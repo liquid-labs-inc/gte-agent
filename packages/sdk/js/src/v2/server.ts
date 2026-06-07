@@ -1,6 +1,10 @@
 import launch from "cross-spawn"
-import { type Config } from "./gen/types.gen.js"
 import { stop, bindAbort } from "../process.js"
+
+type Config = {
+  logLevel?: string
+  [key: string]: unknown
+}
 
 export type ServerOptions = {
   hostname?: string

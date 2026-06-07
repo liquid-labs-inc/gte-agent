@@ -1,20 +1,11 @@
 import type {
-  AgentPart,
   OpencodeClient,
-  Event,
-  FilePart,
-  LspStatus,
-  McpStatus,
-  Todo,
-  Message,
-  Part,
-  Provider,
-  PermissionRequest,
-  QuestionRequest,
-  Session,
-  SessionStatus,
-  TextPart,
-  Config as SdkConfig,
+  ModelV2Info,
+  PermissionV2Request,
+  ProviderV2Info,
+  QuestionV2Request,
+  SessionMessage,
+  SessionV2Info,
 } from "@opencode-ai/sdk/v2"
 import type { CliRenderer, KeyEvent, RGBA, Renderable, SlotMode } from "@opentui/core"
 import type { Binding, Keymap } from "@opentui/keymap"
@@ -27,6 +18,25 @@ import {
 } from "@opentui/keymap/extras"
 import type { JSX, SolidPlugin } from "@opentui/solid"
 import type { Config as PluginConfig, PluginOptions } from "./index.js"
+
+type SDKRecord = Record<string, unknown>
+type AgentPart = SDKRecord
+type Event = SDKRecord & { type: string }
+type FilePart = SDKRecord
+type LspStatus = { id: string; root: string; status: string }
+type McpStatus = { status: string }
+type Todo = { content: string; status: string }
+type Message = SessionMessage
+type Part = SDKRecord
+type Provider = ProviderV2Info
+type PermissionRequest = PermissionV2Request
+type QuestionRequest = QuestionV2Request
+type Session = SessionV2Info
+type SessionStatus = string
+type TextPart = SDKRecord
+type SdkConfig = SDKRecord & {
+  model?: ModelV2Info
+}
 
 export type { CliRenderer, KeyEvent, Renderable, SlotMode } from "@opentui/core"
 export { stringifyKeySequence, stringifyKeyStroke } from "@opentui/keymap"
@@ -475,7 +485,6 @@ export type TuiHostSlotMap = {
   sidebar_title: {
     session_id: string
     title: string
-    share_url?: string
   }
   sidebar_content: {
     session_id: string

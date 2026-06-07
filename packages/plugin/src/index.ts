@@ -1,26 +1,34 @@
+import type { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
 import type {
-  Event,
-  createOpencodeClient,
-  Project,
-  Model,
-  Provider,
-  Permission,
-  UserMessage,
-  Message,
-  Part,
-  Config as SDKConfig,
-} from "@opencode-ai/sdk"
-import type { Provider as ProviderV2, Model as ModelV2, Auth } from "@opencode-ai/sdk/v2"
+  ModelV2Info,
+  PermissionV2Request,
+  ProviderV2Info,
+  SessionMessage,
+  SessionMessageUser,
+} from "@opencode-ai/sdk/v2"
 
 import type { BunShell } from "./shell.js"
 import { type ToolDefinition } from "./tool.js"
 
 export * from "./tool.js"
 
+type SDKRecord = Record<string, unknown>
+type Auth = unknown
+type Event = SDKRecord
+type Project = SDKRecord
+type Model = ModelV2Info
+type Provider = ProviderV2Info
+type ProviderV2 = ProviderV2Info
+type ModelV2 = ModelV2Info
+type Permission = PermissionV2Request
+type UserMessage = SessionMessageUser
+type Message = SessionMessage
+type Part = SDKRecord
+
 export type ProviderContext = {
   source: "env" | "config" | "custom" | "api"
   info: Provider
-  options: Record<string, any>
+  options: SDKRecord
 }
 
 export type WorkspaceInfo = {
@@ -67,7 +75,7 @@ export type PluginInput = {
 
 export type PluginOptions = Record<string, unknown>
 
-export type Config = Omit<SDKConfig, "plugin"> & {
+export type Config = SDKRecord & {
   plugin?: Array<string | [string, PluginOptions]>
 }
 
@@ -87,7 +95,7 @@ type Rule = {
 
 export type AuthHook = {
   provider: string
-  loader?: (auth: () => Promise<Auth>, provider: Provider) => Promise<Record<string, any>>
+  loader?: (auth: () => Promise<Auth>, provider: Provider) => Promise<SDKRecord>
   methods: (
     | {
         type: "oauth"
@@ -251,7 +259,7 @@ export interface Hooks {
       topP: number
       topK: number
       maxOutputTokens: number | undefined
-      options: Record<string, any>
+      options: SDKRecord
     },
   ) => Promise<void>
   "chat.headers"?: (
@@ -265,18 +273,18 @@ export interface Hooks {
   ) => Promise<void>
   "tool.execute.before"?: (
     input: { tool: string; sessionID: string; callID: string },
-    output: { args: any },
+    output: { args: unknown },
   ) => Promise<void>
   "shell.env"?: (
     input: { cwd: string; sessionID?: string; callID?: string },
     output: { env: Record<string, string> },
   ) => Promise<void>
   "tool.execute.after"?: (
-    input: { tool: string; sessionID: string; callID: string; args: any },
+    input: { tool: string; sessionID: string; callID: string; args: unknown },
     output: {
       title: string
       output: string
-      metadata: any
+      metadata: unknown
     },
   ) => Promise<void>
   "experimental.chat.messages.transform"?: (
@@ -331,5 +339,5 @@ export interface Hooks {
   /**
    * Modify tool definitions (description and parameters) sent to LLM
    */
-  "tool.definition"?: (input: { toolID: string }, output: { description: string; parameters: any }) => Promise<void>
+  "tool.definition"?: (input: { toolID: string }, output: { description: string; parameters: unknown }) => Promise<void>
 }

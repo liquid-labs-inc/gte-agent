@@ -6,12 +6,12 @@ process.chdir(dir)
 
 import { $ } from "bun"
 import path from "path"
+import { OpenApi } from "effect/unstable/httpapi"
+import { V2Api } from "@opencode-ai/server/api"
 
 import { createClient } from "@hey-api/openapi-ts"
 
-const opencode = path.resolve(dir, "../../opencode")
-
-await $`bun dev generate > ${dir}/openapi.json`.cwd(opencode)
+await Bun.write(path.join(dir, "openapi.json"), JSON.stringify(OpenApi.fromApi(V2Api), null, 2))
 
 await createClient({
   input: "./openapi.json",
@@ -58,7 +58,7 @@ if (sseTypesPatched === sseTypesSource) {
 }
 await Bun.write(sseTypesPath, sseTypesPatched)
 
-await $`bun prettier --write src/gen`
+await $`rm -rf src/gen`
 await $`bun prettier --write src/v2`
 await $`rm -rf dist`
 await $`bun tsc`
