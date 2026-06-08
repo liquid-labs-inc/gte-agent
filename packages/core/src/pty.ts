@@ -2,8 +2,8 @@ export * as Pty from "./pty"
 
 import type { Disp, Proc } from "#pty"
 import { Context, Effect, Layer, Schema, Types } from "effect"
-import { EventV2 } from "./event"
-import { Location } from "./location"
+import { Event } from "./event"
+import { RuntimeScope } from "./runtime-scope"
 import { NonNegativeInt, PositiveInt } from "./schema"
 import { PtyID } from "./pty/schema"
 import { lazy } from "./util/lazy"
@@ -91,11 +91,11 @@ export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("Pty
   ptyID: PtyID,
 }) {}
 
-export const Event = {
-  Created: EventV2.define({ type: "pty.created", schema: { info: Info } }),
-  Updated: EventV2.define({ type: "pty.updated", schema: { info: Info } }),
-  Exited: EventV2.define({ type: "pty.exited", schema: { id: PtyID, exitCode: NonNegativeInt } }),
-  Deleted: EventV2.define({ type: "pty.deleted", schema: { id: PtyID } }),
+export const PtyEvent = {
+  Created: Event.define({ type: "pty.created", schema: { info: Info } }),
+  Updated: Event.define({ type: "pty.updated", schema: { info: Info } }),
+  Exited: Event.define({ type: "pty.exited", schema: { id: PtyID, exitCode: NonNegativeInt } }),
+  Deleted: Event.define({ type: "pty.deleted", schema: { id: PtyID } }),
 }
 
 export interface Interface {
@@ -116,13 +116,13 @@ export interface Interface {
   >
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Pty") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/Pty") {}
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const events = yield* EventV2.Service
-    const location = yield* Location.Service
+    const events = yield* Event.Service
+    const location = yield* RuntimeScope.Service
     const context = yield* Effect.context()
     const runFork = Effect.runForkWith(context)
     const sessions = new Map<PtyID, Active>()
@@ -160,7 +160,7 @@ export const layer = Layer.effect(
       sessions.delete(id)
       log.info("removing session", { id })
       teardown(session)
-      yield* events.publish(Event.Deleted, { id: session.info.id })
+      yield* events.publish(PtyEvent.Deleted, { id: session.info.id })
       return true
     })
 
@@ -233,13 +233,13 @@ export const layer = Layer.effect(
             Effect.gen(function* () {
               log.info("session exited", { id, exitCode })
               session.info.status = "exited"
-              yield* events.publish(Event.Exited, { id, exitCode })
+              yield* events.publish(PtyEvent.Exited, { id, exitCode })
               yield* removeSession(id)
             }),
           )
         }),
       )
-      yield* events.publish(Event.Created, { info })
+      yield* events.publish(PtyEvent.Created, { info })
       return info
     })
 
@@ -247,7 +247,7 @@ export const layer = Layer.effect(
       const session = yield* requireSession(id)
       if (input.title) session.info.title = input.title
       if (input.size) session.process.resize(input.size.cols, input.size.rows)
-      yield* events.publish(Event.Updated, { info: session.info })
+      yield* events.publish(PtyEvent.Updated, { info: session.info })
       return session.info
     })
 
@@ -309,4 +309,4 @@ export const layer = Layer.effect(
   }),
 )
 
-export const locationLayer = layer
+export const runtimeScopeLayer = layer

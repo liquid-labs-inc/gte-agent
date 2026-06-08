@@ -1,11 +1,11 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@opencode-ai/cli",
+  "name": "@gte-agent/cli",
   "version": "1.16.0",
   "type": "module",
   "license": "MIT",
   "bin": {
-    "lildax": "./bin/lildax.cjs"
+    "gte-agent": "./bin/gte-agent.cjs"
   },
   "files": [
     "bin"
@@ -17,14 +17,14 @@
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",
-    "@opencode-ai/core": "workspace:*",
-    "@opencode-ai/sdk": "workspace:*",
-    "@opencode-ai/server": "workspace:*",
+    "@gte-agent/core": "workspace:*",
+    "@gte-agent/sdk": "workspace:*",
+    "@gte-agent/server": "workspace:*",
     "@parcel/watcher": "2.5.1",
     "effect": "catalog:"
   },
   "devDependencies": {
-    "@opencode-ai/script": "workspace:*",
+    "@gte-agent/script": "workspace:*",
     "@tsconfig/bun": "catalog:",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:"

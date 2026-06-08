@@ -1,13 +1,13 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { TogetherAIPlugin } from "@opencode-ai/core/plugin/provider/togetherai"
+import { Plugin } from "@gte-agent/core/plugin"
+import { TogetherAIPlugin } from "@gte-agent/core/plugin/provider/togetherai"
 import { fakeSelectorSdk, it, model } from "./provider-helper"
 
 describe("TogetherAIPlugin", () => {
   it.effect("creates a TogetherAI SDK for @ai-sdk/togetherai", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(TogetherAIPlugin)
       const result = yield* plugin.trigger(
         "aisdk.sdk",
@@ -20,7 +20,7 @@ describe("TogetherAIPlugin", () => {
 
   it.effect("matches the old bundled provider package exactly", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(TogetherAIPlugin)
 
       const ignored = yield* plugin.trigger(
@@ -45,11 +45,11 @@ describe("TogetherAIPlugin", () => {
 
   it.effect("creates bundled TogetherAI SDKs for custom provider IDs", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const observed: string[] = []
       yield* plugin.add(TogetherAIPlugin)
       yield* plugin.add({
-        id: PluginV2.ID.make("inspector"),
+        id: Plugin.ID.make("inspector"),
         effect: Effect.succeed({
           "aisdk.sdk": (evt) =>
             Effect.sync(() => {
@@ -74,7 +74,7 @@ describe("TogetherAIPlugin", () => {
 
   it.effect("defaults language selection to sdk.languageModel with the model API ID", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(TogetherAIPlugin)
 

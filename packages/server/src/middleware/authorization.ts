@@ -1,14 +1,14 @@
+import { GTEAuth } from "@gte-agent/core/gte-auth"
 import { ServerAuth } from "../auth"
 import { UnauthorizedError } from "../errors"
 import { Effect, Encoding, Layer, Redacted } from "effect"
-import { HttpEffect, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
+import { HttpServerRequest } from "effect/unstable/http"
 import { HttpApiMiddleware } from "effect/unstable/httpapi"
 
 const AUTH_TOKEN_QUERY = "auth_token"
-const WWW_AUTHENTICATE = 'Basic realm="Secure Area"'
 
-export class V2Authorization extends HttpApiMiddleware.Service<V2Authorization>()(
-  "@opencode/ExperimentalHttpApiV2Authorization",
+export class GTEAuthorization extends HttpApiMiddleware.Service<GTEAuthorization>()(
+  "@gte-agent/HttpApiAuthorization",
   {
     error: UnauthorizedError,
   },
@@ -35,25 +35,30 @@ function credentialFromRequest(request: HttpServerRequest.HttpServerRequest) {
   const url = new URL(request.url, "http://localhost")
   const token = url.searchParams.get(AUTH_TOKEN_QUERY)
   if (token) return decodeCredential(token)
-  const match = /^Basic\s+(.+)$/i.exec(request.headers.authorization ?? "")
+  const match = /^Basic\s+(.+)$/i.exec(request.headers[ServerAuth.DAEMON_AUTHORIZATION_HEADER] ?? "")
   if (match) return decodeCredential(match[1])
   return Effect.succeed(emptyCredential())
 }
 
-export const v2AuthorizationLayer = Layer.effect(
-  V2Authorization,
+export const authorizationLayer = Layer.effect(
+  GTEAuthorization,
   Effect.gen(function* () {
     const config = yield* ServerAuth.Config
-    if (!ServerAuth.required(config)) return V2Authorization.of((effect) => effect)
-    return V2Authorization.of((effect) =>
+    const gteAuth = yield* GTEAuth.ConfigService
+    return GTEAuthorization.of((effect) =>
       Effect.gen(function* () {
         const request = yield* HttpServerRequest.HttpServerRequest
-        const credential = yield* credentialFromRequest(request)
-        if (ServerAuth.authorized(credential, config)) return yield* effect
-        yield* HttpEffect.appendPreResponseHandler((_request, response) =>
-          Effect.succeed(HttpServerResponse.setHeader(response, "www-authenticate", WWW_AUTHENTICATE)),
+        if (ServerAuth.required(config)) {
+          const credential = yield* credentialFromRequest(request)
+          if (!ServerAuth.authorized(credential, config)) {
+            return yield* Effect.fail(new UnauthorizedError({ message: "Daemon transport authentication required" }))
+          }
+        }
+        const authContext = yield* Effect.mapError(
+          GTEAuth.authenticate(gteAuth, request.headers.authorization),
+          (error) => new UnauthorizedError({ message: error.message }),
         )
-        return yield* new UnauthorizedError({ message: "Authentication required" })
+        return yield* effect.pipe(Effect.provideService(GTEAuth.RequestContextService, authContext))
       }),
     )
   }),

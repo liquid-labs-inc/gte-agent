@@ -1,6 +1,6 @@
 import { Effect } from "effect"
-import { PluginV2 } from "../../plugin"
-import { ProviderV2 } from "../../provider"
+import { Plugin } from "../../plugin"
+import { Provider } from "../../provider"
 
 type FetchLike = (url: string | URL | Request, init?: RequestInit) => Promise<Response>
 
@@ -64,12 +64,12 @@ export function cortexFetch(upstream: FetchLike = fetch) {
   }
 }
 
-export const SnowflakeCortexPlugin = PluginV2.define({
-  id: PluginV2.ID.make("snowflake-cortex"),
+export const SnowflakeCortexPlugin = Plugin.define({
+  id: Plugin.ID.make("snowflake-cortex"),
   effect: Effect.gen(function* () {
     return {
       "aisdk.sdk": Effect.fn(function* (evt) {
-        if (evt.model.providerID !== ProviderV2.ID.make("snowflake-cortex")) return
+        if (evt.model.providerID !== Provider.ID.make("snowflake-cortex")) return
         const pat =
           process.env.SNOWFLAKE_CORTEX_PAT ?? (typeof evt.options.apiKey === "string" ? evt.options.apiKey : undefined)
         const upstream = typeof evt.options.fetch === "function" ? (evt.options.fetch as FetchLike) : undefined

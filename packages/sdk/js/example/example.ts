@@ -1,56 +1,27 @@
-import { createOpencodeClient, createOpencodeServer } from "@opencode-ai/sdk"
-import { pathToFileURL } from "bun"
+import { createGTEAgentClient } from "@gte-agent/sdk"
 
-const server = await createOpencodeServer()
-const client = createOpencodeClient({ baseUrl: server.url })
+const client = createGTEAgentClient({
+  baseUrl: process.env.GTE_AGENT_URL ?? "http://127.0.0.1:4096",
+})
 
-const input = await Array.fromAsync(new Bun.Glob("packages/core/*.ts").scan())
+const created = await client.session.create({
+  sessionCreateRequest: {
+    runtimeScope: {
+      directory: process.cwd(),
+    },
+  },
+})
 
-const tasks: Promise<void>[] = []
-for await (const file of input) {
-  console.log("processing", file)
-  const session = await client.session.create()
-  tasks.push(
-    client.session.prompt({
-      path: { id: session.data.id },
-      body: {
-        parts: [
-          {
-            type: "file",
-            mime: "text/plain",
-            url: pathToFileURL(file).href,
-          },
-          {
-            type: "text",
-            text: `Write tests for every public function in this file.`,
-          },
-        ],
-      },
-    }),
-  )
-  console.log("done", file)
-}
+await client.session.prompt({
+  sessionID: created.data.id,
+  prompt: {
+    text: "Say hello from the SDK example.",
+  },
+})
 
-await Promise.all(
-  input.map(async (file) => {
-    const session = await client.session.create()
-    console.log("processing", file)
-    await client.session.prompt({
-      path: { id: session.data.id },
-      body: {
-        parts: [
-          {
-            type: "file",
-            mime: "text/plain",
-            url: pathToFileURL(file).href,
-          },
-          {
-            type: "text",
-            text: `Write tests for every public function in this file.`,
-          },
-        ],
-      },
-    })
-    console.log("done", file)
-  }),
-)
+const messages = await client.session.messages({
+  sessionID: created.data.id,
+  order: "asc",
+})
+
+console.log(messages.data.data.map((message) => message.type))

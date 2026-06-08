@@ -1,20 +1,20 @@
 import { describe, expect } from "bun:test"
 import { Effect, Exit, Fiber, Layer } from "effect"
-import { PermissionV2 } from "@opencode-ai/core/permission"
-import { QuestionV2 } from "@opencode-ai/core/question"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
-import { QuestionTool } from "@opencode-ai/core/tool/question"
+import { Permission } from "@gte-agent/core/permission"
+import { Question } from "@gte-agent/core/question"
+import { Session } from "@gte-agent/core/session"
+import { ToolRegistry } from "@gte-agent/core/tool/registry"
+import { QuestionTool } from "@gte-agent/core/tool/question"
 import { testEffect } from "./lib/effect"
 
-const sessionID = SessionV2.ID.make("ses_question_tool_test")
-const assertions: PermissionV2.AssertInput[] = []
-let captured: QuestionV2.AskInput | undefined
+const sessionID = Session.ID.make("ses_question_tool_test")
+const assertions: Permission.AssertInput[] = []
+let captured: Question.AskInput | undefined
 let reject = false
 const capturedInput = () => captured
 const permission = Layer.succeed(
-  PermissionV2.Service,
-  PermissionV2.Service.of({
+  Permission.Service,
+  Permission.Service.of({
     assert: (input) => Effect.sync(() => assertions.push(input)),
     ask: () => Effect.die("unused"),
     reply: () => Effect.die("unused"),
@@ -25,12 +25,12 @@ const permission = Layer.succeed(
 )
 const registry = ToolRegistry.defaultLayer.pipe(Layer.provide(permission))
 const question = Layer.succeed(
-  QuestionV2.Service,
-  QuestionV2.Service.of({
-    ask: (input: QuestionV2.AskInput) =>
+  Question.Service,
+  Question.Service.of({
+    ask: (input: Question.AskInput) =>
       Effect.sync(() => {
         captured = input
-      }).pipe(Effect.andThen(reject ? Effect.fail(new QuestionV2.RejectedError()) : Effect.succeed([["Build"], []]))),
+      }).pipe(Effect.andThen(reject ? Effect.fail(new Question.RejectedError()) : Effect.succeed([["Build"], []]))),
     reply: () => Effect.die("unused"),
     reject: () => Effect.die("unused"),
     list: () => Effect.die("unused"),

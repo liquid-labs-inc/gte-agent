@@ -1,31 +1,31 @@
 import { describe, expect } from "bun:test"
 import { Deferred, Effect, Fiber, Layer } from "effect"
-import { AgentV2 } from "@opencode-ai/core/agent"
-import { Database } from "@opencode-ai/core/database/database"
-import { EventV2 } from "@opencode-ai/core/event"
-import { Location } from "@opencode-ai/core/location"
-import { PermissionV2 } from "@opencode-ai/core/permission"
-import { PermissionTable } from "@opencode-ai/core/permission/sql"
-import { PermissionSaved } from "@opencode-ai/core/permission/saved"
-import { Project } from "@opencode-ai/core/project"
-import { ProjectTable } from "@opencode-ai/core/project/sql"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { SessionTable } from "@opencode-ai/core/session/sql"
-import { SessionExecution } from "@opencode-ai/core/session/execution"
-import { SessionStore } from "@opencode-ai/core/session/store"
+import { Agent } from "@gte-agent/core/agent"
+import { Database } from "@gte-agent/core/database/database"
+import { Event } from "@gte-agent/core/event"
+import { RuntimeScope } from "@gte-agent/core/runtime-scope"
+import { Permission } from "@gte-agent/core/permission"
+import { PermissionTable } from "@gte-agent/core/permission/sql"
+import { PermissionSaved } from "@gte-agent/core/permission/saved"
+import { Project } from "@gte-agent/core/project"
+import { ProjectTable } from "@gte-agent/core/project/sql"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { Session } from "@gte-agent/core/session"
+import { SessionTable } from "@gte-agent/core/session/sql"
+import { SessionExecution } from "@gte-agent/core/session/execution"
+import { SessionStore } from "@gte-agent/core/session/store"
 import { eq } from "drizzle-orm"
-import { location } from "./fixture/location"
+import { runtimeScope } from "./fixture/runtime-scope"
 import { testEffect } from "./lib/effect"
 
 const database = Database.layerFromPath(":memory:")
 const current = Layer.succeed(
-  Location.Service,
-  Location.Service.of(location({ directory: AbsolutePath.make("/project") })),
+  RuntimeScope.Service,
+  RuntimeScope.Service.of(runtimeScope({ directory: AbsolutePath.make("/project") })),
 )
-const events = EventV2.layer.pipe(Layer.provide(database))
+const events = Event.layer.pipe(Layer.provide(database))
 const store = SessionStore.layer.pipe(Layer.provide(database))
-const sessions = SessionV2.layer.pipe(
+const sessions = Session.layer.pipe(
   Layer.provide(events),
   Layer.provide(database),
   Layer.provide(store),
@@ -33,7 +33,7 @@ const sessions = SessionV2.layer.pipe(
   Layer.provide(SessionExecution.noopLayer),
 )
 const saved = PermissionSaved.layer.pipe(Layer.provide(database))
-const layer = PermissionV2.locationLayer.pipe(
+const layer = Permission.runtimeScopeLayer.pipe(
   Layer.provideMerge(database),
   Layer.provideMerge(store),
   Layer.provideMerge(events),
@@ -44,7 +44,7 @@ const layer = PermissionV2.locationLayer.pipe(
 )
 const it = testEffect(layer)
 
-function setup(rules: PermissionV2.Ruleset = []) {
+function setup(rules: Permission.Ruleset = []) {
   return Effect.gen(function* () {
     const { db } = yield* Database.Service
     yield* db
@@ -56,7 +56,7 @@ function setup(rules: PermissionV2.Ruleset = []) {
     yield* db
       .insert(SessionTable)
       .values({
-        id: SessionV2.ID.make("ses_test"),
+        id: Session.ID.make("ses_test"),
         project_id: Project.ID.global,
         slug: "test",
         directory: "/project",
@@ -71,36 +71,36 @@ function setup(rules: PermissionV2.Ruleset = []) {
   })
 }
 
-function setRules(rules: PermissionV2.Ruleset) {
+function setRules(rules: Permission.Ruleset) {
   return Effect.gen(function* () {
-    const agents = yield* AgentV2.Service
+    const agents = yield* Agent.Service
     const update = yield* agents.transform()
     yield* update((editor) =>
-      editor.update(AgentV2.ID.make("test"), (agent) => {
+      editor.update(Agent.ID.make("test"), (agent) => {
         agent.permissions = [...rules]
       }),
     )
   })
 }
 
-function assertion(input: Partial<PermissionV2.AssertInput> = {}) {
+function assertion(input: Partial<Permission.AssertInput> = {}) {
   return {
-    id: PermissionV2.ID.create("per_test"),
-    sessionID: SessionV2.ID.make("ses_test"),
+    id: Permission.ID.create("per_test"),
+    sessionID: Session.ID.make("ses_test"),
     action: "read",
     resources: ["src/index.ts"],
     ...input,
-  } satisfies PermissionV2.AssertInput
+  } satisfies Permission.AssertInput
 }
 
 function waitForRequest() {
   return Effect.gen(function* () {
-    const service = yield* PermissionV2.Service
-    const events = yield* EventV2.Service
-    const asked = yield* Deferred.make<PermissionV2.Request>()
+    const service = yield* Permission.Service
+    const events = yield* Event.Service
+    const asked = yield* Deferred.make<Permission.Request>()
     const unsubscribe = yield* events.listen((event) =>
-      event.type === PermissionV2.Event.Asked.type
-        ? Deferred.succeed(asked, event.data as PermissionV2.Request).pipe(Effect.asVoid)
+      event.type === Permission.PermissionEvent.Asked.type
+        ? Deferred.succeed(asked, event.data as Permission.Request).pipe(Effect.asVoid)
         : Effect.void,
     )
     yield* Effect.addFinalizer(() => unsubscribe)
@@ -110,30 +110,30 @@ function waitForRequest() {
   })
 }
 
-describe("PermissionV2", () => {
+describe("Permission", () => {
   it.effect("returns the evaluated effect and only queues prompts", () =>
     Effect.gen(function* () {
       yield* setup([{ action: "read", resource: "*", effect: "allow" }])
-      const service = yield* PermissionV2.Service
-      expect(yield* service.ask(assertion())).toEqual({ id: PermissionV2.ID.create("per_test"), effect: "allow" })
+      const service = yield* Permission.Service
+      expect(yield* service.ask(assertion())).toEqual({ id: Permission.ID.create("per_test"), effect: "allow" })
       expect(yield* service.list()).toEqual([])
       yield* setRules([{ action: "read", resource: "*", effect: "deny" }])
-      expect(yield* service.ask(assertion())).toEqual({ id: PermissionV2.ID.create("per_test"), effect: "deny" })
+      expect(yield* service.ask(assertion())).toEqual({ id: Permission.ID.create("per_test"), effect: "deny" })
       expect(yield* service.list()).toEqual([])
       yield* setRules([])
-      expect(yield* service.ask(assertion())).toEqual({ id: PermissionV2.ID.create("per_test"), effect: "ask" })
-      expect(yield* service.get(PermissionV2.ID.create("per_test"))).toBeDefined()
+      expect(yield* service.ask(assertion())).toEqual({ id: Permission.ID.create("per_test"), effect: "ask" })
+      expect(yield* service.get(Permission.ID.create("per_test"))).toBeDefined()
     }),
   )
 
   it.effect("allows and denies from explicit rules without asking", () =>
     Effect.gen(function* () {
       yield* setup([{ action: "read", resource: "*", effect: "allow" }])
-      const service = yield* PermissionV2.Service
+      const service = yield* Permission.Service
       yield* service.assert(assertion())
       yield* setRules([{ action: "read", resource: "*", effect: "deny" }])
       const denied = yield* service.assert(assertion()).pipe(Effect.flip)
-      expect(denied).toBeInstanceOf(PermissionV2.DeniedError)
+      expect(denied).toBeInstanceOf(Permission.DeniedError)
       expect(yield* service.list()).toEqual([])
     }),
   )
@@ -145,20 +145,20 @@ describe("PermissionV2", () => {
       yield* db
         .update(SessionTable)
         .set({ agent: null })
-        .where(eq(SessionTable.id, SessionV2.ID.make("ses_test")))
+        .where(eq(SessionTable.id, Session.ID.make("ses_test")))
         .run()
         .pipe(Effect.orDie)
-      const agents = yield* AgentV2.Service
+      const agents = yield* Agent.Service
       const update = yield* agents.transform()
       yield* update((editor) =>
-        editor.update(AgentV2.ID.make("build"), (agent) => {
+        editor.update(Agent.ID.make("build"), (agent) => {
           agent.permissions = [{ action: "todowrite", resource: "*", effect: "allow" }]
         }),
       )
 
-      const service = yield* PermissionV2.Service
+      const service = yield* Permission.Service
       expect(yield* service.ask(assertion({ action: "todowrite", resources: ["*"] }))).toEqual({
-        id: PermissionV2.ID.create("per_test"),
+        id: Permission.ID.create("per_test"),
         effect: "allow",
       })
       expect(yield* service.list()).toEqual([])
@@ -168,13 +168,13 @@ describe("PermissionV2", () => {
   it.effect("evaluates bash with the normal configured-rule semantics", () =>
     Effect.gen(function* () {
       yield* setup([{ action: "*", resource: "*", effect: "allow" }])
-      const service = yield* PermissionV2.Service
+      const service = yield* Permission.Service
       const bash = assertion({ action: "bash", resources: ["pwd"] })
-      expect(yield* service.ask(bash)).toEqual({ id: PermissionV2.ID.create("per_test"), effect: "allow" })
+      expect(yield* service.ask(bash)).toEqual({ id: Permission.ID.create("per_test"), effect: "allow" })
 
       yield* setRules([])
-      expect(yield* service.ask(bash)).toEqual({ id: PermissionV2.ID.create("per_test"), effect: "ask" })
-      expect(yield* service.get(PermissionV2.ID.create("per_test"))).toBeDefined()
+      expect(yield* service.ask(bash)).toEqual({ id: Permission.ID.create("per_test"), effect: "ask" })
+      expect(yield* service.get(Permission.ID.create("per_test"))).toBeDefined()
     }),
   )
 
@@ -184,16 +184,16 @@ describe("PermissionV2", () => {
       const saved = yield* PermissionSaved.Service
       yield* saved.add({ projectID: Project.ID.global, action: "bash", resources: ["pwd"] })
 
-      const service = yield* PermissionV2.Service
+      const service = yield* Permission.Service
       expect(yield* service.ask(assertion({ action: "bash", resources: ["pwd"] }))).toEqual({
-        id: PermissionV2.ID.create("per_test"),
+        id: Permission.ID.create("per_test"),
         effect: "allow",
       })
       expect(yield* service.list()).toEqual([])
 
       yield* setRules([{ action: "bash", resource: "*", effect: "deny" }])
       expect(yield* service.ask(assertion({ action: "bash", resources: ["pwd"] }))).toEqual({
-        id: PermissionV2.ID.create("per_test"),
+        id: Permission.ID.create("per_test"),
         effect: "deny",
       })
     }),
@@ -205,7 +205,7 @@ describe("PermissionV2", () => {
       const { service, fiber, request } = yield* waitForRequest()
       expect(yield* service.list()).toEqual([request])
       expect(yield* service.forSession(request.sessionID)).toEqual([request])
-      expect(yield* service.forSession(SessionV2.ID.make("ses_other"))).toEqual([])
+      expect(yield* service.forSession(Session.ID.make("ses_other"))).toEqual([])
       expect(yield* service.get(request.id)).toEqual(request)
       yield* service.reply({ requestID: request.id, reply: "once" })
       yield* Fiber.join(fiber)
@@ -217,12 +217,12 @@ describe("PermissionV2", () => {
   it.effect("stores and removes saved resources for a project", () =>
     Effect.gen(function* () {
       yield* setup()
-      const service = yield* PermissionV2.Service
-      const asked = yield* Deferred.make<PermissionV2.Request>()
-      const events = yield* EventV2.Service
+      const service = yield* Permission.Service
+      const asked = yield* Deferred.make<Permission.Request>()
+      const events = yield* Event.Service
       const unsubscribe = yield* events.listen((event) =>
-        event.type === PermissionV2.Event.Asked.type
-          ? Deferred.succeed(asked, event.data as PermissionV2.Request).pipe(Effect.asVoid)
+        event.type === Permission.PermissionEvent.Asked.type
+          ? Deferred.succeed(asked, event.data as Permission.Request).pipe(Effect.asVoid)
           : Effect.void,
       )
       yield* Effect.addFinalizer(() => unsubscribe)
@@ -238,7 +238,7 @@ describe("PermissionV2", () => {
       const saved = yield* PermissionSaved.Service
       const id = (yield* saved.list())[0]!.id
       expect(yield* saved.list()).toEqual([{ id, projectID: Project.ID.global, action: "read", resource: "src/*" }])
-      yield* service.assert(assertion({ id: PermissionV2.ID.create("per_next"), resources: ["src/next.ts"] }))
+      yield* service.assert(assertion({ id: Permission.ID.create("per_next"), resources: ["src/next.ts"] }))
       yield* saved.remove(id)
       expect(yield* saved.list()).toEqual([])
     }),

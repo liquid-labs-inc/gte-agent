@@ -1,8 +1,8 @@
 import { Effect } from "effect"
-import { PluginV2 } from "../../plugin"
+import { Plugin } from "../../plugin"
 
-export const GooglePlugin = PluginV2.define({
-  id: PluginV2.ID.make("google"),
+export const GooglePlugin = Plugin.define({
+  id: Plugin.ID.make("google"),
   effect: Effect.gen(function* () {
     return {
       "aisdk.sdk": Effect.fn(function* (evt) {

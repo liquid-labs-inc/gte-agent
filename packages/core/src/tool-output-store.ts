@@ -100,7 +100,7 @@ export interface Interface {
   readonly cleanup: () => Effect.Effect<void>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/ToolOutputStore") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/ToolOutputStore") {}
 
 const uri = (id: string) => URI_PREFIX + id
 
@@ -351,7 +351,7 @@ export const layer = Layer.effect(
 
 export const defaultLayer = layer.pipe(Layer.provide(FSUtil.defaultLayer), Layer.provide(Global.defaultLayer))
 
-/** Runs retention scanning once globally rather than once per active Location. */
+/** Runs retention scanning once globally rather than once per active RuntimeScope. */
 export const cleanupLayer = Layer.effectDiscard(
   Effect.gen(function* () {
     const store = yield* Service

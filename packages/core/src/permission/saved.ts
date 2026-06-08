@@ -3,7 +3,7 @@ export * as PermissionSaved from "./saved"
 import { eq } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Database } from "../database/database"
-import { ProjectV2 } from "../project"
+import { Project } from "../project"
 import { withStatics } from "../schema"
 import { Identifier } from "../util/identifier"
 import { PermissionTable } from "./sql"
@@ -16,19 +16,19 @@ export type ID = typeof ID.Type
 
 export const Info = Schema.Struct({
   id: ID,
-  projectID: ProjectV2.ID,
+  projectID: Project.ID,
   action: Schema.String,
   resource: Schema.String,
 }).annotate({ identifier: "PermissionSaved.Info" })
 export type Info = typeof Info.Type
 
 export const ListInput = Schema.Struct({
-  projectID: ProjectV2.ID.pipe(Schema.optional),
+  projectID: Project.ID.pipe(Schema.optional),
 }).annotate({ identifier: "PermissionSaved.ListInput" })
 export type ListInput = typeof ListInput.Type
 
 export const AddInput = Schema.Struct({
-  projectID: ProjectV2.ID,
+  projectID: Project.ID,
   action: Schema.String,
   resources: Schema.Array(Schema.String),
 }).annotate({ identifier: "PermissionSaved.AddInput" })
@@ -40,7 +40,7 @@ export interface Interface {
   readonly remove: (id: ID) => Effect.Effect<void>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/PermissionSaved") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/PermissionSaved") {}
 
 export const layer = Layer.effect(
   Service,

@@ -1,8 +1,8 @@
 import { Effect } from "effect"
-import { PluginV2 } from "../../plugin"
+import { Plugin } from "../../plugin"
 
-export const MistralPlugin = PluginV2.define({
-  id: PluginV2.ID.make("mistral"),
+export const MistralPlugin = Plugin.define({
+  id: Plugin.ID.make("mistral"),
   effect: Effect.gen(function* () {
     return {
       "aisdk.sdk": Effect.fn(function* (evt) {

@@ -3,8 +3,8 @@ export * as SessionContextEpoch from "./context-epoch"
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm"
 import { DateTime, Effect, Schema } from "effect"
 import type { Database } from "../database/database"
-import { EventV2 } from "../event"
-import { Location } from "../location"
+import { Event } from "../event"
+import { RuntimeScope } from "../runtime-scope"
 import { SystemContext } from "../system-context"
 import { SystemContextRegistry } from "../system-context-registry"
 import { ContextSnapshotDecodeError } from "./error"
@@ -17,7 +17,7 @@ import { SessionContextEpochTable, SessionTable } from "./sql"
 type DatabaseService = Database.Interface["db"]
 
 class RevisionMismatch extends Error {}
-class LocationMismatch extends Error {}
+class RuntimeScopeMismatch extends Error {}
 
 const retryRevisionMismatch = <A, E>(attempt: () => Effect.Effect<A, E>): Effect.Effect<A, E> =>
   attempt().pipe(
@@ -37,36 +37,36 @@ export function initialize(
   db: DatabaseService,
   context: SystemContextRegistry.Interface,
   sessionID: SessionSchema.ID,
-  location: Location.Ref,
+  runtimeScope: RuntimeScope.Ref,
 ): Effect.Effect<Prepared | undefined, SystemContext.InitializationBlocked> {
-  return retryRevisionMismatch(() => initializeOnce(db, context, sessionID, location)).pipe(
+  return retryRevisionMismatch(() => initializeOnce(db, context, sessionID, runtimeScope)).pipe(
     Effect.withSpan("SessionContextEpoch.initialize"),
   )
 }
 
 export function prepare(
   db: DatabaseService,
-  events: EventV2.Interface,
+  events: Event.Interface,
   context: SystemContextRegistry.Interface,
   sessionID: SessionSchema.ID,
-  location: Location.Ref,
+  runtimeScope: RuntimeScope.Ref,
 ): Effect.Effect<Prepared, SystemContext.InitializationBlocked | ContextSnapshotDecodeError> {
-  return retryRevisionMismatch(() => prepareOnce(db, events, context, sessionID, location)).pipe(
+  return retryRevisionMismatch(() => prepareOnce(db, events, context, sessionID, runtimeScope)).pipe(
     Effect.withSpan("SessionContextEpoch.prepare"),
   )
 }
 
 const prepareOnce = Effect.fnUntraced(function* (
   db: DatabaseService,
-  events: EventV2.Interface,
+  events: Event.Interface,
   context: SystemContextRegistry.Interface,
   sessionID: SessionSchema.ID,
-  location: Location.Ref,
+  runtimeScope: RuntimeScope.Ref,
 ) {
   const [value, stored] = yield* Effect.all([context.load(), find(db, sessionID)], { concurrency: "unbounded" })
   if (!stored) {
     const generation = yield* SystemContext.initialize(value)
-    const baselineSeq = yield* insert(db, sessionID, location, generation)
+    const baselineSeq = yield* insert(db, sessionID, runtimeScope, generation)
     return { baseline: generation.baseline, baselineSeq }
   }
 
@@ -97,11 +97,11 @@ const initializeOnce = Effect.fnUntraced(function* (
   db: DatabaseService,
   context: SystemContextRegistry.Interface,
   sessionID: SessionSchema.ID,
-  location: Location.Ref,
+  runtimeScope: RuntimeScope.Ref,
 ) {
   if (yield* exists(db, sessionID)) return
   const generation = yield* context.load().pipe(Effect.flatMap(SystemContext.initialize))
-  const baselineSeq = yield* insert(db, sessionID, location, generation)
+  const baselineSeq = yield* insert(db, sessionID, runtimeScope, generation)
   return { baseline: generation.baseline, baselineSeq }
 })
 
@@ -158,7 +158,7 @@ export const reset = Effect.fn("SessionContextEpoch.reset")(function* (
 const insert = Effect.fnUntraced(function* (
   db: DatabaseService,
   sessionID: SessionSchema.ID,
-  location: Location.Ref,
+  runtimeScope: RuntimeScope.Ref,
   generation: SystemContext.Generation,
 ) {
   return yield* db
@@ -171,15 +171,12 @@ const insert = Effect.fnUntraced(function* (
             .where(
               and(
                 eq(SessionTable.id, sessionID),
-                eq(SessionTable.directory, location.directory),
-                location.workspaceID === undefined
-                  ? isNull(SessionTable.workspace_id)
-                  : eq(SessionTable.workspace_id, location.workspaceID),
+                eq(SessionTable.directory, runtimeScope.directory),
               ),
             )
             .get()
             .pipe(Effect.orDie)
-          if (!placed) return yield* Effect.die(new LocationMismatch())
+          if (!placed) return yield* Effect.die(new RuntimeScopeMismatch())
           const baselineSeq = yield* SessionInput.latestSeq(db, sessionID)
           yield* db
             .insert(SessionContextEpochTable)

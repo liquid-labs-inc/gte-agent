@@ -1,35 +1,35 @@
 export * as GrepTool from "./grep"
 
-import { Tool, ToolFailure, toolText } from "@opencode-ai/llm"
+import { Tool, ToolFailure, toolText } from "@gte-agent/llm"
 import { Cause, Effect, Layer, Schema } from "effect"
 import { FileSystem } from "../filesystem"
-import { LocationSearch } from "../location-search"
+import { RuntimeScopeSearch } from "../runtime-scope-search"
 import { Ripgrep } from "../ripgrep"
 import { ToolRegistry } from "./registry"
 
 export const name = "grep"
 
 export const Parameters = Schema.Struct({
-  pattern: LocationSearch.GrepInput.fields.pattern.annotate({
+  pattern: RuntimeScopeSearch.GrepInput.fields.pattern.annotate({
     description: "Regex pattern to search for in file contents",
   }),
-  path: LocationSearch.GrepInput.fields.path.annotate({
-    description: "Relative file or directory to search. Defaults to the active Location.",
+  path: RuntimeScopeSearch.GrepInput.fields.path.annotate({
+    description: "Relative file or directory to search. Defaults to the active RuntimeScope.",
   }),
-  reference: LocationSearch.GrepInput.fields.reference.annotate({
-    description: "Named project reference to search instead of the active Location",
+  reference: RuntimeScopeSearch.GrepInput.fields.reference.annotate({
+    description: "Named project reference to search instead of the active RuntimeScope",
   }),
-  include: LocationSearch.GrepInput.fields.include.annotate({
+  include: RuntimeScopeSearch.GrepInput.fields.include.annotate({
     description: 'File glob to include in the search (for example, "*.js" or "*.{ts,tsx}")',
   }),
-  limit: LocationSearch.GrepInput.fields.limit.annotate({
-    description: `Maximum matches to return (default: ${LocationSearch.DEFAULT_RESULT_LIMIT})`,
+  limit: RuntimeScopeSearch.GrepInput.fields.limit.annotate({
+    description: `Maximum matches to return (default: ${RuntimeScopeSearch.DEFAULT_RESULT_LIMIT})`,
   }),
 })
 
-type Success = typeof LocationSearch.GrepResult.Encoded
+type Success = typeof RuntimeScopeSearch.GrepResult.Encoded
 
-/** Format raw Location search matches into the familiar concise model output. */
+/** Format raw RuntimeScope search matches into the familiar concise model output. */
 export const toModelOutput = (output: Success) => {
   const lines = output.items.length === 0 ? ["No files found"] : [`Found ${output.items.length} matches`]
   let current = ""
@@ -53,15 +53,15 @@ export const toModelOutput = (output: Success) => {
 
 const definition = Tool.make({
   description:
-    "Search file contents by regular expression within the active Location or a named project reference. Use a relative path to narrow the search, include to filter files by glob, and limit to bound the match count. Returns concise relative file resources, line numbers, and bounded line previews.",
+    "Search file contents by regular expression within the active RuntimeScope or a named project reference. Use a relative path to narrow the search, include to filter files by glob, and limit to bound the match count. Returns concise relative file resources, line numbers, and bounded line previews.",
   parameters: Parameters,
-  success: LocationSearch.GrepResult,
+  success: RuntimeScopeSearch.GrepResult,
   toModelOutput: ({ output }) => [toolText({ type: "text", text: toModelOutput(output) })],
 })
 
 /**
- * Location-scoped grep leaf. FileSystem selects a canonical root for
- * permission metadata; LocationSearch owns containment and ripgrep execution.
+ * RuntimeScope-scoped grep leaf. FileSystem selects a canonical root for
+ * permission metadata; RuntimeScopeSearch owns containment and ripgrep execution.
  *
  * TODO: Revisit root-specific search permission resources if named-reference policy needs independent allow/deny rules.
  */
@@ -69,7 +69,7 @@ export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const registry = yield* ToolRegistry.Service
     const filesystem = yield* FileSystem.Service
-    const search = yield* LocationSearch.Service
+    const search = yield* RuntimeScopeSearch.Service
 
     yield* registry.contribute((editor) =>
       editor.set(name, {

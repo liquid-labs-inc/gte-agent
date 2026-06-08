@@ -16,6 +16,12 @@ export class UnauthorizedError extends Schema.TaggedErrorClass<UnauthorizedError
   { httpApiStatus: 401 },
 ) {}
 
+export class ForbiddenError extends Schema.TaggedErrorClass<ForbiddenError>()(
+  "ForbiddenError",
+  { message: Schema.String },
+  { httpApiStatus: 403 },
+) {}
+
 export class ConflictError extends Schema.TaggedErrorClass<ConflictError>()(
   "ConflictError",
   {

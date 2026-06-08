@@ -1,15 +1,15 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { VercelPlugin } from "@opencode-ai/core/plugin/provider/vercel"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Catalog } from "@gte-agent/core/catalog"
+import { Plugin } from "@gte-agent/core/plugin"
+import { VercelPlugin } from "@gte-agent/core/plugin/provider/vercel"
+import { Provider } from "@gte-agent/core/provider"
 import { it, model, provider } from "./provider-helper"
 
 describe("VercelPlugin", () => {
-  it.effect("applies legacy lower-case referer headers", () =>
+  it.effect("applies GTE Agent lower-case referer headers", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const catalog = yield* Catalog.Service
       yield* plugin.add(VercelPlugin)
       const transform = yield* catalog.transform()
@@ -23,17 +23,17 @@ describe("VercelPlugin", () => {
           draft.request = item.request
         })
       })
-      expect((yield* catalog.provider.get(ProviderV2.ID.make("vercel"))).request.headers).toEqual({
+      expect((yield* catalog.provider.get(Provider.ID.make("vercel"))).request.headers).toEqual({
         Existing: "1",
-        "http-referer": "https://opencode.ai/",
-        "x-title": "opencode",
+        "http-referer": "https://gte-agent.ai/",
+        "x-title": "gte-agent",
       })
     }),
   )
 
-  it.effect("does not add legacy upper-case referer headers", () =>
+  it.effect("does not add GTE Agent upper-case referer headers", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const catalog = yield* Catalog.Service
       yield* plugin.add(VercelPlugin)
       const transform = yield* catalog.transform()
@@ -43,16 +43,16 @@ describe("VercelPlugin", () => {
           draft.api = item.api
         })
       })
-      expect((yield* catalog.provider.get(ProviderV2.ID.make("vercel"))).request.headers).not.toHaveProperty(
+      expect((yield* catalog.provider.get(Provider.ID.make("vercel"))).request.headers).not.toHaveProperty(
         "HTTP-Referer",
       )
-      expect((yield* catalog.provider.get(ProviderV2.ID.make("vercel"))).request.headers).not.toHaveProperty("X-Title")
+      expect((yield* catalog.provider.get(Provider.ID.make("vercel"))).request.headers).not.toHaveProperty("X-Title")
     }),
   )
 
   it.effect("creates @ai-sdk/vercel SDKs for custom provider IDs", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(VercelPlugin)
       const event = yield* plugin.trigger(
         "aisdk.sdk",
@@ -66,12 +66,12 @@ describe("VercelPlugin", () => {
 
   it.effect("ignores non-Vercel providers", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const catalog = yield* Catalog.Service
       yield* plugin.add(VercelPlugin)
       const transform = yield* catalog.transform()
       yield* transform((catalog) => catalog.provider.update(provider("gateway").id, () => {}))
-      expect((yield* catalog.provider.get(ProviderV2.ID.make("gateway"))).request.headers).toEqual({})
+      expect((yield* catalog.provider.get(Provider.ID.make("gateway"))).request.headers).toEqual({})
     }),
   )
 })

@@ -10,13 +10,13 @@ import {
   type ToolResultValue,
   type ToolSchema,
   type ToolSettlement,
-} from "@opencode-ai/llm"
+} from "@gte-agent/llm"
 import { Context, Effect, Layer, Schema, Scope } from "effect"
 import { castDraft, enableMapSet } from "immer"
-import { PermissionV2 } from "../permission"
+import { Permission } from "../permission"
 import { State } from "../state"
 import { SessionSchema } from "../session/schema"
-import type { SessionV2 } from "../session"
+import type { Session } from "../session"
 import { ApplicationTools } from "./application-tools"
 
 export type ExecuteInput = {
@@ -35,10 +35,10 @@ export type ExecuteInput = {
  * signal and durable/live progress sink.
  */
 export type Invocation = ExecuteInput & {
-  readonly source?: PermissionV2.Source
+  readonly source?: Permission.Source
   readonly assertPermission: (
-    input: Omit<PermissionV2.AssertInput, "sessionID" | "source">,
-  ) => Effect.Effect<void, PermissionV2.Error | SessionV2.NotFoundError>
+    input: Omit<Permission.AssertInput, "sessionID" | "source">,
+  ) => Effect.Effect<void, Permission.Error | Session.NotFoundError>
 }
 
 /** Kept as the leaf entry input name for backwards-compatible execute usage. */
@@ -79,14 +79,14 @@ export interface Interface {
   readonly settle: (input: ExecuteInput) => Effect.Effect<ToolSettlement>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/ToolRegistry") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/ToolRegistry") {}
 
 enableMapSet()
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const permission = yield* PermissionV2.Service
+    const permission = yield* Permission.Service
     const applications = yield* ApplicationTools.Service
     const state = State.create<Data, Editor>({
       initial: () => ({ entries: new Map() }),
@@ -107,7 +107,7 @@ export const layer = Layer.effect(
 
     const definitions = Effect.fn("ToolRegistry.definitions")(function* () {
       const tools = new Map(Array.from(state.get().entries, ([name, entry]) => [name, entry.tool] as const))
-      // Location tools own their names. Application tools fill otherwise-unclaimed names.
+      // RuntimeScope tools own their names. Application tools fill otherwise-unclaimed names.
       for (const [name, tool] of applications.entries()) {
         if (!tools.has(name)) tools.set(name, tool.definition)
       }
@@ -193,3 +193,14 @@ export const layer = Layer.effect(
 )
 
 export const defaultLayer = layer.pipe(Layer.provide(ApplicationTools.layer))
+
+export const emptyLayer = Layer.succeed(
+  Service,
+  Service.of({
+    transform: () => Effect.succeed(() => Effect.void),
+    contribute: () => Effect.void,
+    definitions: () => Effect.succeed([]),
+    execute: (input) => Effect.succeed({ type: "error", value: `Unknown tool: ${input.call.name}` }),
+    settle: (input) => Effect.succeed({ result: { type: "error", value: `Unknown tool: ${input.call.name}` } }),
+  }),
+)

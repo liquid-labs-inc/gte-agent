@@ -5,7 +5,7 @@ import { isAbsolute, join, relative, sep } from "path"
 import { FSUtil } from "./fs-util"
 import { Flag } from "./flag/flag"
 import { Global } from "./global"
-import { Location } from "./location"
+import { RuntimeScope } from "./runtime-scope"
 import { AbsolutePath } from "./schema"
 import { SystemContext } from "./system-context"
 import { SystemContextRegistry } from "./system-context-registry"
@@ -22,7 +22,7 @@ export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
     const global = yield* Global.Service
-    const location = yield* Location.Service
+    const location = yield* RuntimeScope.Service
     const registry = yield* SystemContextRegistry.Service
 
     const source = (value: ReadonlyArray<File> | SystemContext.Unavailable) =>
@@ -43,7 +43,7 @@ export const layer = Layer.effectDiscard(
       const insideProject =
         fromProject === "" || (fromProject !== ".." && !fromProject.startsWith(`..${sep}`) && !isAbsolute(fromProject))
       const discovered = new Set(
-        (Flag.OPENCODE_DISABLE_PROJECT_CONFIG || !insideProject
+        (Flag.GTE_AGENT_DISABLE_PROJECT_CONFIG || !insideProject
           ? []
           : yield* fs.up({
               targets: ["AGENTS.md"],

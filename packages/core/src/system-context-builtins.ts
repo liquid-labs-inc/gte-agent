@@ -2,18 +2,18 @@ export * as SystemContextBuiltIns from "./system-context-builtins"
 
 import { DateTime, Effect, Layer, Schema } from "effect"
 import { InstructionContext } from "./instruction-context"
-import { Location } from "./location"
+import { RuntimeScope } from "./runtime-scope"
 import { SystemContext } from "./system-context"
 import { SystemContextRegistry } from "./system-context-registry"
 
 const builtIns = Layer.effectDiscard(
   Effect.gen(function* () {
-    const location = yield* Location.Service
+    const location = yield* RuntimeScope.Service
     const registry = yield* SystemContextRegistry.Service
     const environment = [
       "<env>",
       `  Working directory: ${location.directory}`,
-      `  Workspace root folder: ${location.project.directory}`,
+      `  Project root folder: ${location.project.directory}`,
       `  Is directory a git repo: ${location.vcs?.type === "git" ? "yes" : "no"}`,
       `  Platform: ${process.platform}`,
       "</env>",
@@ -44,4 +44,4 @@ export const layer = Layer.mergeAll(builtIns, InstructionContext.layer).pipe(
   Layer.provideMerge(SystemContextRegistry.layer),
 )
 
-export const locationLayer = layer
+export const runtimeScopeLayer = layer

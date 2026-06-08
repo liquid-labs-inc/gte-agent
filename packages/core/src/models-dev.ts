@@ -7,12 +7,12 @@ import { Flock } from "./util/flock"
 import { Hash } from "./util/hash"
 import { FSUtil } from "./fs-util"
 import { InstallationChannel, InstallationVersion } from "./installation/version"
-import { EventV2 } from "./event"
+import { Event } from "./event"
 
 export const CatalogModelStatus = Schema.Literals(["alpha", "beta", "deprecated"])
 export type CatalogModelStatus = typeof CatalogModelStatus.Type
 
-const USER_AGENT = `opencode/${InstallationChannel}/${InstallationVersion}/${Flag.OPENCODE_CLIENT}`
+const USER_AGENT = `gte-agent/${InstallationChannel}/${InstallationVersion}/${Flag.GTE_AGENT_CLIENT}`
 
 const CostTier = Schema.Struct({
   input: Schema.Finite,
@@ -106,27 +106,27 @@ export const Provider = Schema.Struct({
 
 export type Provider = Schema.Schema.Type<typeof Provider>
 
-export const Event = {
-  Refreshed: EventV2.define({
+export const ModelsDevEvent = {
+  Refreshed: Event.define({
     type: "models-dev.refreshed",
     schema: {},
   }),
 }
 
-declare const OPENCODE_MODELS_DEV: Record<string, Provider> | undefined
+declare const GTE_AGENT_MODELS_DEV: Record<string, Provider> | undefined
 
 export interface Interface {
   readonly get: () => Effect.Effect<Record<string, Provider>>
   readonly refresh: (force?: boolean) => Effect.Effect<void>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/ModelsDev") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/ModelsDev") {}
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
-    const events = yield* EventV2.Service
+    const events = yield* Event.Service
     const http = HttpClient.filterStatusOk(
       (yield* HttpClient.HttpClient).pipe(
         HttpClient.retryTransient({
@@ -137,7 +137,7 @@ export const layer = Layer.effect(
       ),
     )
 
-    const source = Flag.OPENCODE_MODELS_URL || "https://models.dev"
+    const source = Flag.GTE_AGENT_MODELS_URL || "https://models.dev"
     const filepath = path.join(
       Global.Path.cache,
       source === "https://models.dev" ? "models.json" : `models-${Hash.fast(source)}.json`,
@@ -161,10 +161,10 @@ export const layer = Layer.effect(
       )
     })
 
-    const loadFromDisk = fs.readJson(Flag.OPENCODE_MODELS_PATH ?? filepath).pipe(
+    const loadFromDisk = fs.readJson(Flag.GTE_AGENT_MODELS_PATH ?? filepath).pipe(
       Effect.catch((error) => {
         if (
-          Flag.OPENCODE_MODELS_PATH === undefined &&
+          Flag.GTE_AGENT_MODELS_PATH === undefined &&
           error._tag === "FileSystemError" &&
           error.method === "readJson"
         ) {
@@ -176,7 +176,7 @@ export const layer = Layer.effect(
     )
 
     const loadSnapshot = Effect.sync(() =>
-      typeof OPENCODE_MODELS_DEV === "undefined" ? undefined : OPENCODE_MODELS_DEV,
+      typeof GTE_AGENT_MODELS_DEV === "undefined" ? undefined : GTE_AGENT_MODELS_DEV,
     )
 
     const fetchAndWrite = Effect.fn("ModelsDev.fetchAndWrite")(function* () {
@@ -199,8 +199,8 @@ export const layer = Layer.effect(
       if (fromDisk) return fromDisk
       const snapshot = yield* loadSnapshot
       if (snapshot) return snapshot
-      if (Flag.OPENCODE_DISABLE_MODELS_FETCH) return {}
-      // Flock is cross-process: concurrent opencode CLIs can race on this cache file.
+      if (Flag.GTE_AGENT_DISABLE_MODELS_FETCH) return {}
+      // Flock is cross-process: concurrent gte-agent CLIs can race on this cache file.
       const text = yield* Effect.scoped(
         Effect.gen(function* () {
           yield* Flock.effect(lockKey)
@@ -224,7 +224,7 @@ export const layer = Layer.effect(
           if (!force && (yield* fresh())) return
           yield* fetchAndWrite()
           yield* invalidate
-          yield* events.publish(Event.Refreshed, {})
+          yield* events.publish(ModelsDevEvent.Refreshed, {})
         }),
       ).pipe(
         Effect.tapCause((cause) =>
@@ -234,7 +234,7 @@ export const layer = Layer.effect(
       )
     })
 
-    if (!Flag.OPENCODE_DISABLE_MODELS_FETCH && !process.argv.includes("--get-yargs-completions")) {
+    if (!Flag.GTE_AGENT_DISABLE_MODELS_FETCH && !process.argv.includes("--get-yargs-completions")) {
       // Schedule.spaced runs the effect once, then waits between completions.
       yield* Effect.forkScoped(refresh().pipe(Effect.repeat(Schedule.spaced("60 minutes")), Effect.ignore))
     }
@@ -246,7 +246,7 @@ export const layer = Layer.effect(
 export const defaultLayer = layer.pipe(
   Layer.provide(FetchHttpClient.layer),
   Layer.provide(FSUtil.defaultLayer),
-  Layer.provide(EventV2.defaultLayer),
+  Layer.provide(Event.defaultLayer),
 )
 
 export * as ModelsDev from "./models-dev"

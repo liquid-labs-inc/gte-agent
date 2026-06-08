@@ -1,20 +1,20 @@
 import { describe, expect } from "bun:test"
-import { Tool } from "@opencode-ai/core/public"
-import { ApplicationTools } from "@opencode-ai/core/tool/application-tools"
-import { PermissionV2 } from "@opencode-ai/core/permission"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
+import { Tool } from "@gte-agent/core/public"
+import { ApplicationTools } from "@gte-agent/core/tool/application-tools"
+import { Permission } from "@gte-agent/core/permission"
+import { Session } from "@gte-agent/core/session"
+import { ToolRegistry } from "@gte-agent/core/tool/registry"
 import { Effect, Exit, Layer, Schema, Scope } from "effect"
 import { testEffect } from "./lib/effect"
 
-const permission = Layer.mock(PermissionV2.Service, {
+const permission = Layer.mock(Permission.Service, {
   assert: () => Effect.void,
 })
 const applications = ApplicationTools.layer
 const registry = ToolRegistry.layer.pipe(Layer.provide(permission), Layer.provide(applications))
 const it = testEffect(Layer.mergeAll(applications, registry))
 
-const sessionID = SessionV2.ID.make("ses_application_tool")
+const sessionID = Session.ID.make("ses_application_tool")
 const contextual = (contexts: Tool.Context[]) =>
   Tool.make({
     description: "Read application context",
@@ -153,7 +153,7 @@ describe("ApplicationTools", () => {
     }),
   )
 
-  it.effect("keeps the Location tool when an application tool has the same name", () =>
+  it.effect("keeps the RuntimeScope tool when an application tool has the same name", () =>
     Effect.gen(function* () {
       const applications = yield* ApplicationTools.Service
       const registry = yield* ToolRegistry.Service

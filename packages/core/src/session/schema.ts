@@ -1,13 +1,14 @@
 export * as SessionSchema from "./schema"
 
 import { Schema } from "effect"
-import { Location } from "../location"
-import { ModelV2 } from "../model"
-import { ProjectV2 } from "../project"
+import { Model } from "../model"
+import { Project } from "../project"
 import { externalID, type ExternalID, RelativePath, optionalOmitUndefined, withStatics } from "../schema"
 import { Identifier } from "../util/identifier"
-import { V2Schema } from "../v2-schema"
-import { AgentV2 } from "../agent"
+import { TimeSchema } from "../time-schema"
+import { Agent } from "../agent"
+import { GTEAuth } from "../gte-auth"
+import { RuntimeScope } from "../runtime-scope"
 
 export const ID = Schema.String.check(Schema.isStartsWith("ses")).pipe(
   Schema.brand("SessionID"),
@@ -22,12 +23,14 @@ export const ID = Schema.String.check(Schema.isStartsWith("ses")).pipe(
 )
 export type ID = typeof ID.Type
 
-export class Info extends Schema.Class<Info>("SessionV2.Info")({
+export class Info extends Schema.Class<Info>("Session.Info")({
   id: ID,
   parentID: ID.pipe(optionalOmitUndefined),
-  projectID: ProjectV2.ID,
-  agent: AgentV2.ID.pipe(Schema.optional),
-  model: ModelV2.Ref.pipe(Schema.optional),
+  projectID: Project.ID,
+  principalID: GTEAuth.PrincipalID,
+  authorityID: GTEAuth.AuthorityID,
+  agent: Agent.ID.pipe(Schema.optional),
+  model: Model.Ref.pipe(Schema.optional),
   cost: Schema.Finite,
   tokens: Schema.Struct({
     input: Schema.Finite,
@@ -39,11 +42,11 @@ export class Info extends Schema.Class<Info>("SessionV2.Info")({
     }),
   }),
   time: Schema.Struct({
-    created: V2Schema.DateTimeUtcFromMillis,
-    updated: V2Schema.DateTimeUtcFromMillis,
-    archived: V2Schema.DateTimeUtcFromMillis.pipe(Schema.optional),
+    created: TimeSchema.DateTimeUtcFromMillis,
+    updated: TimeSchema.DateTimeUtcFromMillis,
+    archived: TimeSchema.DateTimeUtcFromMillis.pipe(Schema.optional),
   }),
   title: Schema.String,
-  location: Location.Ref,
+  runtimeScope: RuntimeScope.Ref,
   subpath: RelativePath.pipe(Schema.optional),
 }) {}

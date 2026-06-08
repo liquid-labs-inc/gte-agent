@@ -1,11 +1,4 @@
-import type { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
-import type {
-  ModelV2Info,
-  PermissionV2Request,
-  ProviderV2Info,
-  SessionMessage,
-  SessionMessageUser,
-} from "@opencode-ai/sdk/v2"
+import type { createGTEAgentClient, SessionMessageUser, SessionPublicMessage } from "@gte-agent/sdk"
 
 import type { BunShell } from "./shell.js"
 import { type ToolDefinition } from "./tool.js"
@@ -16,13 +9,11 @@ type SDKRecord = Record<string, unknown>
 type Auth = unknown
 type Event = SDKRecord
 type Project = SDKRecord
-type Model = ModelV2Info
-type Provider = ProviderV2Info
-type ProviderV2 = ProviderV2Info
-type ModelV2 = ModelV2Info
-type Permission = PermissionV2Request
+type Model = SDKRecord
+type Provider = SDKRecord
+type Permission = SDKRecord
 type UserMessage = SessionMessageUser
-type Message = SessionMessage
+type Message = SessionPublicMessage
 type Part = SDKRecord
 
 export type ProviderContext = {
@@ -31,44 +22,11 @@ export type ProviderContext = {
   options: SDKRecord
 }
 
-export type WorkspaceInfo = {
-  id: string
-  type: string
-  name: string
-  branch: string | null
-  directory: string | null
-  extra: unknown | null
-  projectID: string
-}
-
-export type WorkspaceTarget =
-  | {
-      type: "local"
-      directory: string
-    }
-  | {
-      type: "remote"
-      url: string | URL
-      headers?: HeadersInit
-    }
-
-export type WorkspaceAdapter = {
-  name: string
-  description: string
-  configure(config: WorkspaceInfo): WorkspaceInfo | Promise<WorkspaceInfo>
-  create(config: WorkspaceInfo, env: Record<string, string | undefined>, from?: WorkspaceInfo): Promise<void>
-  remove(config: WorkspaceInfo): Promise<void>
-  target(config: WorkspaceInfo): WorkspaceTarget | Promise<WorkspaceTarget>
-}
-
 export type PluginInput = {
-  client: ReturnType<typeof createOpencodeClient>
+  client: ReturnType<typeof createGTEAgentClient>
   project: Project
   directory: string
   worktree: string
-  experimental_workspace: {
-    register(type: string, adapter: WorkspaceAdapter): void
-  }
   serverUrl: URL
   $: BunShell
 }
@@ -182,7 +140,6 @@ export type AuthOAuthResult = { url: string; instructions: string } & (
                 refresh: string
                 access: string
                 expires: number
-                accountId?: string
                 enterpriseUrl?: string
               }
             | { key: string; metadata?: Record<string, string> }
@@ -203,7 +160,6 @@ export type AuthOAuthResult = { url: string; instructions: string } & (
                 refresh: string
                 access: string
                 expires: number
-                accountId?: string
                 enterpriseUrl?: string
               }
             | { key: string; metadata?: Record<string, string> }
@@ -221,7 +177,7 @@ export type ProviderHookContext = {
 
 export type ProviderHook = {
   id: string
-  models?: (provider: ProviderV2, ctx: ProviderHookContext) => Promise<Record<string, ModelV2>>
+  models?: (provider: Provider, ctx: ProviderHookContext) => Promise<Record<string, Model>>
 }
 
 /** @deprecated Use AuthOAuthResult instead. */
@@ -302,7 +258,7 @@ export interface Hooks {
       system: string[]
     },
   ) => Promise<void>
-  "experimental.provider.small_model"?: (input: { provider: ProviderV2 }, output: { model?: ModelV2 }) => Promise<void>
+  "experimental.provider.small_model"?: (input: { provider: Provider }, output: { model?: Model }) => Promise<void>
   /**
    * Called before session compaction starts. Allows plugins to customize
    * the compaction prompt.

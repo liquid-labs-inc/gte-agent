@@ -1,6 +1,6 @@
 export * as WebSearchTool from "./websearch"
 
-import { Tool, ToolFailure, toolText } from "@opencode-ai/llm"
+import { Tool, ToolFailure, toolText } from "@gte-agent/llm"
 import { Cause, Context, Duration, Effect, Layer, Schema } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/unstable/http"
 import { truthy } from "../flag/flag"
@@ -19,7 +19,7 @@ export const MAX_CONTEXT_CHARACTERS = 50_000
 export const MAX_RESPONSE_BYTES = 256 * 1024
 
 /**
- * Provider-independent local web search retained in V2 core for launch parity.
+ * Provider-independent local web search retained in core for launch parity.
  * This invokes the legacy Exa/Parallel product backends itself. It is distinct
  * from provider-hosted web search tools, which remain route-owned and execute
  * at the model provider. Ownership of this compromise can be revisited later.
@@ -62,17 +62,17 @@ export interface Config {
   readonly parallelApiKey?: string
 }
 
-export class ConfigService extends Context.Service<ConfigService, Config>()("@opencode/v2/WebSearchConfig") {}
+export class ConfigService extends Context.Service<ConfigService, Config>()("@gte-agent/WebSearchConfig") {}
 
 /** Isolates the retained product environment contract from the generic tool implementation. */
 export const defaultConfigLayer = Layer.sync(ConfigService, () =>
   ConfigService.of({
     provider:
-      process.env.OPENCODE_WEBSEARCH_PROVIDER === "exa" || process.env.OPENCODE_WEBSEARCH_PROVIDER === "parallel"
-        ? process.env.OPENCODE_WEBSEARCH_PROVIDER
+      process.env.GTE_AGENT_WEBSEARCH_PROVIDER === "exa" || process.env.GTE_AGENT_WEBSEARCH_PROVIDER === "parallel"
+        ? process.env.GTE_AGENT_WEBSEARCH_PROVIDER
         : undefined,
-    enableExa: truthy("OPENCODE_EXPERIMENTAL") || truthy("OPENCODE_ENABLE_EXA") || truthy("OPENCODE_EXPERIMENTAL_EXA"),
-    enableParallel: truthy("OPENCODE_ENABLE_PARALLEL") || truthy("OPENCODE_EXPERIMENTAL_PARALLEL"),
+    enableExa: truthy("GTE_AGENT_EXPERIMENTAL") || truthy("GTE_AGENT_ENABLE_EXA") || truthy("GTE_AGENT_EXPERIMENTAL_EXA"),
+    enableParallel: truthy("GTE_AGENT_ENABLE_PARALLEL") || truthy("GTE_AGENT_EXPERIMENTAL_PARALLEL"),
     exaApiKey: process.env.EXA_API_KEY,
     parallelApiKey: process.env.PARALLEL_API_KEY,
   }),
@@ -227,10 +227,10 @@ export const layer = Layer.effectDiscard(
                       objective: parameters.query,
                       search_queries: [parameters.query],
                       session_id: sessionID,
-                      // V2 invocation context does not safely expose the model yet.
+                      // invocation context does not safely expose the model yet.
                     },
                     {
-                      "User-Agent": `opencode/${InstallationVersion}`,
+                      "User-Agent": `gte-agent/${InstallationVersion}`,
                       ...(config.parallelApiKey ? { Authorization: `Bearer ${config.parallelApiKey}` } : {}),
                     },
                   )

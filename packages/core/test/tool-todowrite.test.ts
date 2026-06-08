@@ -1,28 +1,28 @@
 import { describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
-import { Database } from "@opencode-ai/core/database/database"
-import { EventV2 } from "@opencode-ai/core/event"
-import { PermissionV2 } from "@opencode-ai/core/permission"
-import { Project } from "@opencode-ai/core/project"
-import { ProjectTable } from "@opencode-ai/core/project/sql"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { SessionTable } from "@opencode-ai/core/session/sql"
-import { SessionTodo } from "@opencode-ai/core/session/todo"
-import { TodoWriteTool } from "@opencode-ai/core/tool/todowrite"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
+import { Database } from "@gte-agent/core/database/database"
+import { Event } from "@gte-agent/core/event"
+import { Permission } from "@gte-agent/core/permission"
+import { Project } from "@gte-agent/core/project"
+import { ProjectTable } from "@gte-agent/core/project/sql"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { Session } from "@gte-agent/core/session"
+import { SessionTable } from "@gte-agent/core/session/sql"
+import { SessionTodo } from "@gte-agent/core/session/todo"
+import { TodoWriteTool } from "@gte-agent/core/tool/todowrite"
+import { ToolRegistry } from "@gte-agent/core/tool/registry"
 import { testEffect } from "./lib/effect"
 
-const sessionID = SessionV2.ID.make("ses_todowrite_tool_test")
-const assertions: PermissionV2.AssertInput[] = []
+const sessionID = Session.ID.make("ses_todowrite_tool_test")
+const assertions: Permission.AssertInput[] = []
 let deny = false
 
 const permission = Layer.succeed(
-  PermissionV2.Service,
-  PermissionV2.Service.of({
+  Permission.Service,
+  Permission.Service.of({
     assert: (input) =>
       Effect.sync(() => assertions.push(input)).pipe(
-        Effect.andThen(deny ? Effect.fail(new PermissionV2.DeniedError({ rules: [] })) : Effect.void),
+        Effect.andThen(deny ? Effect.fail(new Permission.DeniedError({ rules: [] })) : Effect.void),
       ),
     ask: () => Effect.die("unused"),
     reply: () => Effect.die("unused"),
@@ -32,7 +32,7 @@ const permission = Layer.succeed(
   }),
 )
 const database = Database.layerFromPath(":memory:")
-const events = EventV2.layer.pipe(Layer.provide(database))
+const events = Event.layer.pipe(Layer.provide(database))
 const todos = SessionTodo.layer.pipe(Layer.provide(database), Layer.provide(events))
 const registry = ToolRegistry.defaultLayer.pipe(Layer.provide(permission))
 const tool = TodoWriteTool.layer.pipe(Layer.provide(registry), Layer.provide(todos))

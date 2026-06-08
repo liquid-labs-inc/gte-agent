@@ -1,14 +1,14 @@
-import { Global } from "@opencode-ai/core/global"
-import { InstallationVersion } from "@opencode-ai/core/installation/version"
-import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
-import { ServerAuth } from "@opencode-ai/server/auth"
+import { Global } from "@gte-agent/core/global"
+import { InstallationVersion } from "@gte-agent/core/installation/version"
+import { createGTEAgentClient } from "@gte-agent/sdk/client"
+import { ServerAuth } from "@gte-agent/server/auth"
 import { Context, Effect, FileSystem, Layer, Option, Schedule, Schema, Scope } from "effect"
 import { HttpServer } from "effect/unstable/http"
 import { randomBytes, randomUUID } from "crypto"
 import path from "path"
 
 export interface Interface {
-  readonly client: () => Effect.Effect<ReturnType<typeof createOpencodeClient>, unknown>
+  readonly client: () => Effect.Effect<ReturnType<typeof createGTEAgentClient>, unknown>
   readonly start: () => Effect.Effect<string, Error>
   readonly status: () => Effect.Effect<string | undefined>
   readonly stop: () => Effect.Effect<void, unknown>
@@ -16,7 +16,7 @@ export interface Interface {
   readonly register: (address: HttpServer.Address) => Effect.Effect<void, unknown, Scope.Scope>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/cli/Daemon") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/cli/Daemon") {}
 
 const Registration = Schema.Struct({
   id: Schema.optional(Schema.String),
@@ -58,13 +58,21 @@ export const layer = Layer.effect(
     })
 
     const createClient = Effect.fnUntraced(function* (url: string) {
-      return createOpencodeClient({ baseUrl: url, headers: ServerAuth.headers({ password: yield* password() }) })
+      return createGTEAgentClient({
+        baseUrl: url,
+        headers: {
+          ...ServerAuth.headers({ password: yield* password() }),
+          ...(process.env.GTE_AGENT_AUTH_TOKEN
+            ? { Authorization: `Bearer ${process.env.GTE_AGENT_AUTH_TOKEN}` }
+            : {}),
+        },
+      })
     })
 
     const healthy = Effect.fnUntraced(function* () {
       const info = yield* registration()
       const client = yield* createClient(info.url)
-      const response = yield* Effect.tryPromise(() => client.v2.health.get({ signal: AbortSignal.timeout(2_000) }))
+      const response = yield* Effect.tryPromise(() => client.health.get({ signal: AbortSignal.timeout(2_000) }))
       if (response.data?.healthy === true) return info
       return yield* Effect.fail(new Error("Registered server is not healthy"))
     })

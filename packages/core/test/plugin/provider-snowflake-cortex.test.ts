@@ -1,8 +1,8 @@
 import { describe, expect, it as bun_it } from "bun:test"
 import { Effect } from "effect"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { SnowflakeCortexPlugin, cortexFetch } from "@opencode-ai/core/plugin/provider/snowflake-cortex"
-import { ProviderPlugins } from "@opencode-ai/core/plugin/provider"
+import { Plugin } from "@gte-agent/core/plugin"
+import { SnowflakeCortexPlugin, cortexFetch } from "@gte-agent/core/plugin/provider/snowflake-cortex"
+import { ProviderPlugins } from "@gte-agent/core/plugin/provider"
 import { expectPluginRegistered, it, model, withEnv } from "./provider-helper"
 
 describe("SnowflakeCortexPlugin", () => {
@@ -19,7 +19,7 @@ describe("SnowflakeCortexPlugin", () => {
 
   it.effect("ignores non-snowflake-cortex providers", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(SnowflakeCortexPlugin)
       const result = yield* plugin.trigger(
         "aisdk.sdk",
@@ -33,7 +33,7 @@ describe("SnowflakeCortexPlugin", () => {
   it.effect("creates SDK for snowflake-cortex using SNOWFLAKE_CORTEX_PAT env var", () =>
     withEnv({ SNOWFLAKE_CORTEX_PAT: "test-pat" }, () =>
       Effect.gen(function* () {
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         yield* plugin.add(SnowflakeCortexPlugin)
         const result = yield* plugin.trigger(
           "aisdk.sdk",
@@ -52,7 +52,7 @@ describe("SnowflakeCortexPlugin", () => {
   it.effect("falls back to options.apiKey when SNOWFLAKE_CORTEX_PAT env var is absent", () =>
     withEnv({ SNOWFLAKE_CORTEX_PAT: undefined }, () =>
       Effect.gen(function* () {
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         yield* plugin.add(SnowflakeCortexPlugin)
         const result = yield* plugin.trigger(
           "aisdk.sdk",
@@ -75,11 +75,11 @@ describe("SnowflakeCortexPlugin", () => {
   it.effect("sets includeUsage on the SDK options", () =>
     withEnv({ SNOWFLAKE_CORTEX_PAT: "test-pat" }, () =>
       Effect.gen(function* () {
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         const captured: Record<string, unknown>[] = []
         yield* plugin.add(SnowflakeCortexPlugin)
         yield* plugin.add({
-          id: PluginV2.ID.make("inspector"),
+          id: Plugin.ID.make("inspector"),
           effect: Effect.succeed({
             "aisdk.sdk": (evt) =>
               Effect.sync(() => {

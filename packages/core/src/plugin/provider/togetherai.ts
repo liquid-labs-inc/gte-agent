@@ -1,8 +1,8 @@
 import { Effect } from "effect"
-import { PluginV2 } from "../../plugin"
+import { Plugin } from "../../plugin"
 
-export const TogetherAIPlugin = PluginV2.define({
-  id: PluginV2.ID.make("togetherai"),
+export const TogetherAIPlugin = Plugin.define({
+  id: Plugin.ID.make("togetherai"),
   effect: Effect.gen(function* () {
     return {
       "aisdk.sdk": Effect.fn(function* (evt) {

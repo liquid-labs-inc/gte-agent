@@ -1,10 +1,10 @@
-export * as PermissionV2 from "./permission"
+export * as Permission from "./permission"
 
 import { Context, Deferred, Effect as EffectRuntime, Layer, Schema } from "effect"
-import { EventV2 } from "./event"
-import { Location } from "./location"
-import { AgentV2 } from "./agent"
-import { SessionV2 } from "./session"
+import { Event } from "./event"
+import { RuntimeScope } from "./runtime-scope"
+import { Agent } from "./agent"
+import { Session } from "./session"
 import { SessionStore } from "./session/store"
 import { withStatics } from "./schema"
 import { Identifier } from "./util/identifier"
@@ -18,7 +18,7 @@ type Rule = PermissionSchema.Rule
 type Ruleset = PermissionSchema.Ruleset
 
 export const ID = Schema.String.check(Schema.isStartsWith("per")).pipe(
-  Schema.brand("PermissionV2.ID"),
+  Schema.brand("Permission.ID"),
   withStatics((schema) => ({ create: (id?: string) => schema.make(id ?? "per_" + Identifier.ascending()) })),
 )
 export type ID = typeof ID.Type
@@ -29,70 +29,70 @@ export const Source = Schema.Union([
     messageID: Schema.String,
     callID: Schema.String,
   }),
-]).annotate({ identifier: "PermissionV2.Source" })
+]).annotate({ identifier: "Permission.Source" })
 export type Source = typeof Source.Type
 
 export const Request = Schema.Struct({
   id: ID,
-  sessionID: SessionV2.ID,
+  sessionID: Session.ID,
   action: Schema.String,
   resources: Schema.Array(Schema.String),
   save: Schema.Array(Schema.String).pipe(Schema.optional),
   metadata: Schema.Record(Schema.String, Schema.Unknown).pipe(Schema.optional),
   source: Source.pipe(Schema.optional),
-}).annotate({ identifier: "PermissionV2.Request" })
+}).annotate({ identifier: "Permission.Request" })
 export type Request = typeof Request.Type
 
-export const Reply = Schema.Literals(["once", "always", "reject"]).annotate({ identifier: "PermissionV2.Reply" })
+export const Reply = Schema.Literals(["once", "always", "reject"]).annotate({ identifier: "Permission.Reply" })
 export type Reply = typeof Reply.Type
 
 export const AssertInput = Schema.Struct({
   id: ID.pipe(Schema.optional),
-  sessionID: SessionV2.ID,
+  sessionID: Session.ID,
   action: Schema.String,
   resources: Schema.Array(Schema.String),
   save: Schema.Array(Schema.String).pipe(Schema.optional),
   metadata: Schema.Record(Schema.String, Schema.Unknown).pipe(Schema.optional),
   source: Source.pipe(Schema.optional),
-}).annotate({ identifier: "PermissionV2.AssertInput" })
+}).annotate({ identifier: "Permission.AssertInput" })
 export type AssertInput = typeof AssertInput.Type
 
 export const ReplyInput = Schema.Struct({
   requestID: ID,
   reply: Reply,
   message: Schema.String.pipe(Schema.optional),
-}).annotate({ identifier: "PermissionV2.ReplyInput" })
+}).annotate({ identifier: "Permission.ReplyInput" })
 export type ReplyInput = typeof ReplyInput.Type
 
 export const AskResult = Schema.Struct({
   id: ID,
   effect: PermissionSchema.Effect,
-}).annotate({ identifier: "PermissionV2.AskResult" })
+}).annotate({ identifier: "Permission.AskResult" })
 export type AskResult = typeof AskResult.Type
 
-export const Event = {
-  Asked: EventV2.define({ type: "permission.v2.asked", schema: Request.fields }),
-  Replied: EventV2.define({
-    type: "permission.v2.replied",
+export const PermissionEvent = {
+  Asked: Event.define({ type: "permission.asked", schema: Request.fields }),
+  Replied: Event.define({
+    type: "permission.replied",
     schema: {
-      sessionID: SessionV2.ID,
+      sessionID: Session.ID,
       requestID: ID,
       reply: Reply,
     },
   }),
 }
 
-export class RejectedError extends Schema.TaggedErrorClass<RejectedError>()("PermissionV2.RejectedError", {}) {}
+export class RejectedError extends Schema.TaggedErrorClass<RejectedError>()("Permission.RejectedError", {}) {}
 
-export class CorrectedError extends Schema.TaggedErrorClass<CorrectedError>()("PermissionV2.CorrectedError", {
+export class CorrectedError extends Schema.TaggedErrorClass<CorrectedError>()("Permission.CorrectedError", {
   feedback: Schema.String,
 }) {}
 
-export class DeniedError extends Schema.TaggedErrorClass<DeniedError>()("PermissionV2.DeniedError", {
+export class DeniedError extends Schema.TaggedErrorClass<DeniedError>()("Permission.DeniedError", {
   rules: PermissionSchema.Ruleset,
 }) {}
 
-export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("PermissionV2.NotFoundError", {
+export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("Permission.NotFoundError", {
   requestID: ID,
 }) {}
 
@@ -115,15 +115,15 @@ export function merge(...rulesets: Ruleset[]): Ruleset {
 }
 
 export interface Interface {
-  readonly ask: (input: AssertInput) => EffectRuntime.Effect<AskResult, SessionV2.NotFoundError>
-  readonly assert: (input: AssertInput) => EffectRuntime.Effect<void, Error | SessionV2.NotFoundError>
+  readonly ask: (input: AssertInput) => EffectRuntime.Effect<AskResult, Session.NotFoundError>
+  readonly assert: (input: AssertInput) => EffectRuntime.Effect<void, Error | Session.NotFoundError>
   readonly reply: (input: ReplyInput) => EffectRuntime.Effect<void, NotFoundError>
   readonly get: (id: ID) => EffectRuntime.Effect<Request | undefined>
-  readonly forSession: (sessionID: SessionV2.ID) => EffectRuntime.Effect<ReadonlyArray<Request>>
+  readonly forSession: (sessionID: Session.ID) => EffectRuntime.Effect<ReadonlyArray<Request>>
   readonly list: () => EffectRuntime.Effect<ReadonlyArray<Request>>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Permission") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/Permission") {}
 
 interface Pending {
   readonly request: Request
@@ -133,9 +133,9 @@ interface Pending {
 export const layer = Layer.effect(
   Service,
   EffectRuntime.gen(function* () {
-    const events = yield* EventV2.Service
-    const location = yield* Location.Service
-    const agents = yield* AgentV2.Service
+    const events = yield* Event.Service
+    const location = yield* RuntimeScope.Service
+    const agents = yield* Agent.Service
     const sessions = yield* SessionStore.Service
     const saved = yield* PermissionSaved.Service
     const pending = new Map<ID, Pending>()
@@ -158,10 +158,10 @@ export const layer = Layer.effect(
       )
     })
 
-    const configured = EffectRuntime.fn("PermissionV2.configured")(function* (sessionID: SessionV2.ID) {
+    const configured = EffectRuntime.fn("Permission.configured")(function* (sessionID: Session.ID) {
       const session = yield* sessions.get(sessionID)
-      if (!session) return yield* new SessionV2.NotFoundError({ sessionID })
-      return (yield* agents.get(AgentV2.ID.make(session.agent ?? "build")))?.permissions ?? []
+      if (!session) return yield* new Session.NotFoundError({ sessionID })
+      return (yield* agents.get(Agent.ID.make(session.agent ?? "build")))?.permissions ?? []
     })
 
     function denied(input: AssertInput, rules: Ruleset) {
@@ -201,20 +201,20 @@ export const layer = Layer.effect(
           if (pending.has(request.id)) return yield* EffectRuntime.die(`Duplicate pending permission ID: ${request.id}`)
           pending.set(request.id, item)
           yield* events
-            .publish(Event.Asked, request)
+            .publish(PermissionEvent.Asked, request)
             .pipe(EffectRuntime.onError(() => EffectRuntime.sync(() => pending.delete(request.id))))
           return item
         }),
       )
 
-    const ask = EffectRuntime.fn("PermissionV2.ask")(function* (input: AssertInput) {
+    const ask = EffectRuntime.fn("Permission.ask")(function* (input: AssertInput) {
       const result = yield* evaluateInput(input)
       const value = request(input)
       if (result.effect === "ask") yield* create(value)
       return { id: value.id, effect: result.effect }
     })
 
-    const assert = EffectRuntime.fn("PermissionV2.assert")((input: AssertInput) =>
+    const assert = EffectRuntime.fn("Permission.assert")((input: AssertInput) =>
       EffectRuntime.uninterruptibleMask((restore) =>
         EffectRuntime.gen(function* () {
           const result = yield* evaluateInput(input)
@@ -236,12 +236,12 @@ export const layer = Layer.effect(
       ),
     )
 
-    const reply = EffectRuntime.fn("PermissionV2.reply")((input: ReplyInput) =>
+    const reply = EffectRuntime.fn("Permission.reply")((input: ReplyInput) =>
       EffectRuntime.uninterruptible(
         EffectRuntime.gen(function* () {
           const existing = pending.get(input.requestID)
           if (!existing) return yield* new NotFoundError({ requestID: input.requestID })
-          yield* events.publish(Event.Replied, {
+          yield* events.publish(PermissionEvent.Replied, {
             sessionID: existing.request.sessionID,
             requestID: existing.request.id,
             reply: input.reply,
@@ -255,7 +255,7 @@ export const layer = Layer.effect(
             pending.delete(input.requestID)
             for (const [id, item] of pending) {
               if (item.request.sessionID !== existing.request.sessionID) continue
-              yield* events.publish(Event.Replied, {
+              yield* events.publish(PermissionEvent.Replied, {
                 sessionID: item.request.sessionID,
                 requestID: item.request.id,
                 reply: "reject",
@@ -292,7 +292,7 @@ export const layer = Layer.effect(
               )
             )
               continue
-            yield* events.publish(Event.Replied, {
+            yield* events.publish(PermissionEvent.Replied, {
               sessionID: item.request.sessionID,
               requestID: item.request.id,
               reply: "always",
@@ -304,15 +304,15 @@ export const layer = Layer.effect(
       ),
     )
 
-    const list = EffectRuntime.fn("PermissionV2.list")(function* () {
+    const list = EffectRuntime.fn("Permission.list")(function* () {
       return Array.from(pending.values(), (item) => item.request)
     })
 
-    const get = EffectRuntime.fn("PermissionV2.get")(function* (id: ID) {
+    const get = EffectRuntime.fn("Permission.get")(function* (id: ID) {
       return pending.get(id)?.request
     })
 
-    const forSession = EffectRuntime.fn("PermissionV2.forSession")(function* (sessionID: SessionV2.ID) {
+    const forSession = EffectRuntime.fn("Permission.forSession")(function* (sessionID: Session.ID) {
       return Array.from(pending.values(), (item) => item.request).filter((request) => request.sessionID === sessionID)
     })
 
@@ -320,4 +320,4 @@ export const layer = Layer.effect(
   }),
 )
 
-export const locationLayer = layer.pipe(Layer.provideMerge(AgentV2.locationLayer))
+export const runtimeScopeLayer = layer.pipe(Layer.provideMerge(Agent.runtimeScopeLayer))

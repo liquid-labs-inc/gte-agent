@@ -7,7 +7,7 @@ import { AbsolutePath } from "../schema"
 import { FSUtil } from "../fs-util"
 import { Git } from "../git"
 import { Database } from "../database/database"
-import { EventV2 } from "../event"
+import { Event } from "../event"
 import { Project } from "../project"
 import { ProjectDirectoryTable } from "./sql"
 import { makeStrategies } from "./copy-strategies"
@@ -87,8 +87,8 @@ export interface Strategy {
   readonly detect: (directory: AbsolutePath) => Effect.Effect<boolean>
 }
 
-export const Event = {
-  Updated: EventV2.define({
+export const ProjectCopyEvent = {
+  Updated: Event.define({
     type: "project.directories.updated",
     schema: { projectID: Project.ID },
   }),
@@ -101,14 +101,14 @@ export interface Interface {
   readonly refresh: (input: RefreshInput) => Effect.Effect<void, Error>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/ProjectCopy") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/ProjectCopy") {}
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
     const git = yield* Git.Service
-    const events = yield* EventV2.Service
+    const events = yield* Event.Service
     const db = (yield* Database.Service).db
 
     const canonical = Effect.fnUntraced(function* (input: AbsolutePath) {
@@ -174,7 +174,7 @@ export const layer = Layer.effect(
     })
 
     const changed = Effect.fnUntraced(function* (projectID: Project.ID, update: boolean) {
-      if (update) yield* events.publish(Event.Updated, { projectID })
+      if (update) yield* events.publish(ProjectCopyEvent.Updated, { projectID })
     })
 
     const strategy = (id: StrategyID) => registry.get(id) as Strategy
@@ -269,5 +269,5 @@ export const defaultLayer = layer.pipe(
   Layer.provide(Database.defaultLayer),
   Layer.provide(FSUtil.defaultLayer),
   Layer.provide(Git.defaultLayer),
-  Layer.provide(EventV2.defaultLayer),
+  Layer.provide(Event.defaultLayer),
 )

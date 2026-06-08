@@ -3,35 +3,35 @@ import path from "path"
 import { fileURLToPath } from "url"
 import { describe, expect, test } from "bun:test"
 import { Effect, Layer } from "effect"
-import { FileMutation } from "@opencode-ai/core/file-mutation"
-import { FSUtil } from "@opencode-ai/core/fs-util"
-import { Location } from "@opencode-ai/core/location"
-import { LocationMutation } from "@opencode-ai/core/location-mutation"
-import { PermissionV2 } from "@opencode-ai/core/permission"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
-import { EditTool } from "@opencode-ai/core/tool/edit"
-import { location } from "./fixture/location"
+import { FileMutation } from "@gte-agent/core/file-mutation"
+import { FSUtil } from "@gte-agent/core/fs-util"
+import { RuntimeScope } from "@gte-agent/core/runtime-scope"
+import { RuntimeScopeMutation } from "@gte-agent/core/runtime-scope-mutation"
+import { Permission } from "@gte-agent/core/permission"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { Session } from "@gte-agent/core/session"
+import { ToolRegistry } from "@gte-agent/core/tool/registry"
+import { EditTool } from "@gte-agent/core/tool/edit"
+import { runtimeScope } from "./fixture/runtime-scope"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
 
-const sessionID = SessionV2.ID.make("ses_edit_tool_test")
-const assertions: PermissionV2.AssertInput[] = []
+const sessionID = Session.ID.make("ses_edit_tool_test")
+const assertions: Permission.AssertInput[] = []
 const writes: string[] = []
 let reads = 0
 let denyAction: string | undefined
-let afterAssertion = (_input: PermissionV2.AssertInput): Effect.Effect<void> => Effect.void
+let afterAssertion = (_input: Permission.AssertInput): Effect.Effect<void> => Effect.void
 let afterRead = (_target: string, _content: Uint8Array): Effect.Effect<void> => Effect.void
 
 const permission = Layer.succeed(
-  PermissionV2.Service,
-  PermissionV2.Service.of({
+  Permission.Service,
+  Permission.Service.of({
     assert: (input) =>
       Effect.sync(() => assertions.push(input)).pipe(
         Effect.andThen(
           input.action === denyAction
-            ? Effect.fail(new PermissionV2.DeniedError({ rules: [] }))
+            ? Effect.fail(new Permission.DeniedError({ rules: [] }))
             : afterAssertion(input),
         ),
       ),
@@ -74,10 +74,10 @@ const filesystem = Layer.effect(
 
 const withTool = <A, E, R>(directory: string, body: (registry: ToolRegistry.Interface) => Effect.Effect<A, E, R>) => {
   const activeLocation = Layer.succeed(
-    Location.Service,
-    Location.Service.of(location({ directory: AbsolutePath.make(directory) })),
+    RuntimeScope.Service,
+    RuntimeScope.Service.of(runtimeScope({ directory: AbsolutePath.make(directory) })),
   )
-  const planning = LocationMutation.layer.pipe(Layer.provide(filesystem), Layer.provide(activeLocation))
+  const planning = RuntimeScopeMutation.layer.pipe(Layer.provide(filesystem), Layer.provide(activeLocation))
   const commits = FileMutation.layer.pipe(Layer.provide(filesystem), Layer.provide(planning))
   const registry = ToolRegistry.defaultLayer.pipe(Layer.provide(permission))
   const edit = EditTool.layer.pipe(
@@ -136,7 +136,7 @@ describe("EditTool", () => {
     ),
   )
 
-  it.live("accepts an absolute file path inside the active Location", () =>
+  it.live("accepts an absolute file path inside the active RuntimeScope", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => tmpdir()),
       (tmp) => {
@@ -448,10 +448,10 @@ test("keeps the locked edit schema, semantics docstring, and deferred TODOs visi
   )
   for (const todo of [
     "Port V1 fuzzy correction strategies only after exact-edit behavior is established: line-trimmed matching, block-anchor fallback, indentation correction, and similarity-threshold review.",
-    "Add formatter integration after V2 formatter runtime exists.",
-    "Publish watcher/file-edit events after V2 watcher integration exists.",
+    "Add formatter integration after formatter runtime exists.",
+    "Publish watcher/file-edit events after watcher integration exists.",
     "Add snapshots / undo after design exists.",
-    "Add LSP notification and diagnostics after V2 LSP runtime exists.",
+    "Add LSP notification and diagnostics after LSP runtime exists.",
   ]) {
     expect(source).toContain(`TODO: ${todo}`)
   }

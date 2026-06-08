@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@opencode-ai/plugin",
+  "name": "@gte-agent/plugin",
   "version": "1.16.0",
   "type": "module",
   "license": "MIT",
@@ -17,7 +17,7 @@
     "dist"
   ],
   "dependencies": {
-    "@opencode-ai/sdk": "workspace:*",
+    "@gte-agent/sdk": "workspace:*",
     "effect": "catalog:",
     "zod": "catalog:"
   },

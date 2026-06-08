@@ -1,8 +1,8 @@
 import { Effect } from "effect"
-import { PluginV2 } from "../../plugin"
+import { Plugin } from "../../plugin"
 
-export const CerebrasPlugin = PluginV2.define({
-  id: PluginV2.ID.make("cerebras"),
+export const CerebrasPlugin = Plugin.define({
+  id: Plugin.ID.make("cerebras"),
   effect: Effect.gen(function* () {
     return {
       "catalog.transform": Effect.fn(function* (ctx) {
@@ -10,7 +10,7 @@ export const CerebrasPlugin = PluginV2.define({
           if (item.provider.api.type !== "aisdk") continue
           if (item.provider.api.package !== "@ai-sdk/cerebras") continue
           ctx.provider.update(item.provider.id, (provider) => {
-            provider.request.headers["X-Cerebras-3rd-Party-Integration"] = "opencode"
+            provider.request.headers["X-Cerebras-3rd-Party-Integration"] = "gte-agent"
           })
         }
       }),

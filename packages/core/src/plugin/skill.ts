@@ -3,29 +3,29 @@
 export * as SkillPlugin from "./skill"
 
 import { Effect } from "effect"
-import { PluginV2 } from "../plugin"
+import { define, ID } from "../plugin"
 import { AbsolutePath } from "../schema"
-import { SkillV2 } from "../skill"
-import customizeOpencodeContent from "./skill/customize-opencode.md" with { type: "text" }
+import { Skill } from "../skill"
+import customizeOpencodeContent from "./skill/customize-gte-agent.md" with { type: "text" }
 
-export const CustomizeOpencodeContent = customizeOpencodeContent
+export const CustomizeGTEAgentContent = customizeOpencodeContent
 
-export const Plugin = PluginV2.define({
-  id: PluginV2.ID.make("skill"),
+export const Plugin = define({
+  id: ID.make("skill"),
   effect: Effect.gen(function* () {
-    const skill = yield* SkillV2.Service
+    const skill = yield* Skill.Service
     const transform = yield* skill.transform()
 
     yield* transform((editor) => {
       editor.source(
-        new SkillV2.EmbeddedSource({
+        new Skill.EmbeddedSource({
           type: "embedded",
-          skill: new SkillV2.Info({
-            name: "customize-opencode",
+          skill: new Skill.Info({
+            name: "customize-gte-agent",
             description:
-              "Use ONLY when the user is editing or creating opencode's own configuration: opencode.json, opencode.jsonc, files under .opencode/, or files under ~/.config/opencode/. Also use when creating or fixing opencode agents, subagents, skills, plugins, MCP servers, or permission rules. Do not use for the user's own application code, or for any project that is not configuring opencode itself.",
-            location: AbsolutePath.make("/builtin/customize-opencode.md"),
-            content: CustomizeOpencodeContent,
+              "Use ONLY when the user is editing or creating gte-agent's own configuration: gte-agent.json, gte-agent.jsonc, files under .gte-agent/, or files under ~/.config/gte-agent/. Also use when creating or fixing gte-agent agents, subagents, skills, plugins, MCP servers, or permission rules. Do not use for the user's own application code, or for any project that is not configuring gte-agent itself.",
+            location: AbsolutePath.make("/builtin/customize-gte-agent.md"),
+            content: CustomizeGTEAgentContent,
           }),
         }),
       )

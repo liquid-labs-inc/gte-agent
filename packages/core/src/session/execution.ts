@@ -11,8 +11,8 @@ export interface Interface {
   readonly wake: (sessionID: SessionSchema.ID) => Effect.Effect<void, SessionRunner.RunError>
 }
 
-/** Routes execution from a Session ID to the runner owned by that Session's Location. */
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/SessionExecution") {}
+/** Routes execution from a Session ID to the runner owned by that Session's RuntimeScope. */
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/SessionExecution") {}
 
 /** Low-level compatibility layer for callers that only need durable Session recording. */
 export const noopLayer = Layer.succeed(Service, Service.of({ resume: () => Effect.void, wake: () => Effect.void }))

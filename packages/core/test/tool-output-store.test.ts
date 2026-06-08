@@ -1,17 +1,17 @@
 import { describe, expect } from "bun:test"
 import path from "path"
 import { Effect, Layer } from "effect"
-import { FSUtil } from "@opencode-ai/core/fs-util"
-import { Global } from "@opencode-ai/core/global"
-import { Config } from "@opencode-ai/core/config"
-import { ConfigToolOutput } from "@opencode-ai/core/config/tool-output"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
+import { FSUtil } from "@gte-agent/core/fs-util"
+import { Global } from "@gte-agent/core/global"
+import { Config } from "@gte-agent/core/config"
+import { ConfigToolOutput } from "@gte-agent/core/config/tool-output"
+import { Session } from "@gte-agent/core/session"
+import { ToolOutputStore } from "@gte-agent/core/tool-output-store"
 import { testEffect } from "./lib/effect"
 import { tmpdir } from "./fixture/tmpdir"
 
-const sessionID = SessionV2.ID.make("ses_tool_output_store")
-const otherSessionID = SessionV2.ID.make("ses_tool_output_store_other")
+const sessionID = Session.ID.make("ses_tool_output_store")
+const otherSessionID = Session.ID.make("ses_tool_output_store_other")
 
 const withStore = <A, E, R>(
   body: (input: { root: string; store: ToolOutputStore.Interface; fs: FSUtil.Interface }) => Effect.Effect<A, E, R>,

@@ -1,25 +1,25 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { AzureCognitiveServicesPlugin } from "@opencode-ai/core/plugin/provider/azure"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Catalog } from "@gte-agent/core/catalog"
+import { Plugin } from "@gte-agent/core/plugin"
+import { AzureCognitiveServicesPlugin } from "@gte-agent/core/plugin/provider/azure"
+import { Provider } from "@gte-agent/core/provider"
 import { fakeSelectorSdk, it, model, provider, withEnv } from "./provider-helper"
 
 describe("AzureCognitiveServicesPlugin", () => {
   it.effect("maps the resource env var to the Azure SDK baseURL", () =>
     withEnv({ AZURE_COGNITIVE_SERVICES_RESOURCE_NAME: "cognitive" }, () =>
       Effect.gen(function* () {
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         const catalog = yield* Catalog.Service
         yield* plugin.add(AzureCognitiveServicesPlugin)
         const transform = yield* catalog.transform()
         yield* transform((catalog) => {
-          catalog.provider.update(ProviderV2.ID.make("azure-cognitive-services"), (item) => {
+          catalog.provider.update(Provider.ID.make("azure-cognitive-services"), (item) => {
             item.api = { type: "aisdk", package: "@ai-sdk/openai-compatible" }
           })
         })
-        const result = yield* catalog.provider.get(ProviderV2.ID.make("azure-cognitive-services"))
+        const result = yield* catalog.provider.get(Provider.ID.make("azure-cognitive-services"))
         expect(result.api).toEqual({
           type: "aisdk",
           package: "@ai-sdk/openai-compatible",
@@ -34,7 +34,7 @@ describe("AzureCognitiveServicesPlugin", () => {
   it.effect("leaves baseURL unset without resource env and ignores other providers", () =>
     withEnv({ AZURE_COGNITIVE_SERVICES_RESOURCE_NAME: undefined }, () =>
       Effect.gen(function* () {
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         const catalog = yield* Catalog.Service
         yield* plugin.add(AzureCognitiveServicesPlugin)
         const transform = yield* catalog.transform()
@@ -50,8 +50,8 @@ describe("AzureCognitiveServicesPlugin", () => {
             item.api = openai.api
           })
         })
-        const azure = yield* catalog.provider.get(ProviderV2.ID.make("azure-cognitive-services"))
-        const openai = yield* catalog.provider.get(ProviderV2.ID.openai)
+        const azure = yield* catalog.provider.get(Provider.ID.make("azure-cognitive-services"))
+        const openai = yield* catalog.provider.get(Provider.ID.openai)
         expect(azure.request.body.baseURL).toBeUndefined()
         expect(azure.api).toEqual({ type: "aisdk", package: "@ai-sdk/openai-compatible" })
         expect(openai.request.body.baseURL).toBeUndefined()
@@ -62,7 +62,7 @@ describe("AzureCognitiveServicesPlugin", () => {
 
   it.effect("selects chat only for completion URLs", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(AzureCognitiveServicesPlugin)
       yield* plugin.trigger(
@@ -80,7 +80,7 @@ describe("AzureCognitiveServicesPlugin", () => {
 
   it.effect("uses the legacy Azure selector order and provider guard", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(AzureCognitiveServicesPlugin)
       yield* plugin.trigger(
@@ -100,7 +100,7 @@ describe("AzureCognitiveServicesPlugin", () => {
 
   it.effect("falls back from responses to messages, chat, then languageModel", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       const sdk = fakeSelectorSdk(calls)
       yield* plugin.add(AzureCognitiveServicesPlugin)

@@ -1,8 +1,8 @@
-import { LLM, LLMClient, LLMError, LLMEvent, SystemPart } from "@opencode-ai/llm"
+import { LLM, LLMClient, LLMError, LLMEvent, SystemPart } from "@gte-agent/llm"
 import { Cause, DateTime, Effect, FiberSet, Layer, Semaphore, Stream } from "effect"
-import { EventV2 } from "../../event"
-import { ModelV2 } from "../../model"
-import { ProviderV2 } from "../../provider"
+import { Event } from "../../event"
+import { Model } from "../../model"
+import { Provider } from "../../provider"
 import { SessionSchema } from "../schema"
 import { SessionEvent } from "../event"
 import { SessionStore } from "../store"
@@ -13,7 +13,7 @@ import { ToolRegistry } from "../../tool/registry"
 import { SessionRunnerModel } from "./model"
 import { Database } from "../../database/database"
 import { SessionInput } from "../input"
-import { QuestionV2 } from "../../question"
+import { Question } from "../../question"
 import { SystemContextRegistry } from "../../system-context-registry"
 import { SessionContextEpoch } from "../context-epoch"
 
@@ -32,8 +32,8 @@ import { SessionContextEpoch } from "../context-epoch"
  *   - [ ] Bound provider retries and repeated identical tool calls.
  *
  * - Runtime context assembly
- *   - [x] Load Session placement and chronological projected V2 history.
- *   - [x] Resolve the selected model through the location-scoped runner environment.
+ *   - [x] Load Session placement and chronological projected history.
+ *   - [x] Resolve the selected model through the runtime-scope runner environment.
  *   - [ ] Load the selected agent and effective permissions.
  *   - [ ] Build provider/model-specific base instructions and environment facts.
  *   - [x] Load global and upward project `AGENTS.md` instructions.
@@ -44,8 +44,8 @@ import { SessionContextEpoch } from "../context-epoch"
  *   - [ ] Compact or summarize history when context pressure requires it.
  *
  * - One provider turn
- *   - [x] Translate every projected V2 Session message variant into canonical
- *     `@opencode-ai/llm` messages.
+ *   - [x] Translate every projected Session message variant into canonical
+ *     `@gte-agent/llm` messages.
  *   - [ ] Resolve policy-filtered built-in, MCP, plugin, and structured-output tool definitions.
  *   - [x] Stream exactly one `llm.stream(request)` provider turn.
  *   - [x] Persist assistant text and usage events incrementally as they arrive.
@@ -71,7 +71,7 @@ import { SessionContextEpoch } from "../context-epoch"
  * Use `llm.stream(request)` for each provider turn. Keep tool execution and continuation here.
  * Durable activity recovery remains a separate future slice with an explicit retry policy.
  *
- * The current slice loads V2 history, translates it, resolves a model through a core service, and persists one
+ * The current slice loads projected history, translates it, resolves a model through a core service, and persists one
  * provider turn. Registry definitions are advertised, local tool calls are settled durably, and a
  * bounded explicit loop starts the next provider turn after local settlement.
  */
@@ -82,7 +82,7 @@ const MAX_STEPS = 25
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const events = yield* EventV2.Service
+    const events = yield* Event.Service
     const llm = yield* LLMClient.Service
     const tools = yield* ToolRegistry.Service
     const models = yield* SessionRunnerModel.Service
@@ -125,14 +125,14 @@ export const layer = Layer.effect(
 
     // Match V1: dismissing a question halts the loop instead of becoming model-facing tool output.
     const isQuestionRejected = (cause: Cause.Cause<unknown>) =>
-      cause.reasons.some((reason) => Cause.isDieReason(reason) && reason.defect instanceof QuestionV2.RejectedError)
+      cause.reasons.some((reason) => Cause.isDieReason(reason) && reason.defect instanceof Question.RejectedError)
 
     const runTurn = Effect.fn("SessionRunner.runTurn")(function* (
       sessionID: SessionSchema.ID,
       promotion: "steer" | "queue" | undefined,
     ) {
       const session = yield* getSession(sessionID)
-      const initialized = yield* SessionContextEpoch.initialize(db, systemContext, session.id, session.location)
+      const initialized = yield* SessionContextEpoch.initialize(db, systemContext, session.id, session.runtimeScope)
       const model = yield* models.resolve(session)
       const toolFibers = yield* FiberSet.make<void, never>()
       let needsContinuation = false
@@ -145,7 +145,7 @@ export const layer = Layer.effect(
         }
       }
       const system =
-        initialized ?? (yield* SessionContextEpoch.prepare(db, events, systemContext, session.id, session.location))
+        initialized ?? (yield* SessionContextEpoch.prepare(db, events, systemContext, session.id, session.runtimeScope))
       const context = yield* store.runnerContext(session.id, system.baselineSeq)
       const request = LLM.request({
         model,
@@ -157,8 +157,8 @@ export const layer = Layer.effect(
         sessionID: session.id,
         agent: session.agent ?? "build",
         model: {
-          id: ModelV2.ID.make(model.id),
-          providerID: ProviderV2.ID.make(model.provider),
+          id: Model.ID.make(model.id),
+          providerID: Provider.ID.make(model.provider),
           ...(session.model?.variant === undefined ? {} : { variant: session.model.variant }),
         },
       })

@@ -2,7 +2,7 @@ export * as Policy from "./policy"
 
 import { Context, Effect as EffectRuntime, Layer, Schema } from "effect"
 import { Wildcard } from "./util/wildcard"
-import { Location } from "./location"
+import { RuntimeScope } from "./runtime-scope"
 
 export const Effect = Schema.Literals(["allow", "deny"]).annotate({ identifier: "Policy.Effect" })
 export type Effect = typeof Effect.Type
@@ -19,13 +19,13 @@ export interface Interface {
   readonly hasStatements: () => boolean
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Policy") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/Policy") {}
 
 export const layer = Layer.effect(
   Service,
   EffectRuntime.gen(function* () {
     let statements: Info[] = []
-    yield* Location.Service
+    yield* RuntimeScope.Service
 
     return Service.of({
       load: EffectRuntime.fn("Policy.load")(function* (input) {
@@ -43,4 +43,4 @@ export const layer = Layer.effect(
   }),
 )
 
-export const locationLayer = layer
+export const runtimeScopeLayer = layer

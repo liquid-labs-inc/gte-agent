@@ -3,10 +3,10 @@ export * as SessionInput from "./input"
 import { and, asc, eq, isNull, lte } from "drizzle-orm"
 import { DateTime, Effect, Schema } from "effect"
 import type { Database } from "../database/database"
-import type { EventV2 } from "../event"
+import type { Event } from "../event"
 import { EventSequenceTable } from "../event/sql"
 import { NonNegativeInt } from "../schema"
-import { V2Schema } from "../v2-schema"
+import { TimeSchema } from "../time-schema"
 import { SessionEvent } from "./event"
 import { SessionMessage } from "./message"
 import { Prompt } from "./prompt"
@@ -24,7 +24,7 @@ export class Admitted extends Schema.Class<Admitted>("SessionInput.Admitted")({
   sessionID: SessionSchema.ID,
   prompt: Prompt,
   delivery: Delivery,
-  timeCreated: V2Schema.DateTimeUtcFromMillis,
+  timeCreated: TimeSchema.DateTimeUtcFromMillis,
   promotedSeq: NonNegativeInt.pipe(Schema.optional),
 }) {}
 
@@ -53,7 +53,7 @@ export class LifecycleConflict extends Schema.TaggedErrorClass<LifecycleConflict
 
 export const admit = Effect.fn("SessionInput.admit")(function* (
   db: DatabaseService,
-  events: EventV2.Interface,
+  events: Event.Interface,
   input: {
     readonly id: SessionMessage.ID
     readonly sessionID: SessionSchema.ID
@@ -210,7 +210,7 @@ const matchesPrompt = (input: Admitted, expected: { readonly sessionID: SessionS
 
 export const guardReservedID = Effect.fn("SessionInput.guardReservedID")(function* (
   db: DatabaseService,
-  event: EventV2.Payload,
+  event: Event.Payload,
 ) {
   if (
     Schema.is(SessionEvent.PromptLifecycle.Admitted)(event) ||
@@ -229,49 +229,18 @@ export const guardReservedID = Effect.fn("SessionInput.guardReservedID")(functio
   return yield* Effect.die(new LifecycleConflict({ id }))
 })
 
-const reservedID = (event: EventV2.Payload) => {
+const reservedID = (event: Event.Payload) => {
   if (Schema.is(SessionEvent.Step.Started)(event)) return event.data.assistantMessageID
   if (Schema.is(SessionEvent.AgentSwitched)(event)) return event.data.messageID
   if (Schema.is(SessionEvent.ModelSwitched)(event)) return event.data.messageID
-  if (Schema.is(SessionEvent.Prompted)(event)) return event.data.messageID
   if (Schema.is(SessionEvent.Synthetic)(event)) return event.data.messageID
   if (Schema.is(SessionEvent.Shell.Started)(event)) return event.data.messageID
   if (Schema.is(SessionEvent.Compaction.Started)(event)) return event.data.messageID
 }
 
-export const projectLegacyPrompted = Effect.fn("SessionInput.projectLegacyPrompted")(function* (
-  db: DatabaseService,
-  input: {
-    readonly id: SessionMessage.ID
-    readonly sessionID: SessionSchema.ID
-    readonly prompt: Prompt
-    readonly delivery: Delivery
-    readonly timeCreated: DateTime.Utc
-    readonly promotedSeq: number
-  },
-) {
-  const inserted = yield* db
-    .insert(SessionInputTable)
-    .values({
-      id: input.id,
-      session_id: input.sessionID,
-      admitted_seq: input.promotedSeq,
-      prompt: encodePrompt(input.prompt),
-      delivery: input.delivery,
-      promoted_seq: input.promotedSeq,
-      time_created: DateTime.toEpochMillis(input.timeCreated),
-    })
-    .onConflictDoNothing()
-    .returning()
-    .get()
-    .pipe(Effect.orDie)
-  if (!inserted) return yield* Effect.die("Prompt projection conflicts with admitted input")
-  return fromRow(inserted)
-})
-
 const publish = Effect.fn("SessionInput.publish")(function* (
   db: DatabaseService,
-  events: EventV2.Interface,
+  events: Event.Interface,
   sessionID: SessionSchema.ID,
   rows: ReadonlyArray<typeof SessionInputTable.$inferSelect>,
 ) {
@@ -299,7 +268,7 @@ const publish = Effect.fn("SessionInput.publish")(function* (
 
 export const promoteSteers = Effect.fn("SessionInput.promoteSteers")(function* (
   db: DatabaseService,
-  events: EventV2.Interface,
+  events: Event.Interface,
   sessionID: SessionSchema.ID,
   cutoff: number,
 ) {
@@ -322,7 +291,7 @@ export const promoteSteers = Effect.fn("SessionInput.promoteSteers")(function* (
 
 export const promoteNextQueued = Effect.fn("SessionInput.promoteNextQueued")(function* (
   db: DatabaseService,
-  events: EventV2.Interface,
+  events: Event.Interface,
   sessionID: SessionSchema.ID,
 ) {
   const row = yield* db

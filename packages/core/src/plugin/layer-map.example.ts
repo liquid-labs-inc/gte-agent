@@ -7,7 +7,7 @@ import { Npm } from "../npm"
  * Tutorial: split global services from context-specific services.
  *
  * Use this pattern when part of the app should be constructed once at the app edge,
- * while another part should be cached per request/project/workspace key.
+ * while another part should be cached per request/project key.
  *
  * In this example:
  * - Npm.Service is the global service. It is not keyed by request context and should
@@ -34,22 +34,22 @@ import { Npm } from "../npm"
 
 export type RequestContext = {
   readonly directory: string
-  readonly workspace: string
+  readonly project: string
 }
 
 export class RequestContextRef extends Context.Service<RequestContextRef, RequestContext>()(
-  "@opencode/example/RequestContextRef",
+  "@gte-agent/example/RequestContextRef",
 ) {}
 
 export interface ConfigServiceShape {
   readonly directory: string
-  readonly workspace: string
+  readonly project: string
   readonly nextUse: () => Effect.Effect<number>
   readonly which: Npm.Interface["which"]
 }
 
 export class ConfigService extends Context.Service<ConfigService, ConfigServiceShape>()(
-  "@opencode/example/ConfigService",
+  "@gte-agent/example/ConfigService",
 ) {}
 
 const configServiceLayer = Layer.effect(
@@ -62,14 +62,14 @@ const configServiceLayer = Layer.effect(
 
     return ConfigService.of({
       directory: context.directory,
-      workspace: context.workspace,
+      project: context.project,
       nextUse: () => Effect.succeed(++useCount),
       which: npm.which,
     })
   }),
 )
 
-export class ConfigServiceMap extends LayerMap.Service<ConfigServiceMap>()("@opencode/example/ConfigServiceMap", {
+export class ConfigServiceMap extends LayerMap.Service<ConfigServiceMap>()("@gte-agent/example/ConfigServiceMap", {
   lookup: (context: RequestContext) =>
     configServiceLayer.pipe(Layer.provide(Layer.succeed(RequestContextRef, RequestContextRef.of(context)))),
   idleTimeToLive: "5 minutes",
@@ -82,7 +82,7 @@ export const readConfig = Effect.fn("LayerMapExample.readConfig")(function* () {
 
   return {
     directory: config.directory,
-    workspace: config.workspace,
+    project: config.project,
     useCount: yield* config.nextUse(),
   }
 })

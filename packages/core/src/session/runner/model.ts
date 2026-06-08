@@ -1,17 +1,19 @@
 export * as SessionRunnerModel from "./model"
 
-import { type Model } from "@opencode-ai/llm"
-import * as AnthropicMessages from "@opencode-ai/llm/protocols/anthropic-messages"
-import * as OpenAICompatibleChat from "@opencode-ai/llm/protocols/openai-compatible-chat"
-import * as OpenAIResponses from "@opencode-ai/llm/protocols/openai-responses"
-import { Auth, type AnyRoute } from "@opencode-ai/llm/route"
+import { type ModelSchema } from "@gte-agent/llm"
+import * as AnthropicMessages from "@gte-agent/llm/protocols/anthropic-messages"
+import * as OpenAICompatibleChat from "@gte-agent/llm/protocols/openai-compatible-chat"
+import * as OpenAIResponses from "@gte-agent/llm/protocols/openai-responses"
+import { Auth, type AnyRoute } from "@gte-agent/llm/route"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { produce } from "immer"
 import { Catalog } from "../../catalog"
-import { ModelV2 } from "../../model"
+import { Model } from "../../model"
 import { PluginBoot } from "../../plugin/boot"
-import { ProviderV2 } from "../../provider"
+import { Provider } from "../../provider"
 import { SessionSchema } from "../schema"
+
+type ResolvedModel = typeof ModelSchema.Type
 
 export class ModelNotSelectedError extends Schema.TaggedErrorClass<ModelNotSelectedError>()(
   "SessionRunnerModel.ModelNotSelectedError",
@@ -23,8 +25,8 @@ export class ModelNotSelectedError extends Schema.TaggedErrorClass<ModelNotSelec
 export class UnsupportedApiError extends Schema.TaggedErrorClass<UnsupportedApiError>()(
   "SessionRunnerModel.UnsupportedApiError",
   {
-    providerID: ProviderV2.ID,
-    modelID: ModelV2.ID,
+    providerID: Provider.ID,
+    modelID: Model.ID,
     api: Schema.String,
   },
 ) {}
@@ -36,21 +38,21 @@ export type Error =
   | UnsupportedApiError
 
 export interface Interface {
-  readonly resolve: (session: SessionSchema.Info) => Effect.Effect<Model, Error>
+  readonly resolve: (session: SessionSchema.Info) => Effect.Effect<ResolvedModel, Error>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/SessionRunnerModel") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/SessionRunnerModel") {}
 
 /** Test or embedding seam for supplying a model resolver directly. */
 export const layerWith = (resolve: Interface["resolve"]) => Layer.succeed(Service, Service.of({ resolve }))
 
-const apiKey = (model: ModelV2.Info, provider?: ProviderV2.Info) => {
+const apiKey = (model: Model.Info, provider?: Provider.Info) => {
   const value = model.request.body.apiKey ?? model.api.settings?.apiKey
   if (typeof value === "string") return Auth.value(value)
   return provider?.enabled !== false && provider?.enabled.via === "env" ? Auth.config(provider.enabled.name) : undefined
 }
 
-const withDefaults = (model: ModelV2.Info, route: AnyRoute) =>
+const withDefaults = (model: Model.Info, route: AnyRoute) =>
   route.with({
     provider: model.providerID,
     endpoint: model.api.url === undefined ? undefined : { baseURL: model.api.url },
@@ -61,7 +63,7 @@ const withDefaults = (model: ModelV2.Info, route: AnyRoute) =>
     limits: { context: model.limit.context, output: model.limit.output },
   })
 
-const withVariant = (model: ModelV2.Info, variantID: ModelV2.VariantID | undefined) => {
+const withVariant = (model: Model.Info, variantID: Model.VariantID | undefined) => {
   const id = variantID === "default" || variantID === undefined ? model.request.variant : variantID
   const variant = model.variants.find((item) => item.id === id)
   if (!variant) return model
@@ -71,13 +73,13 @@ const withVariant = (model: ModelV2.Info, variantID: ModelV2.VariantID | undefin
   })
 }
 
-const apiName = (model: ModelV2.Info) =>
+const apiName = (model: Model.Info) =>
   model.api.type === "aisdk" ? `${model.api.type}:${model.api.package}` : model.api.type
 
 export const fromCatalogModel = (
-  model: ModelV2.Info,
-  provider?: ProviderV2.Info,
-): Effect.Effect<Model, UnsupportedApiError> => {
+  model: Model.Info,
+  provider?: Provider.Info,
+): Effect.Effect<ResolvedModel, UnsupportedApiError> => {
   const key = apiKey(model, provider)
   if (model.api.type === "aisdk" && model.api.package === "@ai-sdk/openai") {
     return Effect.succeed(
@@ -109,24 +111,24 @@ export const fromCatalogModel = (
   )
 }
 
-export const resolve = (session: SessionSchema.Info, model: ModelV2.Info, provider?: ProviderV2.Info) =>
+export const resolve = (session: SessionSchema.Info, model: Model.Info, provider?: Provider.Info) =>
   fromCatalogModel(withVariant(model, session.model?.variant), provider)
 
-export const supported = (model: ModelV2.Info) =>
+export const supported = (model: Model.Info) =>
   model.api.type === "aisdk" &&
   (model.api.package === "@ai-sdk/openai" ||
     model.api.package === "@ai-sdk/anthropic" ||
     (model.api.package === "@ai-sdk/openai-compatible" && model.api.url !== undefined))
 
-/** Resolves models from the catalog belonging to the current Location runtime. */
-export const locationLayer = Layer.effect(
+/** Resolves models from the catalog belonging to the current RuntimeScope runtime. */
+export const runtimeScopeLayer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const catalog = yield* Catalog.Service
     const boot = yield* PluginBoot.Service
     return Service.of({
       resolve: Effect.fn("SessionRunnerModel.resolve")(function* (session) {
-        // Location plugins populate and filter the catalog asynchronously during layer startup.
+        // RuntimeScope plugins populate and filter the catalog asynchronously during layer startup.
         yield* boot.wait()
         const preferred = yield* catalog.model.default()
         const selected = session.model

@@ -5,7 +5,7 @@
     "": {
       "name": "opencode",
       "dependencies": {
-        "@opencode-ai/script": "workspace:*",
+        "@gte-agent/script": "workspace:*",
         "typescript": "catalog:",
       },
       "devDependencies": {
@@ -22,28 +22,28 @@
       },
     },
     "packages/cli": {
-      "name": "@opencode-ai/cli",
+      "name": "@gte-agent/cli",
       "version": "1.16.0",
       "bin": {
-        "lildax": "./bin/lildax.cjs",
+        "gte-agent": "./bin/gte-agent.cjs",
       },
       "dependencies": {
         "@effect/platform-node": "catalog:",
-        "@opencode-ai/core": "workspace:*",
-        "@opencode-ai/sdk": "workspace:*",
-        "@opencode-ai/server": "workspace:*",
+        "@gte-agent/core": "workspace:*",
+        "@gte-agent/sdk": "workspace:*",
+        "@gte-agent/server": "workspace:*",
         "@parcel/watcher": "2.5.1",
         "effect": "catalog:",
       },
       "devDependencies": {
-        "@opencode-ai/script": "workspace:*",
+        "@gte-agent/script": "workspace:*",
         "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
       },
     },
     "packages/core": {
-      "name": "@opencode-ai/core",
+      "name": "@gte-agent/core",
       "version": "1.16.0",
       "bin": {
         "opencode": "./bin/opencode",
@@ -73,12 +73,12 @@
         "@effect/opentelemetry": "catalog:",
         "@effect/platform-node": "catalog:",
         "@effect/sql-sqlite-bun": "catalog:",
+        "@gte-agent/effect-drizzle-sqlite": "workspace:*",
+        "@gte-agent/effect-sqlite-node": "workspace:*",
+        "@gte-agent/llm": "workspace:*",
         "@lydell/node-pty": "catalog:",
         "@npmcli/arborist": "9.4.0",
         "@npmcli/config": "10.8.1",
-        "@opencode-ai/effect-drizzle-sqlite": "workspace:*",
-        "@opencode-ai/effect-sqlite-node": "workspace:*",
-        "@opencode-ai/llm": "workspace:*",
         "@openrouter/ai-sdk-provider": "2.9.0",
         "@opentelemetry/api": "1.9.0",
         "@opentelemetry/context-async-hooks": "2.6.1",
@@ -110,7 +110,7 @@
         "zod": "catalog:",
       },
       "devDependencies": {
-        "@opencode-ai/http-recorder": "workspace:*",
+        "@gte-agent/http-recorder": "workspace:*",
         "@parcel/watcher-darwin-arm64": "2.5.1",
         "@parcel/watcher-darwin-x64": "2.5.1",
         "@parcel/watcher-linux-arm64-glibc": "2.5.1",
@@ -132,7 +132,7 @@
       },
     },
     "packages/effect-drizzle-sqlite": {
-      "name": "@opencode-ai/effect-drizzle-sqlite",
+      "name": "@gte-agent/effect-drizzle-sqlite",
       "version": "1.16.0",
       "dependencies": {
         "drizzle-orm": "catalog:",
@@ -146,7 +146,7 @@
       },
     },
     "packages/effect-sqlite-node": {
-      "name": "@opencode-ai/effect-sqlite-node",
+      "name": "@gte-agent/effect-sqlite-node",
       "version": "1.16.0",
       "dependencies": {
         "effect": "catalog:",
@@ -158,7 +158,7 @@
       },
     },
     "packages/http-recorder": {
-      "name": "@opencode-ai/http-recorder",
+      "name": "@gte-agent/http-recorder",
       "version": "1.16.0",
       "dependencies": {
         "@effect/platform-node": "catalog:",
@@ -171,7 +171,7 @@
       },
     },
     "packages/llm": {
-      "name": "@opencode-ai/llm",
+      "name": "@gte-agent/llm",
       "version": "1.16.0",
       "dependencies": {
         "@smithy/eventstream-codec": "4.2.14",
@@ -182,17 +182,17 @@
       "devDependencies": {
         "@clack/prompts": "1.0.0-alpha.1",
         "@effect/platform-node": "catalog:",
-        "@opencode-ai/http-recorder": "workspace:*",
+        "@gte-agent/http-recorder": "workspace:*",
         "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
       },
     },
     "packages/plugin": {
-      "name": "@opencode-ai/plugin",
+      "name": "@gte-agent/plugin",
       "version": "1.16.0",
       "dependencies": {
-        "@opencode-ai/sdk": "workspace:*",
+        "@gte-agent/sdk": "workspace:*",
         "effect": "catalog:",
         "zod": "catalog:",
       },
@@ -217,7 +217,7 @@
       ],
     },
     "packages/script": {
-      "name": "@opencode-ai/script",
+      "name": "@gte-agent/script",
       "dependencies": {
         "semver": "^7.6.3",
       },
@@ -227,14 +227,14 @@
       },
     },
     "packages/sdk/js": {
-      "name": "@opencode-ai/sdk",
+      "name": "@gte-agent/sdk",
       "version": "1.16.0",
       "dependencies": {
         "cross-spawn": "catalog:",
       },
       "devDependencies": {
+        "@gte-agent/server": "workspace:*",
         "@hey-api/openapi-ts": "0.90.10",
-        "@opencode-ai/server": "workspace:*",
         "@tsconfig/node22": "catalog:",
         "@types/cross-spawn": "catalog:",
         "@types/node": "catalog:",
@@ -244,10 +244,10 @@
       },
     },
     "packages/server": {
-      "name": "@opencode-ai/server",
+      "name": "@gte-agent/server",
       "version": "1.16.0",
       "dependencies": {
-        "@opencode-ai/core": "workspace:*",
+        "@gte-agent/core": "workspace:*",
         "drizzle-orm": "catalog:",
         "effect": "catalog:",
       },
@@ -554,6 +554,26 @@
 
     "@graphql-typed-document-node/core": ["@graphql-typed-document-node/core@3.2.0", "", { "peerDependencies": { "graphql": "^0.8.0 || ^0.9.0 || ^0.10.0 || ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0" } }, "sha512-mB9oAsNCm9aM3/SOv4YtBMqZbYj10R7dkq8byBqxGY/ncFwhf2oQzMV+LCRlWoDSEBJ3COiR1yeDvMtsoOsuFQ=="],
 
+    "@gte-agent/cli": ["@gte-agent/cli@workspace:packages/cli"],
+
+    "@gte-agent/core": ["@gte-agent/core@workspace:packages/core"],
+
+    "@gte-agent/effect-drizzle-sqlite": ["@gte-agent/effect-drizzle-sqlite@workspace:packages/effect-drizzle-sqlite"],
+
+    "@gte-agent/effect-sqlite-node": ["@gte-agent/effect-sqlite-node@workspace:packages/effect-sqlite-node"],
+
+    "@gte-agent/http-recorder": ["@gte-agent/http-recorder@workspace:packages/http-recorder"],
+
+    "@gte-agent/llm": ["@gte-agent/llm@workspace:packages/llm"],
+
+    "@gte-agent/plugin": ["@gte-agent/plugin@workspace:packages/plugin"],
+
+    "@gte-agent/script": ["@gte-agent/script@workspace:packages/script"],
+
+    "@gte-agent/sdk": ["@gte-agent/sdk@workspace:packages/sdk/js"],
+
+    "@gte-agent/server": ["@gte-agent/server@workspace:packages/server"],
+
     "@hey-api/codegen-core": ["@hey-api/codegen-core@0.5.5", "", { "dependencies": { "@hey-api/types": "0.1.2", "ansi-colors": "4.1.3", "c12": "3.3.3", "color-support": "1.1.3" }, "peerDependencies": { "typescript": ">=5.5.3" } }, "sha512-f2ZHucnA2wBGAY8ipB4wn/mrEYW+WUxU2huJmUvfDO6AE2vfILSHeF3wCO39Pz4wUYPoAWZByaauftLrOfC12Q=="],
 
     "@hey-api/json-schema-ref-parser": ["@hey-api/json-schema-ref-parser@1.2.2", "", { "dependencies": { "@jsdevtools/ono": "^7.1.3", "@types/json-schema": "^7.0.15", "js-yaml": "^4.1.1", "lodash": "^4.17.21" } }, "sha512-oS+5yAdwnK20lSeFO1d53Ku+yaGCsY8PcrmSq2GtSs3bsBfRnHAbpPKSVzQcaxAOrzj5NB+f34WhZglVrNayBA=="],
@@ -641,26 +661,6 @@
     "@npmcli/redact": ["@npmcli/redact@4.0.0", "", {}, "sha512-gOBg5YHMfZy+TfHArfVogwgfBeQnKbbGo3pSUyK/gSI0AVu+pEiDVcKlQb0D8Mg1LNRZILZ6XG8I5dJ4KuAd9Q=="],
 
     "@npmcli/run-script": ["@npmcli/run-script@10.0.4", "", { "dependencies": { "@npmcli/node-gyp": "^5.0.0", "@npmcli/package-json": "^7.0.0", "@npmcli/promise-spawn": "^9.0.0", "node-gyp": "^12.1.0", "proc-log": "^6.0.0" } }, "sha512-mGUWr1uMnf0le2TwfOZY4SFxZGXGfm4Jtay/nwAa2FLNAKXUoUwaGwBMNH36UHPtinWfTSJ3nqFQr0091CxVGg=="],
-
-    "@opencode-ai/cli": ["@opencode-ai/cli@workspace:packages/cli"],
-
-    "@opencode-ai/core": ["@opencode-ai/core@workspace:packages/core"],
-
-    "@opencode-ai/effect-drizzle-sqlite": ["@opencode-ai/effect-drizzle-sqlite@workspace:packages/effect-drizzle-sqlite"],
-
-    "@opencode-ai/effect-sqlite-node": ["@opencode-ai/effect-sqlite-node@workspace:packages/effect-sqlite-node"],
-
-    "@opencode-ai/http-recorder": ["@opencode-ai/http-recorder@workspace:packages/http-recorder"],
-
-    "@opencode-ai/llm": ["@opencode-ai/llm@workspace:packages/llm"],
-
-    "@opencode-ai/plugin": ["@opencode-ai/plugin@workspace:packages/plugin"],
-
-    "@opencode-ai/script": ["@opencode-ai/script@workspace:packages/script"],
-
-    "@opencode-ai/sdk": ["@opencode-ai/sdk@workspace:packages/sdk/js"],
-
-    "@opencode-ai/server": ["@opencode-ai/server@workspace:packages/server"],
 
     "@openrouter/ai-sdk-provider": ["@openrouter/ai-sdk-provider@2.9.0", "", { "peerDependencies": { "ai": "^6.0.0", "zod": "^3.25.0 || ^4.0.0" } }, "sha512-Seva+NCa0WUQnJIUE5GzHsUv1WTIeyqwz0ELl2VtS6NP+eF+77yCXGFVOMbvoCM7QMjlnhv7931e89R+8pJdcQ=="],
 

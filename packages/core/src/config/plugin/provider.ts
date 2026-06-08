@@ -3,12 +3,12 @@ export * as ConfigProviderPlugin from "./provider"
 import { Effect } from "effect"
 import { Catalog } from "../../catalog"
 import { Config } from "../../config"
-import { ModelV2 } from "../../model"
-import { PluginV2 } from "../../plugin"
-import { ProviderV2 } from "../../provider"
+import { Model } from "../../model"
+import { define, ID } from "../../plugin"
+import { Provider } from "../../provider"
 
-export const Plugin = PluginV2.define({
-  id: PluginV2.ID.make("config-provider"),
+export const Plugin = define({
+  id: ID.make("config-provider"),
   effect: Effect.gen(function* () {
     const catalog = yield* Catalog.Service
     const config = yield* Config.Service
@@ -18,7 +18,7 @@ export const Plugin = PluginV2.define({
     yield* transform((catalog) => {
       for (const file of files) {
         for (const [id, item] of Object.entries(file.info.providers ?? {})) {
-          const providerID = ProviderV2.ID.make(id)
+          const providerID = Provider.ID.make(id)
           catalog.provider.update(providerID, (provider) => {
             if (item.name !== undefined) provider.name = item.name
             if (item.env !== undefined) provider.env = [...item.env]
@@ -31,7 +31,7 @@ export const Plugin = PluginV2.define({
           })
 
           for (const [id, config] of Object.entries(item.models ?? {})) {
-            catalog.model.update(providerID, ModelV2.ID.make(id), (model) => {
+            catalog.model.update(providerID, Model.ID.make(id), (model) => {
               if (config.family !== undefined) model.family = config.family
               if (config.name !== undefined) model.name = config.name
               if (config.api !== undefined) model.api = { ...model.api, ...config.api }

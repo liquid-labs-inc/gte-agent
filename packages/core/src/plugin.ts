@@ -1,18 +1,18 @@
-export * as PluginV2 from "./plugin"
+export * as Plugin from "./plugin"
 
 import { createDraft, finishDraft, type Draft } from "immer"
 import type { LanguageModelV3 } from "@ai-sdk/provider"
 import { Context, Effect, Exit, Layer, Schema, Scope } from "effect"
-import type { ModelV2 } from "./model"
+import type { Model } from "./model"
 import type { Catalog } from "./catalog"
-import { EventV2 } from "./event"
+import { Event } from "./event"
 import { KeyedMutex } from "./effect/keyed-mutex"
 
 export const ID = Schema.String.pipe(Schema.brand("Plugin.ID"))
 export type ID = typeof ID.Type
 
-export const Event = {
-  Added: EventV2.define({
+export const PluginEvent = {
+  Added: Event.define({
     type: "plugin.added",
     schema: {
       id: ID,
@@ -25,17 +25,9 @@ type HookSpec = {
     input: Catalog.Editor
     output: {}
   }
-  "account.switched": {
-    input: {
-      serviceID: import("./auth").Auth.ServiceID
-      from?: import("./auth").Auth.ID
-      to?: import("./auth").Auth.ID
-    }
-    output: {}
-  }
   "aisdk.language": {
     input: {
-      model: ModelV2.Info
+      model: Model.Info
       sdk: any
       options: Record<string, any>
     }
@@ -45,7 +37,7 @@ type HookSpec = {
   }
   "aisdk.sdk": {
     input: {
-      model: ModelV2.Info
+      model: Model.Info
       package: string
       options: Record<string, any>
     }
@@ -95,7 +87,7 @@ export interface Interface {
   ) => Effect.Effect<HookInput<Name> & HookOutput<Name>>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Plugin") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/Plugin") {}
 
 export const layer = Layer.effect(
   Service,
@@ -105,7 +97,7 @@ export const layer = Layer.effect(
       hooks: HookFunctions
       scope: Scope.Closeable
     }[] = []
-    const events = yield* EventV2.Service
+    const events = yield* Event.Service
     const scope = yield* Scope.Scope
     const locks = KeyedMutex.makeUnsafe<ID>()
 
@@ -133,7 +125,7 @@ export const layer = Layer.effect(
                 scope: childScope,
               },
             ]
-            yield* events.publish(Event.Added, { id: input.id })
+            yield* events.publish(PluginEvent.Added, { id: input.id })
           }),
         )
       }),
@@ -188,7 +180,7 @@ export const layer = Layer.effect(
   }),
 )
 
-export const locationLayer = layer
+export const runtimeScopeLayer = layer
 
-// opencode
+// gte-agent
 // sdcok

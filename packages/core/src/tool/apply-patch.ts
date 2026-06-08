@@ -1,10 +1,10 @@
 export * as ApplyPatchTool from "./apply-patch"
 
-import { Tool, ToolFailure, toolText } from "@opencode-ai/llm"
+import { Tool, ToolFailure, toolText } from "@gte-agent/llm"
 import { Cause, Effect, Layer, Schema } from "effect"
 import { FileMutation } from "../file-mutation"
 import { FSUtil } from "../fs-util"
-import { LocationMutation } from "../location-mutation"
+import { RuntimeScopeMutation } from "../runtime-scope-mutation"
 import { Patch } from "../patch"
 import { ToolRegistry } from "./registry"
 
@@ -41,22 +41,22 @@ const definition = Tool.make({
   toModelOutput: ({ output }) => [toolText({ type: "text", text: toModelOutput(output) })],
 })
 
-type Planned = { readonly hunk: Patch.Hunk; readonly plan: LocationMutation.Plan }
+type Planned = { readonly hunk: Patch.Hunk; readonly plan: RuntimeScopeMutation.Plan }
 type Prepared =
   | {
       readonly type: "add"
       readonly hunk: Extract<Patch.Hunk, { readonly type: "add" }>
-      readonly plan: LocationMutation.Plan
+      readonly plan: RuntimeScopeMutation.Plan
     }
   | {
       readonly type: "delete"
       readonly hunk: Extract<Patch.Hunk, { readonly type: "delete" }>
-      readonly plan: LocationMutation.Plan
+      readonly plan: RuntimeScopeMutation.Plan
     }
   | {
       readonly type: "update"
       readonly hunk: Extract<Patch.Hunk, { readonly type: "update" }>
-      readonly plan: LocationMutation.Plan
+      readonly plan: RuntimeScopeMutation.Plan
       readonly source: Uint8Array
       readonly content: string
     }
@@ -64,7 +64,7 @@ type Prepared =
 export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const registry = yield* ToolRegistry.Service
-    const mutation = yield* LocationMutation.Service
+    const mutation = yield* RuntimeScopeMutation.Service
     const files = yield* FileMutation.Service
     const fs = yield* FSUtil.Service
 
@@ -93,13 +93,13 @@ export const layer = Layer.effectDiscard(
             const planned: Planned[] = []
             for (const hunk of hunks)
               planned.push({ hunk, plan: yield* mutation.resolve({ path: hunk.path, kind: "file" }) })
-            const externalDirectories = new Map<string, LocationMutation.ExternalDirectoryAuthorization>()
+            const externalDirectories = new Map<string, RuntimeScopeMutation.ExternalDirectoryAuthorization>()
             for (const { plan } of planned) {
               const external = plan.target.externalDirectory
               if (external) externalDirectories.set(external.resource, external)
             }
             for (const external of externalDirectories.values()) {
-              yield* assertPermission(LocationMutation.externalDirectoryPermission(external))
+              yield* assertPermission(RuntimeScopeMutation.externalDirectoryPermission(external))
             }
             yield* assertPermission({
               action: "edit",

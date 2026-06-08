@@ -1,10 +1,10 @@
 export * as ReadTool from "./read"
 
-import { Tool, ToolFailure } from "@opencode-ai/llm"
+import { Tool, ToolFailure } from "@gte-agent/llm"
 import { Cause, Effect, Layer, Schema } from "effect"
 import { FileSystem } from "../filesystem"
 import { NonNegativeInt, PositiveInt } from "../schema"
-import { PermissionV2 } from "../permission"
+import { Permission } from "../permission"
 import { ToolOutputStore } from "../tool-output-store"
 import { ToolRegistry } from "./registry"
 
@@ -92,9 +92,9 @@ export const layer = Layer.effectDiscard(
     )
   }),
 )
-export const locationLayer = layer.pipe(
+export const runtimeScopeLayer = layer.pipe(
   Layer.provideMerge(ToolRegistry.defaultLayer),
-  Layer.provideMerge(FileSystem.locationLayer),
-  Layer.provideMerge(PermissionV2.locationLayer),
+  Layer.provideMerge(FileSystem.runtimeScopeLayer),
+  Layer.provideMerge(Permission.runtimeScopeLayer),
   Layer.provideMerge(ToolOutputStore.defaultLayer),
 )

@@ -3,17 +3,17 @@ import fs from "fs/promises"
 import { describe, expect } from "bun:test"
 import { Effect, Layer, Schema } from "effect"
 import { FastCheck } from "effect/testing"
-import { Config } from "@opencode-ai/core/config"
-import { ConfigProvider } from "@opencode-ai/core/config/provider"
-import { ConfigMigrateV1 } from "@opencode-ai/core/v1/config/migrate"
-import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
-import { FSUtil } from "@opencode-ai/core/fs-util"
-import { Global } from "@opencode-ai/core/global"
-import { Location } from "@opencode-ai/core/location"
-import { Policy } from "@opencode-ai/core/policy"
-import { Project } from "@opencode-ai/core/project"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { location } from "../fixture/location"
+import { Config } from "@gte-agent/core/config"
+import { ConfigProvider } from "@gte-agent/core/config/provider"
+import { ConfigMigrateV1 } from "@gte-agent/core/v1/config/migrate"
+import { ConfigV1 } from "@gte-agent/core/v1/config/config"
+import { FSUtil } from "@gte-agent/core/fs-util"
+import { Global } from "@gte-agent/core/global"
+import { RuntimeScope } from "@gte-agent/core/runtime-scope"
+import { Policy } from "@gte-agent/core/policy"
+import { Project } from "@gte-agent/core/project"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { runtimeScope } from "../fixture/runtime-scope"
 import { tmpdir } from "../fixture/tmpdir"
 import { testEffect } from "../lib/effect"
 
@@ -25,14 +25,14 @@ function testLayer(
   projectDirectory = directory,
   vcs?: Project.Vcs,
 ) {
-  return Config.locationLayer.pipe(
+  return Config.runtimeScopeLayer.pipe(
     Layer.provide(FSUtil.defaultLayer),
     Layer.provide(Global.layerWith({ config: globalDirectory })),
     Layer.provide(
       Layer.succeed(
-        Location.Service,
-        Location.Service.of(
-          location(
+        RuntimeScope.Service,
+        RuntimeScope.Service.of(
+          runtimeScope(
             { directory: AbsolutePath.make(directory) },
             { projectDirectory: AbsolutePath.make(projectDirectory), vcs },
           ),
@@ -60,7 +60,7 @@ describe("Config", () => {
     }),
   )
 
-  it.effect("migrates arbitrary v1 configuration into valid v2 configuration", () =>
+  it.effect("migrates arbitrary v1 configuration into valid configuration", () =>
     Effect.sync(() => {
       FastCheck.assert(
         FastCheck.property(Schema.toArbitrary(ConfigV1.Info), (info) => {
@@ -160,11 +160,11 @@ describe("Config", () => {
                 JSON.stringify({ $schema: "base", providers: { base: provider } }),
               ),
               fs.writeFile(
-                path.join(tmp.path, "opencode.json"),
+                path.join(tmp.path, "gte-agent.json"),
                 JSON.stringify({ $schema: "middle", providers: { middle: provider } }),
               ),
               fs.writeFile(
-                path.join(tmp.path, "opencode.jsonc"),
+                path.join(tmp.path, "gte-agent.jsonc"),
                 `{
                   // Later global files override scalar fields while retaining providers.
                   "$schema": "last",
@@ -185,7 +185,7 @@ describe("Config", () => {
             expect(documents[2]?.info.providers?.last).toBeInstanceOf(ConfigProvider.Info)
 
             yield* Effect.promise(() =>
-              fs.writeFile(path.join(tmp.path, "opencode.jsonc"), JSON.stringify({ $schema: "changed" })),
+              fs.writeFile(path.join(tmp.path, "gte-agent.jsonc"), JSON.stringify({ $schema: "changed" })),
             )
             expect(
               (yield* config.entries())
@@ -205,7 +205,7 @@ describe("Config", () => {
     ).pipe(
       Effect.flatMap((tmp) =>
         Effect.gen(function* () {
-          const file = path.join(tmp.path, "opencode.json")
+          const file = path.join(tmp.path, "gte-agent.json")
           const contents = JSON.stringify({
             shell: "/bin/zsh",
             experimental: { policies: [{ effect: "deny", action: "provider.use", resource: "openai" }] },
@@ -240,7 +240,7 @@ describe("Config", () => {
         Effect.gen(function* () {
           yield* Effect.promise(() =>
             fs.writeFile(
-              path.join(tmp.path, "opencode.json"),
+              path.join(tmp.path, "gte-agent.json"),
               JSON.stringify({
                 shell: "/bin/bash",
                 model: "anthropic/claude",
@@ -312,7 +312,7 @@ describe("Config", () => {
                   shorthand: "github.com/example/docs",
                 },
                 plugins: [
-                  "opencode-helicone-session",
+                  "gte-agent-helicone-session",
                   { package: "@my-org/audit-plugin", options: { endpoint: "https://audit.example.com" } },
                 ],
               }),
@@ -402,7 +402,7 @@ describe("Config", () => {
               shorthand: "github.com/example/docs",
             })
             expect(documents[0]?.info.plugins).toEqual([
-              "opencode-helicone-session",
+              "gte-agent-helicone-session",
               { package: "@my-org/audit-plugin", options: { endpoint: "https://audit.example.com" } },
             ])
           }).pipe(Effect.provide(testLayer(tmp.path)))
@@ -420,7 +420,7 @@ describe("Config", () => {
         Effect.gen(function* () {
           yield* Effect.promise(() =>
             fs.writeFile(
-              path.join(tmp.path, "opencode.json"),
+              path.join(tmp.path, "gte-agent.json"),
               JSON.stringify({
                 shell: "/bin/zsh",
                 snapshot: false,
@@ -437,7 +437,7 @@ describe("Config", () => {
                   },
                 },
                 plugin: [
-                  "opencode-helicone-session",
+                  "gte-agent-helicone-session",
                   ["@my-org/audit-plugin", { endpoint: "https://audit.example.com" }],
                 ],
                 skills: { paths: ["./skills"], urls: ["https://example.com/.well-known/skills/"] },
@@ -495,7 +495,7 @@ describe("Config", () => {
               permissions: [{ action: "read", resource: "*", effect: "allow" }],
             })
             expect(documents[0]?.info.plugins).toEqual([
-              "opencode-helicone-session",
+              "gte-agent-helicone-session",
               { package: "@my-org/audit-plugin", options: { endpoint: "https://audit.example.com" } },
             ])
             expect(documents[0]?.info.skills).toEqual(["./skills", "https://example.com/.well-known/skills/"])
@@ -548,8 +548,8 @@ describe("Config", () => {
           yield* Effect.promise(() =>
             Promise.all([
               fs.writeFile(path.join(tmp.path, "config.json"), JSON.stringify({ $schema: "base" })),
-              fs.writeFile(path.join(tmp.path, "opencode.json"), "{ invalid"),
-              fs.writeFile(path.join(tmp.path, "opencode.jsonc"), JSON.stringify({ providers: { invalid: true } })),
+              fs.writeFile(path.join(tmp.path, "gte-agent.json"), "{ invalid"),
+              fs.writeFile(path.join(tmp.path, "gte-agent.jsonc"), JSON.stringify({ providers: { invalid: true } })),
             ]),
           )
           return yield* Effect.gen(function* () {
@@ -574,13 +574,13 @@ describe("Config", () => {
           yield* Effect.promise(async () => {
             await fs.mkdir(global, { recursive: true })
             await fs.writeFile(
-              path.join(global, "opencode.json"),
+              path.join(global, "gte-agent.json"),
               JSON.stringify({
                 experimental: { policies: [{ effect: "deny", action: "provider.use", resource: "openai" }] },
               }),
             )
             await fs.writeFile(
-              path.join(tmp.path, "opencode.json"),
+              path.join(tmp.path, "gte-agent.json"),
               JSON.stringify({
                 experimental: { policies: [{ effect: "allow", action: "provider.use", resource: "openai" }] },
               }),
@@ -597,7 +597,7 @@ describe("Config", () => {
     ),
   )
 
-  it.live("loads global, ancestor, and .opencode configuration up to the project boundary", () =>
+  it.live("loads global, ancestor, and .gte-agent configuration up to the project boundary", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),
       (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
@@ -611,17 +611,17 @@ describe("Config", () => {
           yield* Effect.promise(async () => {
             await fs.mkdir(global, { recursive: true })
             await fs.mkdir(directory, { recursive: true })
-            await fs.mkdir(path.join(root, ".opencode"), { recursive: true })
-            await fs.mkdir(path.join(directory, ".opencode"), { recursive: true })
+            await fs.mkdir(path.join(root, ".gte-agent"), { recursive: true })
+            await fs.mkdir(path.join(directory, ".gte-agent"), { recursive: true })
             await Promise.all([
-              fs.writeFile(path.join(tmp.path, "opencode.json"), JSON.stringify({ $schema: "outside" })),
-              fs.writeFile(path.join(global, "opencode.json"), JSON.stringify({ $schema: "global" })),
-              fs.writeFile(path.join(root, "opencode.json"), JSON.stringify({ $schema: "root" })),
-              fs.writeFile(path.join(parent, "opencode.jsonc"), JSON.stringify({ $schema: "parent" })),
+              fs.writeFile(path.join(tmp.path, "gte-agent.json"), JSON.stringify({ $schema: "outside" })),
+              fs.writeFile(path.join(global, "gte-agent.json"), JSON.stringify({ $schema: "global" })),
+              fs.writeFile(path.join(root, "gte-agent.json"), JSON.stringify({ $schema: "root" })),
+              fs.writeFile(path.join(parent, "gte-agent.jsonc"), JSON.stringify({ $schema: "parent" })),
               fs.writeFile(path.join(directory, "config.json"), JSON.stringify({ $schema: "directory" })),
-              fs.writeFile(path.join(root, ".opencode", "opencode.json"), JSON.stringify({ $schema: "root-dot" })),
+              fs.writeFile(path.join(root, ".gte-agent", "gte-agent.json"), JSON.stringify({ $schema: "root-dot" })),
               fs.writeFile(
-                path.join(directory, ".opencode", "opencode.jsonc"),
+                path.join(directory, ".gte-agent", "gte-agent.jsonc"),
                 JSON.stringify({ $schema: "directory-dot" }),
               ),
             ])
@@ -634,8 +634,8 @@ describe("Config", () => {
 
             expect(entries.filter((entry) => entry.type === "directory").map((entry) => entry.path)).toEqual([
               AbsolutePath.make(global),
-              AbsolutePath.make(path.join(root, ".opencode")),
-              AbsolutePath.make(path.join(directory, ".opencode")),
+              AbsolutePath.make(path.join(root, ".gte-agent")),
+              AbsolutePath.make(path.join(directory, ".gte-agent")),
             ])
             expect(documents.map((document) => document.info.$schema)).toEqual([
               "global",
@@ -652,9 +652,9 @@ describe("Config", () => {
               "parent",
               "directory",
               "root-dot",
-              AbsolutePath.make(path.join(root, ".opencode")),
+              AbsolutePath.make(path.join(root, ".gte-agent")),
               "directory-dot",
-              AbsolutePath.make(path.join(directory, ".opencode")),
+              AbsolutePath.make(path.join(directory, ".gte-agent")),
             ])
           }).pipe(
             Effect.provide(

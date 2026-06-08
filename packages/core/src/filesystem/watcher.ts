@@ -6,23 +6,23 @@ import type ParcelWatcher from "@parcel/watcher"
 import { Cause, Context, Effect, Layer, Schema } from "effect"
 import path from "path"
 import { Config } from "../config"
-import { EventV2 } from "../event"
+import { Event } from "../event"
 import { Flag } from "../flag/flag"
 import { FSUtil } from "../fs-util"
 import { Git } from "../git"
-import { Location } from "../location"
+import { RuntimeScope } from "../runtime-scope"
 import { lazy } from "../util/lazy"
 import * as Log from "../util/log"
 import { Ignore } from "./ignore"
 import { Protected } from "./protected"
 
-declare const OPENCODE_LIBC: string | undefined
+declare const GTE_AGENT_LIBC: string | undefined
 
 const log = Log.create({ service: "file.watcher" })
 const SUBSCRIBE_TIMEOUT_MS = 10_000
 
-export const Event = {
-  Updated: EventV2.define({
+export const WatcherEvent = {
+  Updated: Event.define({
     type: "file.watcher.updated",
     schema: {
       file: Schema.String,
@@ -33,7 +33,7 @@ export const Event = {
 
 const watcher = lazy((): typeof import("@parcel/watcher") | undefined => {
   try {
-    const libc = typeof OPENCODE_LIBC === "undefined" ? undefined : OPENCODE_LIBC
+    const libc = typeof GTE_AGENT_LIBC === "undefined" ? undefined : GTE_AGENT_LIBC
     const binding = require(
       `@parcel/watcher-${process.platform}-${process.arch}${process.platform === "linux" ? `-${libc || "glibc"}` : ""}`,
     )
@@ -61,15 +61,15 @@ export const hasNativeBinding = () => !!watcher()
 
 export interface Interface {}
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/FileWatcher") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/FileWatcher") {}
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    if (yield* Flag.OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER) return Service.of({})
+    if (yield* Flag.GTE_AGENT_EXPERIMENTAL_DISABLE_FILEWATCHER) return Service.of({})
 
     const backend = getBackend()
-    const location = yield* Location.Service
+    const location = yield* RuntimeScope.Service
     if (!backend) {
       log.error("watcher backend not supported", { directory: location.directory, platform: process.platform })
       return Service.of({})
@@ -79,7 +79,7 @@ export const layer = Layer.effect(
     if (!w) return Service.of({})
 
     log.info("watcher backend", { directory: location.directory, platform: process.platform, backend })
-    const events = yield* EventV2.Service
+    const events = yield* Event.Service
     const fs = yield* FSUtil.Service
     const git = yield* Git.Service
     const context = yield* Effect.context()
@@ -91,9 +91,11 @@ export const layer = Layer.effect(
 
     const callback: ParcelWatcher.SubscribeCallback = (_error, updates) => {
       for (const update of updates) {
-        if (update.type === "create") runFork(events.publish(Event.Updated, { file: update.path, event: "add" }))
-        if (update.type === "update") runFork(events.publish(Event.Updated, { file: update.path, event: "change" }))
-        if (update.type === "delete") runFork(events.publish(Event.Updated, { file: update.path, event: "unlink" }))
+        if (update.type === "create") runFork(events.publish(WatcherEvent.Updated, { file: update.path, event: "add" }))
+        if (update.type === "update")
+          runFork(events.publish(WatcherEvent.Updated, { file: update.path, event: "change" }))
+        if (update.type === "delete")
+          runFork(events.publish(WatcherEvent.Updated, { file: update.path, event: "unlink" }))
       }
     }
 
@@ -113,7 +115,7 @@ export const layer = Layer.effect(
     const config = (yield* (yield* Config.Service).entries())
       .filter((entry): entry is Config.Document => entry.type === "document")
       .flatMap((item) => item.info.watcher?.ignore ?? [])
-    if (yield* Flag.OPENCODE_EXPERIMENTAL_FILEWATCHER) {
+    if (yield* Flag.GTE_AGENT_EXPERIMENTAL_FILEWATCHER) {
       yield* Effect.forkScoped(
         subscribe(location.directory, [...Ignore.PATTERNS, ...config, ...protecteds(location.directory)]),
       )
@@ -139,4 +141,4 @@ export const layer = Layer.effect(
   ),
 )
 
-export const locationLayer = layer.pipe(Layer.provide(Config.locationLayer), Layer.provide(Git.defaultLayer))
+export const runtimeScopeLayer = layer.pipe(Layer.provide(Config.runtimeScopeLayer), Layer.provide(Git.defaultLayer))

@@ -1,8 +1,8 @@
 import { describe, expect, mock } from "bun:test"
 import { Effect } from "effect"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { CoherePlugin } from "@opencode-ai/core/plugin/provider/cohere"
+import { Model } from "@gte-agent/core/model"
+import { Plugin } from "@gte-agent/core/plugin"
+import { CoherePlugin } from "@gte-agent/core/plugin/provider/cohere"
 import { fakeSelectorSdk, it, model } from "./provider-helper"
 
 const cohereOptions: Record<string, any>[] = []
@@ -23,7 +23,7 @@ void mock.module("@ai-sdk/cohere", () => ({
 describe("CoherePlugin", () => {
   it.effect("creates a Cohere SDK only for @ai-sdk/cohere", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(CoherePlugin)
 
       const ignored = yield* plugin.trigger(
@@ -44,7 +44,7 @@ describe("CoherePlugin", () => {
 
   it.effect("uses the model provider ID as the bundled SDK name", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(CoherePlugin)
       const result = yield* plugin.trigger(
         "aisdk.sdk",
@@ -67,13 +67,13 @@ describe("CoherePlugin", () => {
 
   it.effect("leaves language selection to the default languageModel fallback", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       const sdk = fakeSelectorSdk(calls)
       yield* plugin.add(CoherePlugin)
       const result = yield* plugin.trigger(
         "aisdk.language",
-        { model: model("cohere", "alias", { api: { id: ModelV2.ID.make("command-r-plus") } }), sdk, options: {} },
+        { model: model("cohere", "alias", { api: { id: Model.ID.make("command-r-plus") } }), sdk, options: {} },
         {},
       )
 

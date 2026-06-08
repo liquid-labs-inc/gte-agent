@@ -1,11 +1,11 @@
 import { describe, expect } from "bun:test"
 import { Effect, Schema } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { Config } from "@opencode-ai/core/config"
-import { ConfigProviderPlugin } from "@opencode-ai/core/config/plugin/provider"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Catalog } from "@gte-agent/core/catalog"
+import { Config } from "@gte-agent/core/config"
+import { ConfigProviderPlugin } from "@gte-agent/core/config/plugin/provider"
+import { Model } from "@gte-agent/core/model"
+import { Plugin } from "@gte-agent/core/plugin"
+import { Provider } from "@gte-agent/core/provider"
 import { it } from "../plugin/provider-helper"
 
 function request(headers: Record<string, string>, variant?: string) {
@@ -21,9 +21,9 @@ describe("ConfigProviderPlugin.Plugin", () => {
   it.effect("loads configured providers and applies later model overrides", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service
-      const plugin = yield* PluginV2.Service
-      const providerID = ProviderV2.ID.make("custom")
-      const modelID = ModelV2.ID.make("chat")
+      const plugin = yield* Plugin.Service
+      const providerID = Provider.ID.make("custom")
+      const modelID = Model.ID.make("chat")
       const config = Config.Service.of({
         entries: () =>
           Effect.succeed([
@@ -111,7 +111,7 @@ describe("ConfigProviderPlugin.Plugin", () => {
       expect(provider.enabled).toEqual({ via: "custom", data: {} })
       expect(provider.api).toEqual({ type: "aisdk", package: "custom-sdk", url: "https://example.test" })
       expect(provider.request.headers).toEqual({ first: "first", shared: "last", last: "last" })
-      expect(model.api.id).toBe(ModelV2.ID.make("api-chat"))
+      expect(model.api.id).toBe(Model.ID.make("api-chat"))
       expect(model.name).toBe("Last")
       expect(model.capabilities).toEqual({ tools: true, input: ["text"], output: ["text"] })
       expect(model.enabled).toBe(false)
@@ -120,8 +120,8 @@ describe("ConfigProviderPlugin.Plugin", () => {
       expect(model.request.headers).toEqual({ first: "first", shared: "last", last: "last" })
       expect(model.request.variant).toBe("retained")
       expect(model.variants.map((variant) => variant.id)).toEqual([
-        ModelV2.VariantID.make("fast"),
-        ModelV2.VariantID.make("slow"),
+        Model.VariantID.make("fast"),
+        Model.VariantID.make("slow"),
       ])
       expect(model.variants[0]?.headers).toEqual({ first: "first", shared: "last", last: "last" })
       expect(model.variants[1]?.headers).toEqual({ slow: "slow" })

@@ -2,17 +2,17 @@ import fs from "fs/promises"
 import path from "path"
 import { describe, expect } from "bun:test"
 import { Effect, Layer, Schema } from "effect"
-import { CommandV2 } from "@opencode-ai/core/command"
-import { Config } from "@opencode-ai/core/config"
-import { ConfigCommandPlugin } from "@opencode-ai/core/config/plugin/command"
-import { FSUtil } from "@opencode-ai/core/fs-util"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { ProviderV2 } from "@opencode-ai/core/provider"
-import { AbsolutePath } from "@opencode-ai/core/schema"
+import { Command } from "@gte-agent/core/command"
+import { Config } from "@gte-agent/core/config"
+import { ConfigCommandPlugin } from "@gte-agent/core/config/plugin/command"
+import { FSUtil } from "@gte-agent/core/fs-util"
+import { Model } from "@gte-agent/core/model"
+import { Provider } from "@gte-agent/core/provider"
+import { AbsolutePath } from "@gte-agent/core/schema"
 import { tmpdir } from "../fixture/tmpdir"
 import { testEffect } from "../lib/effect"
 
-const it = testEffect(Layer.mergeAll(CommandV2.locationLayer, FSUtil.defaultLayer))
+const it = testEffect(Layer.mergeAll(Command.runtimeScopeLayer, FSUtil.defaultLayer))
 const decode = Schema.decodeUnknownSync(Config.Info)
 
 describe("ConfigCommandPlugin.Plugin", () => {
@@ -40,9 +40,9 @@ Review files`,
             await fs.writeFile(path.join(tmp.path, "commands", "empty.md"), "")
           })
 
-          const command = yield* CommandV2.Service
+          const command = yield* Command.Service
           yield* ConfigCommandPlugin.Plugin.effect.pipe(
-            Effect.provideService(CommandV2.Service, command),
+            Effect.provideService(Command.Service, command),
             Effect.provideService(
               Config.Service,
               Config.Service.of({
@@ -59,20 +59,20 @@ Review files`,
           )
 
           expect(yield* command.list()).toEqual([
-            new CommandV2.Info({
+            new Command.Info({
               name: "review",
               template: "Review files",
               description: "File review",
               agent: "reviewer",
               model: {
-                providerID: ProviderV2.ID.make("anthropic"),
-                id: ModelV2.ID.make("claude"),
-                variant: ModelV2.VariantID.make("high"),
+                providerID: Provider.ID.make("anthropic"),
+                id: Model.ID.make("claude"),
+                variant: Model.VariantID.make("high"),
               },
               subtask: true,
             }),
-            new CommandV2.Info({ name: "empty", template: "" }),
-            new CommandV2.Info({ name: "nested/docs", template: "Write docs" }),
+            new Command.Info({ name: "empty", template: "" }),
+            new Command.Info({ name: "nested/docs", template: "Write docs" }),
           ])
         }),
       ),

@@ -1,16 +1,11 @@
 import { Argument, Flag } from "effect/unstable/cli"
 import { Spec } from "../framework/spec"
 
-declare const OPENCODE_CLI_NAME: string | undefined
+declare const GTE_AGENT_CLI_NAME: string | undefined
 
-export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME : "opencode", {
-  description: "OpenCode 2.0 preview command line interface",
+export const Commands = Spec.make(typeof GTE_AGENT_CLI_NAME === "string" ? GTE_AGENT_CLI_NAME : "gte-agent", {
+  description: "GTE Agent command line interface",
   commands: [
-    Spec.make("debug", {
-      description: "Debugging and troubleshooting tools",
-      commands: [Spec.make("agents", { description: "List all agents" })],
-    }),
-    Spec.make("migrate", { description: "Migrate v1 data to v2" }),
     Spec.make("service", {
       description: "Manage the background server",
       commands: [
@@ -24,8 +19,43 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
         }),
       ],
     }),
+    Spec.make("session", {
+      description: "Manage local sessions",
+      commands: [
+        Spec.make("create", {
+          description: "Create a session",
+          params: {
+            directory: Flag.string("directory").pipe(Flag.withDefault(process.cwd())),
+            authority: Flag.string("authority").pipe(Flag.optional),
+          },
+        }),
+        Spec.make("list", { description: "List sessions" }),
+        Spec.make("prompt", {
+          description: "Admit a prompt",
+          params: {
+            session: Argument.string("session"),
+            text: Argument.string("text"),
+          },
+        }),
+        Spec.make("events", {
+          description: "Stream session events",
+          params: {
+            session: Argument.string("session"),
+            after: Flag.string("after").pipe(Flag.optional),
+          },
+        }),
+        Spec.make("messages", {
+          description: "Replay session messages",
+          params: {
+            session: Argument.string("session"),
+            order: Flag.string("order").pipe(Flag.optional),
+            limit: Flag.integer("limit").pipe(Flag.optional),
+          },
+        }),
+      ],
+    }),
     Spec.make("serve", {
-      description: "Start the v2 API server",
+      description: "Start the GTE Agent API server",
       params: {
         hostname: Flag.string("hostname").pipe(Flag.withDefault("127.0.0.1")),
         port: Flag.integer("port").pipe(Flag.optional),

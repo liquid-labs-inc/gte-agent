@@ -1,14 +1,14 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { PerplexityPlugin } from "@opencode-ai/core/plugin/provider/perplexity"
+import { Model } from "@gte-agent/core/model"
+import { Plugin } from "@gte-agent/core/plugin"
+import { PerplexityPlugin } from "@gte-agent/core/plugin/provider/perplexity"
 import { fakeSelectorSdk, it, model } from "./provider-helper"
 
 describe("PerplexityPlugin", () => {
   it.effect("creates a Perplexity SDK for the exact @ai-sdk/perplexity package", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(PerplexityPlugin)
       const result = yield* plugin.trigger(
         "aisdk.sdk",
@@ -21,7 +21,7 @@ describe("PerplexityPlugin", () => {
 
   it.effect("ignores packages that are not the bundled Perplexity package", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(PerplexityPlugin)
       const result = yield* plugin.trigger(
         "aisdk.sdk",
@@ -38,11 +38,11 @@ describe("PerplexityPlugin", () => {
 
   it.effect("uses the Perplexity provider ID as the SDK name for the bundled provider", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const providers: string[] = []
       yield* plugin.add(PerplexityPlugin)
       yield* plugin.add({
-        id: PluginV2.ID.make("perplexity-sdk-inspector"),
+        id: Plugin.ID.make("perplexity-sdk-inspector"),
         effect: Effect.succeed({
           "aisdk.sdk": (evt) =>
             Effect.sync(() => {
@@ -61,11 +61,11 @@ describe("PerplexityPlugin", () => {
 
   it.effect("creates bundled Perplexity SDKs for custom provider IDs", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const providers: string[] = []
       yield* plugin.add(PerplexityPlugin)
       yield* plugin.add({
-        id: PluginV2.ID.make("custom-perplexity-sdk-inspector"),
+        id: Plugin.ID.make("custom-perplexity-sdk-inspector"),
         effect: Effect.succeed({
           "aisdk.sdk": (evt) =>
             Effect.sync(() => {
@@ -88,13 +88,13 @@ describe("PerplexityPlugin", () => {
 
   it.effect("leaves Perplexity language selection to the default languageModel fallback", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(PerplexityPlugin)
       const result = yield* plugin.trigger(
         "aisdk.language",
         {
-          model: model("perplexity", "alias", { api: { id: ModelV2.ID.make("sonar") } }),
+          model: model("perplexity", "alias", { api: { id: Model.ID.make("sonar") } }),
           sdk: fakeSelectorSdk(calls),
           options: {},
         },

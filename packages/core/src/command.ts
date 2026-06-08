@@ -1,16 +1,16 @@
-export * as CommandV2 from "./command"
+export * as Command from "./command"
 
 import { Context, Effect, Layer, Schema } from "effect"
 import { castDraft, type Draft } from "immer"
-import { ModelV2 } from "./model"
+import { Model } from "./model"
 import { State } from "./state"
 
-export class Info extends Schema.Class<Info>("CommandV2.Info")({
+export class Info extends Schema.Class<Info>("Command.Info")({
   name: Schema.String,
   template: Schema.String,
   description: Schema.String.pipe(Schema.optional),
   agent: Schema.String.pipe(Schema.optional),
-  model: ModelV2.Ref.pipe(Schema.optional),
+  model: Model.Ref.pipe(Schema.optional),
   subtask: Schema.Boolean.pipe(Schema.optional),
 }) {}
 
@@ -31,7 +31,7 @@ export interface Interface {
   readonly list: () => Effect.Effect<Info[]>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Command") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/Command") {}
 
 export const layer = Layer.effect(
   Service,
@@ -55,14 +55,14 @@ export const layer = Layer.effect(
 
     return Service.of({
       transform: state.transform,
-      get: Effect.fn("CommandV2.get")(function* (name) {
+      get: Effect.fn("Command.get")(function* (name) {
         return state.get().commands.get(name)
       }),
-      list: Effect.fn("CommandV2.list")(function* () {
+      list: Effect.fn("Command.list")(function* () {
         return Array.from(state.get().commands.values())
       }),
     })
   }),
 )
 
-export const locationLayer = layer
+export const runtimeScopeLayer = layer

@@ -1,57 +1,33 @@
-import { SessionV2 } from "@opencode-ai/core/session"
-import { LocationServiceMap } from "@opencode-ai/core/location-layer"
-import { PermissionSaved } from "@opencode-ai/core/permission/saved"
+import { Session } from "@gte-agent/core/session"
 import { Layer } from "effect"
-import { layer as v2LocationLayer } from "./groups/v2/location"
-import { messageHandlers } from "./handlers/v2/message"
-import { modelHandlers } from "./handlers/v2/model"
-import { providerHandlers } from "./handlers/v2/provider"
-import { sessionHandlers } from "./handlers/v2/session"
-import { permissionHandlers, savedPermissionHandlers, sessionPermissionHandlers } from "./handlers/v2/permission"
-import { fileSystemHandlers } from "./handlers/v2/fs"
-import { commandHandlers } from "./handlers/v2/command"
-import { skillHandlers } from "./handlers/v2/skill"
-import { eventHandlers } from "./handlers/v2/event"
-import { agentHandlers } from "./handlers/v2/agent"
-import { healthHandlers } from "./handlers/v2/health"
-import { questionHandlers, sessionQuestionHandlers } from "./handlers/v2/question"
-import { Database } from "@opencode-ai/core/database/database"
-import { EventV2 } from "@opencode-ai/core/event"
-import { ProjectV2 } from "@opencode-ai/core/project"
-import * as SessionExecutionLocal from "@opencode-ai/core/session/execution/local"
-import { SessionProjector } from "@opencode-ai/core/session/projector"
-import { SessionStore } from "@opencode-ai/core/session/store"
+import { messageHandlers } from "./handlers/message"
+import { sessionHandlers } from "./handlers/session"
+import { healthHandlers } from "./handlers/health"
+import { Database } from "@gte-agent/core/database/database"
+import { Event } from "@gte-agent/core/event"
+import { Project } from "@gte-agent/core/project"
+import * as SessionExecutionLocal from "@gte-agent/core/session/execution/local"
+import { SessionProjector } from "@gte-agent/core/session/projector"
+import { SessionRunCoordinator } from "@gte-agent/core/session/run-coordinator"
+import * as SessionRunnerDemo from "@gte-agent/core/session/runner/demo"
+import { SessionStore } from "@gte-agent/core/session/store"
+import { GTEAuth } from "@gte-agent/core/gte-auth"
 
-const routedSessions = SessionV2.layer.pipe(
+const routedSessions = Session.layer.pipe(
   Layer.provide(SessionProjector.layer),
   Layer.provide(SessionExecutionLocal.layer),
-  Layer.provide(LocationServiceMap.layer),
+  Layer.provide(SessionRunCoordinator.layer),
+  Layer.provide(SessionRunnerDemo.layer),
+  Layer.provide(GTEAuth.defaultLayer),
   Layer.provide(SessionStore.layer),
-  Layer.provide(EventV2.layer),
+  Layer.provide(Event.layer),
   Layer.provide(Database.defaultLayer),
-  Layer.provide(ProjectV2.defaultLayer),
+  Layer.provide(Project.defaultLayer),
   Layer.orDie,
 )
 
-export const v2Handlers = Layer.mergeAll(
+export const gteAgentHandlers = Layer.mergeAll(
   healthHandlers,
-  agentHandlers,
   sessionHandlers,
   messageHandlers,
-  modelHandlers,
-  providerHandlers,
-  permissionHandlers,
-  sessionPermissionHandlers,
-  savedPermissionHandlers,
-  fileSystemHandlers,
-  commandHandlers,
-  skillHandlers,
-  eventHandlers,
-  questionHandlers,
-  sessionQuestionHandlers,
-).pipe(
-  Layer.provide(v2LocationLayer),
-  Layer.provide(LocationServiceMap.layer),
-  Layer.provide(PermissionSaved.layer),
-  Layer.provide(routedSessions),
-)
+).pipe(Layer.provide(routedSessions))

@@ -1,10 +1,10 @@
 import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core"
 import * as DatabasePath from "../database/path"
 import { Timestamps } from "../database/schema.sql"
-import { ProjectV2 } from "../project"
+import { Project } from "../project"
 
 export const ProjectTable = sqliteTable("project", {
-  id: text().$type<ProjectV2.ID>().primaryKey(),
+  id: text().$type<Project.ID>().primaryKey(),
   worktree: DatabasePath.absoluteColumn().notNull(),
   vcs: text(),
   name: text(),
@@ -21,7 +21,7 @@ export const ProjectDirectoryTable = sqliteTable(
   "project_directory",
   {
     project_id: text()
-      .$type<ProjectV2.ID>()
+      .$type<Project.ID>()
       .notNull()
       .references(() => ProjectTable.id, { onDelete: "cascade" }),
     directory: text().notNull(),

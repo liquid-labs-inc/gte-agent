@@ -3,22 +3,22 @@ import { describe, expect } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
 import { ConfigProvider, Deferred, Duration, Effect, Fiber, Layer, Option, Stream } from "effect"
-import { Config } from "@opencode-ai/core/config"
-import { EventV2 } from "@opencode-ai/core/event"
-import { FSUtil } from "@opencode-ai/core/fs-util"
-import { Watcher } from "@opencode-ai/core/filesystem/watcher"
-import { Git } from "@opencode-ai/core/git"
-import { Location } from "@opencode-ai/core/location"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { location } from "../fixture/location"
+import { Config } from "@gte-agent/core/config"
+import { Event } from "@gte-agent/core/event"
+import { FSUtil } from "@gte-agent/core/fs-util"
+import { Watcher } from "@gte-agent/core/filesystem/watcher"
+import { Git } from "@gte-agent/core/git"
+import { RuntimeScope } from "@gte-agent/core/runtime-scope"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { runtimeScope } from "../fixture/runtime-scope"
 import { tmpdir } from "../fixture/tmpdir"
 import { testEffect } from "../lib/effect"
 
-const describeWatcher = Watcher.hasNativeBinding() && !process.env.CI ? describe : describe.skip
+const describeWatcher = Watcher.hasNativeBinding() && !process.env.CI && !process.env.CODEX_SANDBOX ? describe : describe.skip
 
 type WatcherEvent = { file: string; event: "add" | "change" | "unlink" }
 
-const it = testEffect(Layer.mergeAll(FSUtil.defaultLayer, EventV2.defaultLayer))
+const it = testEffect(Layer.mergeAll(FSUtil.defaultLayer, Event.defaultLayer))
 
 const configLayer = Layer.succeed(
   Config.Service,
@@ -29,28 +29,28 @@ const configLayer = Layer.succeed(
 
 const flagsLayer = ConfigProvider.layer(
   ConfigProvider.fromUnknown({
-    OPENCODE_EXPERIMENTAL_FILEWATCHER: "true",
-    OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER: "false",
+    GTE_AGENT_EXPERIMENTAL_FILEWATCHER: "true",
+    GTE_AGENT_EXPERIMENTAL_DISABLE_FILEWATCHER: "false",
   }),
 )
 
-function provide(directory: string, vcs?: Location.Interface["vcs"]) {
-  const locationLayer = Layer.succeed(
-    Location.Service,
-    Location.Service.of(location({ directory: AbsolutePath.make(directory) }, { vcs })),
+function provide(directory: string, vcs?: RuntimeScope.Interface["vcs"]) {
+  const runtimeScopeLayer = Layer.succeed(
+    RuntimeScope.Service,
+    RuntimeScope.Service.of(runtimeScope({ directory: AbsolutePath.make(directory) }, { vcs })),
   )
   return Effect.provide(
     Watcher.layer.pipe(
       Layer.provide(configLayer),
       Layer.provide(Git.defaultLayer),
-      Layer.provide(locationLayer),
+      Layer.provide(runtimeScopeLayer),
       Layer.provide(flagsLayer),
     ),
   )
 }
 
 function withTmp<A, E, R>(
-  f: (directory: string, vcs?: Location.Interface["vcs"]) => Effect.Effect<A, E, R>,
+  f: (directory: string, vcs?: RuntimeScope.Interface["vcs"]) => Effect.Effect<A, E, R>,
   options?: { git?: boolean; init?: (directory: string) => Promise<void> },
 ) {
   return Effect.acquireRelease(
@@ -72,9 +72,9 @@ function withTmp<A, E, R>(
 
 function wait(check: (event: WatcherEvent) => boolean) {
   return Effect.gen(function* () {
-    const events = yield* EventV2.Service
+    const events = yield* Event.Service
     const deferred = yield* Deferred.make<WatcherEvent>()
-    const fiber = yield* events.subscribe(Watcher.Event.Updated).pipe(
+    const fiber = yield* events.subscribe(Watcher.WatcherEvent.Updated).pipe(
       Stream.runForEach((event) => {
         if (!check(event.data)) return Effect.void
         return Deferred.succeed(deferred, event.data).pipe(Effect.asVoid)
@@ -185,7 +185,7 @@ describeWatcher("Watcher", () => {
 
   it.live("cleanup stops publishing events", () =>
     Effect.gen(function* () {
-      const events = yield* EventV2.Service
+      const events = yield* Event.Service
       const fs = yield* FSUtil.Service
       const tmp = yield* Effect.acquireRelease(
         Effect.promise(() => tmpdir()),
@@ -194,9 +194,9 @@ describeWatcher("Watcher", () => {
       yield* ready(tmp.path).pipe(provide(tmp.path), Effect.scoped)
       const file = path.join(tmp.path, "after-dispose.txt")
       yield* noUpdate((event) => event.file === file, fs.writeFileString(file, "gone")).pipe(
-        Effect.provideService(EventV2.Service, events),
+        Effect.provideService(Event.Service, events),
       )
-    }).pipe(Effect.provide(Layer.mergeAll(FSUtil.defaultLayer, EventV2.defaultLayer))),
+    }).pipe(Effect.provide(Layer.mergeAll(FSUtil.defaultLayer, Event.defaultLayer))),
   )
 
   it.live("ignores .git/index changes", () =>

@@ -7,7 +7,7 @@ import { ConfigReference } from "./config/reference"
 import { FSUtil } from "./fs-util"
 import { Flag } from "./flag/flag"
 import { Global } from "./global"
-import { Location } from "./location"
+import { RuntimeScope } from "./runtime-scope"
 import { Repository } from "./repository"
 import { RepositoryCache } from "./repository-cache"
 
@@ -50,7 +50,7 @@ export interface Interface {
   readonly containsManagedPath: (target?: string) => Effect.Effect<boolean>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/ProjectReference") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/ProjectReference") {}
 
 type Materializer = {
   readonly name: string
@@ -62,12 +62,12 @@ type Materializer = {
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    if (!Flag.OPENCODE_EXPERIMENTAL_REFERENCES) return Service.of(inert)
+    if (!Flag.GTE_AGENT_EXPERIMENTAL_REFERENCES) return Service.of(inert)
 
     const config = yield* Config.Service
     const fs = yield* FSUtil.Service
     const global = yield* Global.Service
-    const location = yield* Location.Service
+    const location = yield* RuntimeScope.Service
     const cache = yield* RepositoryCache.Service
     const references = resolveAll({
       references: ConfigReference.normalize(
@@ -152,7 +152,7 @@ export const layer = Layer.effect(
   }),
 )
 
-export const locationLayer = layer.pipe(Layer.provideMerge(Config.locationLayer))
+export const runtimeScopeLayer = layer.pipe(Layer.provideMerge(Config.runtimeScopeLayer))
 
 const inert: Interface = {
   list: () => Effect.succeed([]),

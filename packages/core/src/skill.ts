@@ -1,27 +1,27 @@
-export * as SkillV2 from "./skill"
+export * as Skill from "./skill"
 
 import path from "path"
 import { Context, Effect, Layer, Schema } from "effect"
 import { castDraft } from "immer"
-import { AgentV2 } from "./agent"
+import { Agent } from "./agent"
 import { ConfigMarkdown } from "./config/markdown"
 import { FSUtil } from "./fs-util"
-import { PermissionV2 } from "./permission"
+import { Permission } from "./permission"
 import { AbsolutePath, withStatics } from "./schema"
 import { SkillDiscovery } from "./skill/discovery"
 import { State } from "./state"
 
-export class DirectorySource extends Schema.Class<DirectorySource>("SkillV2.DirectorySource")({
+export class DirectorySource extends Schema.Class<DirectorySource>("Skill.DirectorySource")({
   type: Schema.Literal("directory"),
   path: AbsolutePath,
 }) {}
 
-export class UrlSource extends Schema.Class<UrlSource>("SkillV2.UrlSource")({
+export class UrlSource extends Schema.Class<UrlSource>("Skill.UrlSource")({
   type: Schema.Literal("url"),
   url: Schema.String,
 }) {}
 
-export class EmbeddedSource extends Schema.Class<EmbeddedSource>("SkillV2.EmbeddedSource")({
+export class EmbeddedSource extends Schema.Class<EmbeddedSource>("Skill.EmbeddedSource")({
   type: Schema.Literal("embedded"),
   skill: Schema.suspend(() => Info),
 }) {}
@@ -46,7 +46,7 @@ export const Source = Schema.Union([DirectorySource, UrlSource, EmbeddedSource])
 )
 export type Source = typeof Source.Type
 
-export class Info extends Schema.Class<Info>("SkillV2.Info")({
+export class Info extends Schema.Class<Info>("Skill.Info")({
   name: Schema.String,
   description: Schema.String.pipe(Schema.optional),
   slash: Schema.Boolean.pipe(Schema.optional),
@@ -74,15 +74,15 @@ export interface Interface {
   readonly transform: State.Interface<Data, Editor>["transform"]
   readonly sources: () => Effect.Effect<Source[]>
   readonly list: () => Effect.Effect<Info[]>
-  readonly forAgent: (agent: AgentV2.ID) => Effect.Effect<Info[]>
+  readonly forAgent: (agent: Agent.ID) => Effect.Effect<Info[]>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Skill") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/Skill") {}
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const agent = yield* AgentV2.Service
+    const agent = yield* Agent.Service
     const discovery = yield* SkillDiscovery.Service
     const fs = yield* FSUtil.Service
 
@@ -97,7 +97,7 @@ export const layer = Layer.effect(
       }),
     })
 
-    const load = Effect.fn("SkillV2.load")(function* (source: Source) {
+    const load = Effect.fn("Skill.load")(function* (source: Source) {
       const skills: Info[] = []
       if (source.type === "embedded") return [source.skill]
       const directories = source.type === "directory" ? [source.path] : yield* discovery.pull(source.url)
@@ -136,7 +136,7 @@ export const layer = Layer.effect(
     // QUESTION(Dax): Should local skill sources invalidate on filesystem watch
     // events, following the reload policy chosen for other context sources?
     const cache = new Map<string, Info[]>()
-    const list = Effect.fn("SkillV2.list")(function* () {
+    const list = Effect.fn("Skill.list")(function* () {
       const skills = new Map<string, Info>()
       for (const source of state.get().sources) {
         const key = Source.key(source)
@@ -149,22 +149,22 @@ export const layer = Layer.effect(
 
     return Service.of({
       transform: state.transform,
-      sources: Effect.fn("SkillV2.sources")(function* () {
+      sources: Effect.fn("Skill.sources")(function* () {
         return state.get().sources
       }),
       list,
-      forAgent: Effect.fn("SkillV2.forAgent")(function* (id) {
+      forAgent: Effect.fn("Skill.forAgent")(function* (id) {
         const current = yield* agent.get(id)
         if (!current) return []
         return (yield* list()).filter(
-          (skill) => PermissionV2.evaluate("skill", skill.name, current.permissions).effect !== "deny",
+          (skill) => Permission.evaluate("skill", skill.name, current.permissions).effect !== "deny",
         )
       }),
     })
   }),
 )
 
-export const locationLayer = layer.pipe(
+export const runtimeScopeLayer = layer.pipe(
   Layer.provide(SkillDiscovery.defaultLayer),
-  Layer.provideMerge(AgentV2.locationLayer),
+  Layer.provideMerge(Agent.runtimeScopeLayer),
 )

@@ -2,29 +2,29 @@ import fs from "fs/promises"
 import path from "path"
 import { describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
-import { FSUtil } from "@opencode-ai/core/fs-util"
-import { Location } from "@opencode-ai/core/location"
-import { FileSystem } from "@opencode-ai/core/filesystem"
-import { Ripgrep as FileSystemRipgrep } from "@opencode-ai/core/filesystem/ripgrep"
-import { LocationSearch } from "@opencode-ai/core/location-search"
-import { PermissionV2 } from "@opencode-ai/core/permission"
-import { AppProcess } from "@opencode-ai/core/process"
-import { ProjectReference } from "@opencode-ai/core/project-reference"
-import { Ripgrep } from "@opencode-ai/core/ripgrep"
-import { AbsolutePath, RelativePath } from "@opencode-ai/core/schema"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { GrepTool } from "@opencode-ai/core/tool/grep"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
-import { location } from "./fixture/location"
+import { FSUtil } from "@gte-agent/core/fs-util"
+import { RuntimeScope } from "@gte-agent/core/runtime-scope"
+import { FileSystem } from "@gte-agent/core/filesystem"
+import { Ripgrep as FileSystemRipgrep } from "@gte-agent/core/filesystem/ripgrep"
+import { RuntimeScopeSearch } from "@gte-agent/core/runtime-scope-search"
+import { Permission } from "@gte-agent/core/permission"
+import { AppProcess } from "@gte-agent/core/process"
+import { ProjectReference } from "@gte-agent/core/project-reference"
+import { Ripgrep } from "@gte-agent/core/ripgrep"
+import { AbsolutePath, RelativePath } from "@gte-agent/core/schema"
+import { Session } from "@gte-agent/core/session"
+import { GrepTool } from "@gte-agent/core/tool/grep"
+import { ToolRegistry } from "@gte-agent/core/tool/registry"
+import { runtimeScope } from "./fixture/runtime-scope"
 import { tmpdir } from "./fixture/tmpdir"
 import { it as runtimeIt } from "./lib/effect"
 import { testEffect } from "./lib/effect"
 
-const assertions: PermissionV2.AssertInput[] = []
-const searches: LocationSearch.GrepInput[] = []
+const assertions: Permission.AssertInput[] = []
+const searches: RuntimeScopeSearch.GrepInput[] = []
 const roots: FileSystem.RootTarget[] = []
 let allow = true
-let result = new LocationSearch.GrepResult({ items: [], truncated: false, partial: false })
+let result = new RuntimeScopeSearch.GrepResult({ items: [], truncated: false, partial: false })
 let searchFailure: Ripgrep.InvalidPatternError | undefined
 
 const filesystem = Layer.succeed(
@@ -60,8 +60,8 @@ const filesystem = Layer.succeed(
   }),
 )
 const search = Layer.succeed(
-  LocationSearch.Service,
-  LocationSearch.Service.of({
+  RuntimeScopeSearch.Service,
+  RuntimeScopeSearch.Service.of({
     files: () => Effect.die("unused"),
     grep: (input, root) =>
       Effect.sync(() => {
@@ -73,12 +73,12 @@ const search = Layer.succeed(
   }),
 )
 const permission = Layer.succeed(
-  PermissionV2.Service,
-  PermissionV2.Service.of({
+  Permission.Service,
+  Permission.Service.of({
     assert: (input) =>
       Effect.sync(() => {
         assertions.push(input)
-      }).pipe(Effect.andThen(allow ? Effect.void : Effect.fail(new PermissionV2.DeniedError({ rules: [] })))),
+      }).pipe(Effect.andThen(allow ? Effect.void : Effect.fail(new Permission.DeniedError({ rules: [] })))),
     ask: () => Effect.die("unused"),
     reply: () => Effect.die("unused"),
     get: () => Effect.die("unused"),
@@ -94,7 +94,7 @@ const grep = GrepTool.layer.pipe(
   Layer.provide(permission),
 )
 const it = testEffect(Layer.mergeAll(registry, filesystem, search, permission, grep))
-const sessionID = SessionV2.ID.make("ses_grep_tool_test")
+const sessionID = Session.ID.make("ses_grep_tool_test")
 
 const execute = (input: Record<string, unknown>) =>
   ToolRegistry.Service.use((registry) =>
@@ -112,7 +112,7 @@ const reset = () => {
   roots.length = 0
   allow = true
   searchFailure = undefined
-  result = new LocationSearch.GrepResult({ items: [], truncated: false, partial: false })
+  result = new RuntimeScopeSearch.GrepResult({ items: [], truncated: false, partial: false })
 }
 
 function references(entries: Record<string, ProjectReference.Resolved>) {
@@ -130,11 +130,11 @@ function provideLive(directory: string, projectReferences = references({})) {
     FSUtil.defaultLayer,
     FileSystemRipgrep.defaultLayer,
     AppProcess.defaultLayer,
-    Layer.succeed(Location.Service, Location.Service.of(location({ directory: AbsolutePath.make(directory) }))),
+    Layer.succeed(RuntimeScope.Service, RuntimeScope.Service.of(runtimeScope({ directory: AbsolutePath.make(directory) }))),
     Layer.succeed(ProjectReference.Service, projectReferences),
   )
   const filesystem = FileSystem.layer.pipe(Layer.provide(dependencies))
-  const search = LocationSearch.layer.pipe(
+  const search = RuntimeScopeSearch.layer.pipe(
     Layer.provide(filesystem),
     Layer.provide(Ripgrep.layer.pipe(Layer.provide(dependencies))),
     Layer.provide(FSUtil.defaultLayer),
@@ -158,7 +158,7 @@ describe("GrepTool", () => {
     }),
   )
 
-  it.effect("authorizes the regex resource and delegates an active Location grep", () =>
+  it.effect("authorizes the regex resource and delegates an active RuntimeScope grep", () =>
     Effect.gen(function* () {
       reset()
       const input = { pattern: "needle", path: "src", include: "*.ts", limit: 2 }
@@ -208,9 +208,9 @@ describe("GrepTool", () => {
   it.effect("keeps structured results raw while formatting bounded partial previews for models", () =>
     Effect.gen(function* () {
       reset()
-      result = new LocationSearch.GrepResult({
+      result = new RuntimeScopeSearch.GrepResult({
         items: [
-          new LocationSearch.Match({
+          new RuntimeScopeSearch.Match({
             path: RelativePath.make("src/index.ts"),
             canonical: "/project/src/index.ts",
             resource: "src/index.ts",
@@ -218,7 +218,7 @@ describe("GrepTool", () => {
             linePreviewTruncated: true,
             line: 3,
             offset: 8,
-            submatches: [new LocationSearch.Submatch({ text: "needle", start: 0, end: 6 })],
+            submatches: [new RuntimeScopeSearch.Submatch({ text: "needle", start: 0, end: 6 })],
             mtime: 1,
           }),
         ],
@@ -252,7 +252,7 @@ describe("GrepTool", () => {
     }),
   )
 
-  runtimeIt.live("greps active Location and named-reference files with include globs", () =>
+  runtimeIt.live("greps active RuntimeScope and named-reference files with include globs", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),
       (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),

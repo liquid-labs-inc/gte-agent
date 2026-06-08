@@ -1,16 +1,16 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { GithubCopilotPlugin } from "@opencode-ai/core/plugin/provider/github-copilot"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Catalog } from "@gte-agent/core/catalog"
+import { Model } from "@gte-agent/core/model"
+import { Plugin } from "@gte-agent/core/plugin"
+import { GithubCopilotPlugin } from "@gte-agent/core/plugin/provider/github-copilot"
+import { Provider } from "@gte-agent/core/provider"
 import { fakeSelectorSdk, it, model } from "./provider-helper"
 
 describe("GithubCopilotPlugin", () => {
   it.effect("creates the bundled Copilot SDK for the GitHub Copilot package", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(GithubCopilotPlugin)
       const ignored = yield* plugin.trigger(
         "aisdk.sdk",
@@ -37,7 +37,7 @@ describe("GithubCopilotPlugin", () => {
 
   it.effect("selects languageModel when responses and chat are absent", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(GithubCopilotPlugin)
       yield* plugin.trigger(
@@ -55,13 +55,13 @@ describe("GithubCopilotPlugin", () => {
 
   it.effect("selects languageModel with the API model ID when responses and chat are absent", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(GithubCopilotPlugin)
       yield* plugin.trigger(
         "aisdk.language",
         {
-          model: model("github-copilot", "alias", { api: { id: ModelV2.ID.make("claude-sonnet-4") } }),
+          model: model("github-copilot", "alias", { api: { id: Model.ID.make("claude-sonnet-4") } }),
           sdk: { languageModel: fakeSelectorSdk(calls).languageModel },
           options: {},
         },
@@ -73,7 +73,7 @@ describe("GithubCopilotPlugin", () => {
 
   it.effect("uses responses for gpt-5 models except gpt-5-mini", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(GithubCopilotPlugin)
       yield* plugin.trigger(
@@ -113,13 +113,13 @@ describe("GithubCopilotPlugin", () => {
 
   it.effect("uses the API model ID when selecting responses or chat", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(GithubCopilotPlugin)
       yield* plugin.trigger(
         "aisdk.language",
         {
-          model: model("github-copilot", "default", { api: { id: ModelV2.ID.make("gpt-5") } }),
+          model: model("github-copilot", "default", { api: { id: Model.ID.make("gpt-5") } }),
           sdk: fakeSelectorSdk(calls),
           options: {},
         },
@@ -128,7 +128,7 @@ describe("GithubCopilotPlugin", () => {
       yield* plugin.trigger(
         "aisdk.language",
         {
-          model: model("github-copilot", "small", { api: { id: ModelV2.ID.make("gpt-5-mini") } }),
+          model: model("github-copilot", "small", { api: { id: Model.ID.make("gpt-5-mini") } }),
           sdk: fakeSelectorSdk(calls),
           options: {},
         },
@@ -137,7 +137,7 @@ describe("GithubCopilotPlugin", () => {
       yield* plugin.trigger(
         "aisdk.language",
         {
-          model: model("github-copilot", "sonnet", { api: { id: ModelV2.ID.make("claude-sonnet-4") } }),
+          model: model("github-copilot", "sonnet", { api: { id: Model.ID.make("claude-sonnet-4") } }),
           sdk: fakeSelectorSdk(calls),
           options: {},
         },
@@ -149,39 +149,39 @@ describe("GithubCopilotPlugin", () => {
 
   it.effect("disables gpt-5-chat-latest before Copilot language selection", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const catalog = yield* Catalog.Service
       yield* plugin.add(GithubCopilotPlugin)
       const transform = yield* catalog.transform()
       yield* transform((catalog) => {
-        catalog.provider.update(ProviderV2.ID.make("github-copilot"), () => {})
-        catalog.model.update(ProviderV2.ID.make("github-copilot"), ModelV2.ID.make("gpt-5-chat-latest"), () => {})
+        catalog.provider.update(Provider.ID.make("github-copilot"), () => {})
+        catalog.model.update(Provider.ID.make("github-copilot"), Model.ID.make("gpt-5-chat-latest"), () => {})
       })
       expect(
-        (yield* catalog.model.get(ProviderV2.ID.make("github-copilot"), ModelV2.ID.make("gpt-5-chat-latest"))).enabled,
+        (yield* catalog.model.get(Provider.ID.make("github-copilot"), Model.ID.make("gpt-5-chat-latest"))).enabled,
       ).toBe(false)
     }),
   )
 
   it.effect("does not disable gpt-5-chat-latest for non-Copilot providers", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const catalog = yield* Catalog.Service
       yield* plugin.add(GithubCopilotPlugin)
       const transform = yield* catalog.transform()
       yield* transform((catalog) => {
-        catalog.provider.update(ProviderV2.ID.make("custom-copilot"), () => {})
-        catalog.model.update(ProviderV2.ID.make("custom-copilot"), ModelV2.ID.make("gpt-5-chat-latest"), () => {})
+        catalog.provider.update(Provider.ID.make("custom-copilot"), () => {})
+        catalog.model.update(Provider.ID.make("custom-copilot"), Model.ID.make("gpt-5-chat-latest"), () => {})
       })
       expect(
-        (yield* catalog.model.get(ProviderV2.ID.make("custom-copilot"), ModelV2.ID.make("gpt-5-chat-latest"))).enabled,
+        (yield* catalog.model.get(Provider.ID.make("custom-copilot"), Model.ID.make("gpt-5-chat-latest"))).enabled,
       ).toBe(true)
     }),
   )
 
   it.effect("ignores non-Copilot providers", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(GithubCopilotPlugin)
       const result = yield* plugin.trigger(

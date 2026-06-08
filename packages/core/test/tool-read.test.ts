@@ -1,15 +1,15 @@
 import { describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
-import { FileSystem } from "@opencode-ai/core/filesystem"
-import { PermissionV2 } from "@opencode-ai/core/permission"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
-import { ReadTool } from "@opencode-ai/core/tool/read"
-import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
-import { RelativePath } from "@opencode-ai/core/schema"
+import { FileSystem } from "@gte-agent/core/filesystem"
+import { Permission } from "@gte-agent/core/permission"
+import { Session } from "@gte-agent/core/session"
+import { ToolRegistry } from "@gte-agent/core/tool/registry"
+import { ReadTool } from "@gte-agent/core/tool/read"
+import { ToolOutputStore } from "@gte-agent/core/tool-output-store"
+import { RelativePath } from "@gte-agent/core/schema"
 import { testEffect } from "./lib/effect"
 
-const assertions: PermissionV2.AssertInput[] = []
+const assertions: Permission.AssertInput[] = []
 const reads: FileSystem.ReadInput[] = []
 const textPageInputs: FileSystem.TextPageInput[] = []
 const pages: FileSystem.ListTarget[] = []
@@ -113,13 +113,13 @@ const filesystem = Layer.succeed(
 )
 let allow = true
 const permission = Layer.succeed(
-  PermissionV2.Service,
-  PermissionV2.Service.of({
+  Permission.Service,
+  Permission.Service.of({
     assert: (input) =>
       Effect.sync(() => {
         assertions.push(input)
         if (allow) afterApproval()
-      }).pipe(Effect.andThen(allow ? Effect.void : Effect.fail(new PermissionV2.DeniedError({ rules: [] })))),
+      }).pipe(Effect.andThen(allow ? Effect.void : Effect.fail(new Permission.DeniedError({ rules: [] })))),
     ask: () => Effect.die("unused"),
     reply: () => Effect.die("unused"),
     get: () => Effect.die("unused"),
@@ -154,7 +154,7 @@ const read = ReadTool.layer.pipe(
   Layer.provide(resources),
 )
 const it = testEffect(Layer.mergeAll(registry, filesystem, permission, resources, read))
-const sessionID = SessionV2.ID.make("ses_read_tool_test")
+const sessionID = Session.ID.make("ses_read_tool_test")
 
 describe("ReadTool", () => {
   it.effect("registers, authorizes, and reads through the location filesystem", () =>

@@ -13,7 +13,7 @@ const Git = Schema.Struct({
 
 const Local = Schema.Struct({
   path: Schema.String.annotate({
-    description: "Absolute path, ~/ path, or workspace-relative path to a local reference directory",
+    description: "Absolute path, ~/ path, or project-relative path to a local reference directory",
   }),
 })
 

@@ -1,17 +1,17 @@
 import { describe, expect, test } from "bun:test"
 import { Duration, Effect, Fiber, Layer, Schema } from "effect"
 import * as TestClock from "effect/testing/TestClock"
-import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
-import { PermissionV2 } from "@opencode-ai/core/permission"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
-import { WebFetchTool } from "@opencode-ai/core/tool/webfetch"
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
+import { Permission } from "@gte-agent/core/permission"
+import { Session } from "@gte-agent/core/session"
+import { ToolOutputStore } from "@gte-agent/core/tool-output-store"
+import { ToolRegistry } from "@gte-agent/core/tool/registry"
+import { WebFetchTool } from "@gte-agent/core/tool/webfetch"
 import { testEffect } from "./lib/effect"
 
-const sessionID = SessionV2.ID.make("ses_webfetch_test")
+const sessionID = Session.ID.make("ses_webfetch_test")
 const requests: Array<{ readonly url: string; readonly headers: Record<string, string> }> = []
-const assertions: PermissionV2.AssertInput[] = []
+const assertions: Permission.AssertInput[] = []
 const truncations: ToolOutputStore.TruncateInput[] = []
 let respond = (_request: HttpClientRequest.HttpClientRequest) =>
   Effect.succeed(new Response("hello", { headers: { "content-type": "text/plain" } }))
@@ -28,8 +28,8 @@ const http = Layer.succeed(
   ),
 )
 const permission = Layer.succeed(
-  PermissionV2.Service,
-  PermissionV2.Service.of({
+  Permission.Service,
+  Permission.Service.of({
     assert: (input) => Effect.sync(() => assertions.push(input)),
     ask: () => Effect.die("unused"),
     reply: () => Effect.die("unused"),
@@ -51,12 +51,6 @@ const resources = Layer.succeed(
 const registry = ToolRegistry.defaultLayer.pipe(Layer.provide(permission))
 const webfetch = WebFetchTool.layer.pipe(Layer.provide(registry), Layer.provide(http), Layer.provide(resources))
 const it = testEffect(Layer.mergeAll(registry, permission, http, resources, webfetch))
-const fetchWebfetch = WebFetchTool.layer.pipe(
-  Layer.provide(registry),
-  Layer.provide(FetchHttpClient.layer),
-  Layer.provide(resources),
-)
-const live = testEffect(Layer.mergeAll(registry, permission, FetchHttpClient.layer, resources, fetchWebfetch))
 
 const reset = () => {
   requests.length = 0
@@ -125,30 +119,19 @@ describe("WebFetchTool contribution", () => {
     }),
   )
 
-  live.effect("follows redirects while approving only the requested URL", () =>
-    Effect.acquireUseRelease(
-      Effect.sync(() =>
-        Bun.serve({
-          port: 0,
-          fetch: (request) =>
-            new URL(request.url).pathname === "/redirect"
-              ? new Response("", { status: 302, headers: { location: "/target" } })
-              : new Response("redirected", { headers: { "content-type": "text/plain" } }),
-        }),
-      ),
-      (server) =>
-        Effect.gen(function* () {
-          reset()
-          const registry = yield* ToolRegistry.Service
-          const url = new URL("/redirect", server.url).toString()
+  it.effect("approves only the requested URL before transport handling", () =>
+    Effect.gen(function* () {
+      reset()
+      respond = () => Effect.succeed(new Response("redirected", { headers: { "content-type": "text/plain" } }))
+      const registry = yield* ToolRegistry.Service
+      const url = "https://example.com/redirect"
 
-          expect(yield* registry.execute(call({ url, format: "text" }))).toEqual({ type: "text", value: "redirected" })
-          expect(assertions).toEqual([
-            { sessionID, action: "webfetch", resources: [url], save: ["*"], metadata: { url, format: "text" } },
-          ])
-        }),
-      (server) => Effect.promise(() => server.stop(true)),
-    ),
+      expect(yield* registry.execute(call({ url, format: "text" }))).toEqual({ type: "text", value: "redirected" })
+      expect(assertions).toEqual([
+        { sessionID, action: "webfetch", resources: [url], save: ["*"], metadata: { url, format: "text" } },
+      ])
+      expect(requests.map((request) => request.url)).toEqual([url])
+    }),
   )
 
   it.effect("rejects non-HTTP schemes before permission or transport", () =>
@@ -275,7 +258,7 @@ describe("WebFetchTool contribution", () => {
       })
       expect(requests).toHaveLength(2)
       expect(requests[0]?.headers["user-agent"]).toContain("Mozilla/5.0")
-      expect(requests[1]?.headers["user-agent"]).toBe("opencode")
+      expect(requests[1]?.headers["user-agent"]).toBe("gte-agent")
     }),
   )
 

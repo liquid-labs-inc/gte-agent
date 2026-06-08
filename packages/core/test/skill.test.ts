@@ -2,11 +2,11 @@ import fs from "fs/promises"
 import path from "path"
 import { describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
-import { AgentV2 } from "@opencode-ai/core/agent"
-import { FSUtil } from "@opencode-ai/core/fs-util"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SkillV2 } from "@opencode-ai/core/skill"
-import { SkillDiscovery } from "@opencode-ai/core/skill/discovery"
+import { Agent } from "@gte-agent/core/agent"
+import { FSUtil } from "@gte-agent/core/fs-util"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { Skill } from "@gte-agent/core/skill"
+import { SkillDiscovery } from "@gte-agent/core/skill/discovery"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
 
@@ -22,10 +22,10 @@ const discovery = Layer.succeed(
   }),
 )
 const it = testEffect(
-  SkillV2.layer.pipe(
+  Skill.layer.pipe(
     Layer.provide(discovery),
     Layer.provide(FSUtil.defaultLayer),
-    Layer.provideMerge(AgentV2.locationLayer),
+    Layer.provideMerge(Agent.runtimeScopeLayer),
   ),
 )
 
@@ -40,7 +40,7 @@ description: ${description}
   )
 }
 
-describe("SkillV2", () => {
+describe("Skill", () => {
   it.live("registers sources and resolves later source precedence", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),
@@ -58,7 +58,7 @@ describe("SkillV2", () => {
             await fs.writeFile(path.join(first, "foo.md"), "---\nslash: true\n---\n# foo")
           })
 
-          const skill = yield* SkillV2.Service
+          const skill = yield* Skill.Service
           const register = yield* skill.transform()
           yield* register((editor) => {
             editor.source({ type: "directory", path: AbsolutePath.make(first) })
@@ -75,7 +75,7 @@ describe("SkillV2", () => {
             { type: "directory", path: AbsolutePath.make(second) },
           ])
           expect(yield* skill.list()).toEqual([
-            new SkillV2.Info({
+            new Skill.Info({
               name: "foo",
               slash: true,
               location: AbsolutePath.make(path.join(first, "foo.md")),
@@ -107,22 +107,22 @@ describe("SkillV2", () => {
           pulls = 0
           urls.set("https://example.test/skills/", [AbsolutePath.make(tmp.path)])
 
-          const agents = yield* AgentV2.Service
+          const agents = yield* Agent.Service
           yield* agents.update((editor) =>
-            editor.update(AgentV2.ID.make("reviewer"), (agent) => {
+            editor.update(Agent.ID.make("reviewer"), (agent) => {
               agent.permissions.push({ action: "skill", resource: "deploy", effect: "deny" })
             }),
           )
 
-          const skill = yield* SkillV2.Service
+          const skill = yield* Skill.Service
           const register = yield* skill.transform()
           yield* register((editor) => editor.source({ type: "url", url: "https://example.test/skills/" }))
 
           expect((yield* skill.list()).map((item) => item.name)).toEqual(["deploy"])
           expect((yield* skill.list()).map((item) => item.name)).toEqual(["deploy"])
           expect(pulls).toBe(1)
-          expect(yield* skill.forAgent(AgentV2.ID.make("reviewer"))).toEqual([])
-          expect(yield* skill.forAgent(AgentV2.ID.make("missing"))).toEqual([])
+          expect(yield* skill.forAgent(Agent.ID.make("reviewer"))).toEqual([])
+          expect(yield* skill.forAgent(Agent.ID.make("missing"))).toEqual([])
         }),
       ),
     ),

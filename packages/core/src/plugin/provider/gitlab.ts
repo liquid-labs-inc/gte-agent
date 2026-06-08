@@ -1,11 +1,11 @@
 import os from "os"
 import { InstallationVersion } from "../../installation/version"
 import { Effect } from "effect"
-import { PluginV2 } from "../../plugin"
-import { ProviderV2 } from "../../provider"
+import { Plugin } from "../../plugin"
+import { Provider } from "../../provider"
 
-export const GitLabPlugin = PluginV2.define({
-  id: PluginV2.ID.make("gitlab"),
+export const GitLabPlugin = Plugin.define({
+  id: Plugin.ID.make("gitlab"),
   effect: Effect.gen(function* () {
     return {
       "aisdk.sdk": Effect.fn(function* (evt) {
@@ -19,7 +19,7 @@ export const GitLabPlugin = PluginV2.define({
               : (process.env.GITLAB_INSTANCE_URL ?? "https://gitlab.com"),
           apiKey: typeof evt.options.apiKey === "string" ? evt.options.apiKey : process.env.GITLAB_TOKEN,
           aiGatewayHeaders: {
-            "User-Agent": `opencode/${InstallationVersion} gitlab-ai-provider/${mod.VERSION} (${os.platform()} ${os.release()}; ${os.arch()})`,
+            "User-Agent": `gte-agent/${InstallationVersion} gitlab-ai-provider/${mod.VERSION} (${os.platform()} ${os.release()}; ${os.arch()})`,
             "anthropic-beta": "context-1m-2025-08-07",
             ...evt.options.aiGatewayHeaders,
           },
@@ -31,7 +31,7 @@ export const GitLabPlugin = PluginV2.define({
         })
       }),
       "aisdk.language": Effect.fn(function* (evt) {
-        if (evt.model.providerID !== ProviderV2.ID.gitlab) return
+        if (evt.model.providerID !== Provider.ID.gitlab) return
         const featureFlags =
           typeof evt.options.featureFlags === "object" && evt.options.featureFlags ? evt.options.featureFlags : {}
         if (evt.model.api.id.startsWith("duo-workflow-")) {

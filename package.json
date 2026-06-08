@@ -85,7 +85,7 @@
     "turbo": "2.8.13"
   },
   "dependencies": {
-    "@opencode-ai/script": "workspace:*",
+    "@gte-agent/script": "workspace:*",
     "typescript": "catalog:"
   },
   "repository": {

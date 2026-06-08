@@ -2,33 +2,33 @@ import { describe, expect } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
 import { Deferred, Effect, Layer, Schema } from "effect"
-import { Config } from "@opencode-ai/core/config"
-import { ConfigReference } from "@opencode-ai/core/config/reference"
-import { FSUtil } from "@opencode-ai/core/fs-util"
-import { Flag } from "@opencode-ai/core/flag/flag"
-import { Global } from "@opencode-ai/core/global"
-import { Location } from "@opencode-ai/core/location"
-import { ProjectReference } from "@opencode-ai/core/project-reference"
-import { Repository } from "@opencode-ai/core/repository"
-import { RepositoryCache } from "@opencode-ai/core/repository-cache"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { location } from "./fixture/location"
+import { Config } from "@gte-agent/core/config"
+import { ConfigReference } from "@gte-agent/core/config/reference"
+import { FSUtil } from "@gte-agent/core/fs-util"
+import { Flag } from "@gte-agent/core/flag/flag"
+import { Global } from "@gte-agent/core/global"
+import { RuntimeScope } from "@gte-agent/core/runtime-scope"
+import { ProjectReference } from "@gte-agent/core/project-reference"
+import { Repository } from "@gte-agent/core/repository"
+import { RepositoryCache } from "@gte-agent/core/repository-cache"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { runtimeScope } from "./fixture/runtime-scope"
 import { tmpdir } from "./fixture/tmpdir"
 import { it } from "./lib/effect"
 
 describe("ProjectReference", () => {
   it.live("uses the broad experimental flag unless references are explicitly configured", () =>
     withEnv(
-      { OPENCODE_EXPERIMENTAL: "true", OPENCODE_EXPERIMENTAL_REFERENCES: undefined },
+      { GTE_AGENT_EXPERIMENTAL: "true", GTE_AGENT_EXPERIMENTAL_REFERENCES: undefined },
       Effect.sync(() => {
-        expect(Flag.OPENCODE_EXPERIMENTAL_REFERENCES).toBe(true)
+        expect(Flag.GTE_AGENT_EXPERIMENTAL_REFERENCES).toBe(true)
       }),
     ).pipe(
       Effect.flatMap(() =>
         withEnv(
-          { OPENCODE_EXPERIMENTAL: "true", OPENCODE_EXPERIMENTAL_REFERENCES: "false" },
+          { GTE_AGENT_EXPERIMENTAL: "true", GTE_AGENT_EXPERIMENTAL_REFERENCES: "false" },
           Effect.sync(() => {
-            expect(Flag.OPENCODE_EXPERIMENTAL_REFERENCES).toBe(false)
+            expect(Flag.GTE_AGENT_EXPERIMENTAL_REFERENCES).toBe(false)
           }),
         ),
       ),
@@ -246,9 +246,9 @@ function testLayer(input: {
         FSUtil.defaultLayer,
         Global.layerWith({ home: path.join(input.directory, "home"), repos: input.repos }),
         Layer.succeed(
-          Location.Service,
-          Location.Service.of(
-            location(
+          RuntimeScope.Service,
+          RuntimeScope.Service.of(
+            runtimeScope(
               { directory: AbsolutePath.make(input.directory) },
               { projectDirectory: AbsolutePath.make(input.project) },
             ),
@@ -270,11 +270,11 @@ function withTmp<A, E, R>(body: (tmp: Awaited<ReturnType<typeof tmpdir>>) => Eff
 }
 
 function withReferences<A, E, R>(body: Effect.Effect<A, E, R>) {
-  return withEnv({ OPENCODE_EXPERIMENTAL_REFERENCES: "true" }, body)
+  return withEnv({ GTE_AGENT_EXPERIMENTAL_REFERENCES: "true" }, body)
 }
 
 function withoutReferences<A, E, R>(body: Effect.Effect<A, E, R>) {
-  return withEnv({ OPENCODE_EXPERIMENTAL: undefined, OPENCODE_EXPERIMENTAL_REFERENCES: undefined }, body)
+  return withEnv({ GTE_AGENT_EXPERIMENTAL: undefined, GTE_AGENT_EXPERIMENTAL_REFERENCES: undefined }, body)
 }
 
 function withEnv<A, E, R>(env: Record<string, string | undefined>, body: Effect.Effect<A, E, R>) {

@@ -5,7 +5,7 @@ import { type ParseError, parse } from "jsonc-parser"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { FSUtil } from "./fs-util"
 import { Global } from "./global"
-import { Location } from "./location"
+import { RuntimeScope } from "./runtime-scope"
 import { PermissionSchema } from "./permission/schema"
 import { Policy } from "./policy"
 import { AbsolutePath } from "./schema"
@@ -110,16 +110,16 @@ export interface Interface {
   readonly entries: () => Effect.Effect<Entry[]>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Config") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/Config") {}
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
     const global = yield* Global.Service
-    const location = yield* Location.Service
+    const location = yield* RuntimeScope.Service
     const policy = yield* Policy.Service
-    const names = ["config.json", "opencode.json", "opencode.jsonc"]
+    const names = ["config.json", "gte-agent.json", "gte-agent.jsonc"]
 
     const loadFile = Effect.fnUntraced(function* (filepath: string) {
       const text = yield* fs.readFileStringSafe(filepath)
@@ -166,7 +166,7 @@ export const layer = Layer.effect(
       ? []
       : yield* fs
           .up({
-            targets: [".opencode", ...names.toReversed()],
+            targets: [".gte-agent", ...names.toReversed()],
             start: location.directory,
             stop: location.project.directory,
           })
@@ -174,20 +174,20 @@ export const layer = Layer.effect(
     const directories = [
       globalDirectory,
       ...discovered
-        .filter((item) => path.basename(item) === ".opencode")
+        .filter((item) => path.basename(item) === ".gte-agent")
         .toReversed()
         .map((directory) => AbsolutePath.make(directory)),
     ]
     // A config closer to the opened directory should win over one higher up.
     // Search starts nearby, so reverse the results before applying them.
-    const directPaths = discovered.filter((item) => path.basename(item) !== ".opencode").toReversed()
+    const directPaths = discovered.filter((item) => path.basename(item) !== ".gte-agent").toReversed()
     const direct = yield* Effect.forEach(directPaths, loadFile).pipe(
       Effect.orDie,
       Effect.map((configs) => configs.filter((config): config is Document => config !== undefined)),
     )
     const supplementary = yield* Effect.forEach(directories, loadDirectory).pipe(Effect.orDie)
     // Apply general settings first and more specific settings last:
-    // global config, project files, then `.opencode` files.
+    // global config, project files, then `.gte-agent` files.
     const configs = [...(supplementary[0] ?? []), ...direct, ...supplementary.slice(1).flat()]
     // Rules use the opposite order so a user-global rule can override a
     // repository rule. Statement order inside each file stays unchanged.
@@ -206,4 +206,4 @@ export const layer = Layer.effect(
   }),
 )
 
-export const locationLayer = layer.pipe(Layer.provideMerge(Policy.locationLayer))
+export const runtimeScopeLayer = layer.pipe(Layer.provideMerge(Policy.runtimeScopeLayer))

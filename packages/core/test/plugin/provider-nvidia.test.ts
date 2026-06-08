@@ -1,14 +1,14 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { ProviderPlugins } from "@opencode-ai/core/plugin/provider"
-import { NvidiaPlugin } from "@opencode-ai/core/plugin/provider/nvidia"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Catalog } from "@gte-agent/core/catalog"
+import { Plugin } from "@gte-agent/core/plugin"
+import { ProviderPlugins } from "@gte-agent/core/plugin/provider"
+import { NvidiaPlugin } from "@gte-agent/core/plugin/provider/nvidia"
+import { Provider } from "@gte-agent/core/provider"
 import { expectPluginRegistered, it, provider } from "./provider-helper"
 
 describe("NvidiaPlugin", () => {
-  it.effect("is registered so legacy referer headers can be applied", () =>
+  it.effect("is registered so GTE Agent referer headers can be applied", () =>
     Effect.sync(() =>
       expectPluginRegistered(
         ProviderPlugins.map((item) => item.id),
@@ -19,7 +19,7 @@ describe("NvidiaPlugin", () => {
 
   it.effect("applies NVIDIA tracking headers only to nvidia", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const catalog = yield* Catalog.Service
       yield* plugin.add(NvidiaPlugin)
       const transform = yield* catalog.transform()
@@ -34,19 +34,19 @@ describe("NvidiaPlugin", () => {
         })
         catalog.provider.update(provider("openrouter").id, () => {})
       })
-      expect((yield* catalog.provider.get(ProviderV2.ID.make("nvidia"))).request.headers).toEqual({
+      expect((yield* catalog.provider.get(Provider.ID.make("nvidia"))).request.headers).toEqual({
         Existing: "value",
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
-        "X-BILLING-INVOKE-ORIGIN": "OpenCode",
+        "HTTP-Referer": "https://gte-agent.ai/",
+        "X-Title": "gte-agent",
+        "X-BILLING-INVOKE-ORIGIN": "GTE Agent",
       })
-      expect((yield* catalog.provider.get(ProviderV2.ID.openrouter)).request.headers).toEqual({})
+      expect((yield* catalog.provider.get(Provider.ID.openrouter)).request.headers).toEqual({})
     }),
   )
 
   it.effect("adds billing origin for custom NVIDIA endpoints", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const catalog = yield* Catalog.Service
       yield* plugin.add(NvidiaPlugin)
       const transform = yield* catalog.transform()
@@ -61,17 +61,17 @@ describe("NvidiaPlugin", () => {
         })
       })
 
-      expect((yield* catalog.provider.get(ProviderV2.ID.make("nvidia"))).request.headers).toEqual({
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
-        "X-BILLING-INVOKE-ORIGIN": "OpenCode",
+      expect((yield* catalog.provider.get(Provider.ID.make("nvidia"))).request.headers).toEqual({
+        "HTTP-Referer": "https://gte-agent.ai/",
+        "X-Title": "gte-agent",
+        "X-BILLING-INVOKE-ORIGIN": "GTE Agent",
       })
     }),
   )
 
   it.effect("preserves an explicit NVIDIA billing origin header", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const catalog = yield* Catalog.Service
       yield* plugin.add(NvidiaPlugin)
       const transform = yield* catalog.transform()
@@ -89,9 +89,9 @@ describe("NvidiaPlugin", () => {
         })
       })
 
-      expect((yield* catalog.provider.get(ProviderV2.ID.make("nvidia"))).request.headers).toEqual({
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
+      expect((yield* catalog.provider.get(Provider.ID.make("nvidia"))).request.headers).toEqual({
+        "HTTP-Referer": "https://gte-agent.ai/",
+        "X-Title": "gte-agent",
         "X-BILLING-INVOKE-ORIGIN": "CustomOrigin",
       })
     }),

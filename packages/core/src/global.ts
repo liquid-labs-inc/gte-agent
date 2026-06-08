@@ -1,21 +1,21 @@
 import path from "path"
 import fs from "fs/promises"
-import { xdgData, xdgCache, xdgConfig, xdgState } from "xdg-basedir"
 import os from "os"
 import { Context, Effect, Layer } from "effect"
 import { Flock } from "./util/flock"
 import { Flag } from "./flag/flag"
 
-const app = "opencode"
-const data = path.join(xdgData!, app)
-const cache = path.join(xdgCache!, app)
-const config = path.join(xdgConfig!, app)
-const state = path.join(xdgState!, app)
-const tmp = path.join(os.tmpdir(), app)
+const app = "gte-agent"
+const base = process.env.GTE_AGENT_HOME ?? path.join(os.tmpdir(), app)
+const data = process.env.GTE_AGENT_DATA_DIR ?? path.join(base, "data")
+const cache = process.env.GTE_AGENT_CACHE_DIR ?? path.join(base, "cache")
+const config = process.env.GTE_AGENT_CONFIG_DIR ?? path.join(base, "config")
+const state = process.env.GTE_AGENT_STATE_DIR ?? path.join(base, "state")
+const tmp = process.env.GTE_AGENT_TMP_DIR ?? path.join(base, "tmp")
 
 const paths = {
   get home() {
-    return process.env.OPENCODE_TEST_HOME ?? os.homedir()
+    return process.env.GTE_AGENT_TEST_HOME ?? process.env.GTE_AGENT_HOME ?? os.homedir()
   },
   data,
   bin: path.join(cache, "bin"),
@@ -41,7 +41,7 @@ await Promise.all([
   fs.mkdir(Path.repos, { recursive: true }),
 ])
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/Global") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/Global") {}
 
 export interface Interface {
   readonly home: string
@@ -60,7 +60,7 @@ export function make(input: Partial<Interface> = {}): Interface {
     home: Path.home,
     data: Path.data,
     cache: Path.cache,
-    config: Flag.OPENCODE_CONFIG_DIR ?? Path.config,
+    config: Flag.GTE_AGENT_CONFIG_DIR ?? Path.config,
     state: Path.state,
     tmp: Path.tmp,
     bin: Path.bin,

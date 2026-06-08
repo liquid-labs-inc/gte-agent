@@ -1,16 +1,16 @@
 import { Npm } from "../../npm"
 import { Effect, Option } from "effect"
 import { pathToFileURL } from "url"
-import { PluginV2 } from "../../plugin"
-import { ProviderV2 } from "../../provider"
+import { Plugin } from "../../plugin"
+import { Provider } from "../../provider"
 
-export const SapAICorePlugin = PluginV2.define({
-  id: PluginV2.ID.make("sap-ai-core"),
+export const SapAICorePlugin = Plugin.define({
+  id: Plugin.ID.make("sap-ai-core"),
   effect: Effect.gen(function* () {
     const npm = yield* Npm.Service
     return {
       "aisdk.sdk": Effect.fn(function* (evt) {
-        if (evt.model.providerID !== ProviderV2.ID.make("sap-ai-core")) return
+        if (evt.model.providerID !== Provider.ID.make("sap-ai-core")) return
         const serviceKey =
           process.env.AICORE_SERVICE_KEY ??
           (typeof evt.options.serviceKey === "string" ? evt.options.serviceKey : undefined)
@@ -36,7 +36,7 @@ export const SapAICorePlugin = PluginV2.define({
         )
       }),
       "aisdk.language": Effect.fn(function* (evt) {
-        if (evt.model.providerID !== ProviderV2.ID.make("sap-ai-core")) return
+        if (evt.model.providerID !== Provider.ID.make("sap-ai-core")) return
         evt.language = evt.sdk(evt.model.api.id)
       }),
     }

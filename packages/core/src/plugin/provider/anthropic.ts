@@ -1,8 +1,8 @@
 import { Effect } from "effect"
-import { PluginV2 } from "../../plugin"
+import { Plugin } from "../../plugin"
 
-export const AnthropicPlugin = PluginV2.define({
-  id: PluginV2.ID.make("anthropic"),
+export const AnthropicPlugin = Plugin.define({
+  id: Plugin.ID.make("anthropic"),
   effect: Effect.gen(function* () {
     return {
       "catalog.transform": Effect.fn(function* (evt) {

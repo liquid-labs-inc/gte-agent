@@ -1,8 +1,8 @@
 import { Effect } from "effect"
-import { PluginV2 } from "../../plugin"
+import { Plugin } from "../../plugin"
 
-export const GroqPlugin = PluginV2.define({
-  id: PluginV2.ID.make("groq"),
+export const GroqPlugin = Plugin.define({
+  id: Plugin.ID.make("groq"),
   effect: Effect.gen(function* () {
     return {
       "aisdk.sdk": Effect.fn(function* (evt) {

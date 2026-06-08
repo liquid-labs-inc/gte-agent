@@ -4,15 +4,15 @@ import { Context, Effect, Layer, Schema } from "effect"
 import { dirname } from "path"
 import { KeyedMutex } from "./effect/keyed-mutex"
 import { FSUtil } from "./fs-util"
-import { LocationMutation } from "./location-mutation"
+import { RuntimeScopeMutation } from "./runtime-scope-mutation"
 
 export interface WriteInput {
-  readonly plan: LocationMutation.Plan
+  readonly plan: RuntimeScopeMutation.Plan
   readonly content: string | Uint8Array
 }
 
 export interface TextWriteInput {
-  readonly plan: LocationMutation.Plan
+  readonly plan: RuntimeScopeMutation.Plan
   readonly content: string
 }
 
@@ -21,7 +21,7 @@ export interface ConditionalWriteInput extends WriteInput {
 }
 
 export interface RemoveInput {
-  readonly plan: LocationMutation.Plan
+  readonly plan: RuntimeScopeMutation.Plan
 }
 
 export class StaleContentError extends Schema.TaggedErrorClass<StaleContentError>()("FileMutation.StaleContentError", {
@@ -54,24 +54,24 @@ export interface Interface {
   /** Create only while the planned target remains absent. */
   readonly create: (
     input: WriteInput,
-  ) => Effect.Effect<WriteResult, TargetExistsError | LocationMutation.RevalidationError | FSUtil.Error>
+  ) => Effect.Effect<WriteResult, TargetExistsError | RuntimeScopeMutation.RevalidationError | FSUtil.Error>
   /** Write after immediately revalidating the planned target. */
-  readonly write: (input: WriteInput) => Effect.Effect<WriteResult, LocationMutation.RevalidationError | FSUtil.Error>
+  readonly write: (input: WriteInput) => Effect.Effect<WriteResult, RuntimeScopeMutation.RevalidationError | FSUtil.Error>
   /** Write text while retaining an existing UTF-8 BOM and emitting at most one BOM. */
   readonly writeTextPreservingBom: (
     input: TextWriteInput,
-  ) => Effect.Effect<WriteResult, LocationMutation.RevalidationError | FSUtil.Error>
+  ) => Effect.Effect<WriteResult, RuntimeScopeMutation.RevalidationError | FSUtil.Error>
   /** Commit only if an existing target still has the expected bytes. */
   readonly writeIfUnchanged: (
     input: ConditionalWriteInput,
-  ) => Effect.Effect<WriteResult, StaleContentError | LocationMutation.RevalidationError | FSUtil.Error>
+  ) => Effect.Effect<WriteResult, StaleContentError | RuntimeScopeMutation.RevalidationError | FSUtil.Error>
   /** Remove after immediately revalidating the planned target. */
   readonly remove: (
     input: RemoveInput,
-  ) => Effect.Effect<RemoveResult, LocationMutation.RevalidationError | FSUtil.Error>
+  ) => Effect.Effect<RemoveResult, RuntimeScopeMutation.RevalidationError | FSUtil.Error>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/FileMutation") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/FileMutation") {}
 
 /**
  * Commit planned file changes.
@@ -96,7 +96,7 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
-    const mutation = yield* LocationMutation.Service
+    const mutation = yield* RuntimeScopeMutation.Service
     const locks = KeyedMutex.makeUnsafe<string>()
     const withTargetLock =
       (target: string) =>
@@ -104,18 +104,18 @@ export const layer = Layer.effect(
         locks.withLock(target)(Effect.uninterruptible(effect))
 
     const withValidatedTarget =
-      (plan: LocationMutation.Plan) =>
-      <A, E, R>(commit: (target: LocationMutation.Target) => Effect.Effect<A, E, R>) =>
+      (plan: RuntimeScopeMutation.Plan) =>
+      <A, E, R>(commit: (target: RuntimeScopeMutation.Target) => Effect.Effect<A, E, R>) =>
         withTargetLock(plan.target.canonical)(mutation.revalidate(plan).pipe(Effect.flatMap(commit)))
 
-    const writeResult = (target: LocationMutation.Target, existed = target.exists): WriteResult => ({
+    const writeResult = (target: RuntimeScopeMutation.Target, existed = target.exists): WriteResult => ({
       operation: "write",
       target: target.canonical,
       resource: target.resource,
       existed,
     })
 
-    const removeResult = (target: LocationMutation.Target): RemoveResult => ({
+    const removeResult = (target: RuntimeScopeMutation.Target): RemoveResult => ({
       operation: "remove",
       target: target.canonical,
       resource: target.resource,
@@ -198,15 +198,15 @@ function sameBytes(left: Uint8Array, right: Uint8Array) {
   return left.every((byte, index) => byte === right[index])
 }
 
-export const locationLayer = layer
+export const runtimeScopeLayer = layer
 
 /**
- * Deferred until the corresponding V2 integrations exist.
+ * Deferred until the corresponding integrations exist.
  */
-// TODO: Add formatter integration after V2 formatter runtime exists.
-// TODO: Publish watcher/file-edit events after V2 watcher integration exists.
-// TODO: Add snapshots / undo after V2 snapshot design exists.
-// TODO: Notify LSP and collect diagnostics after V2 LSP runtime exists.
+// TODO: Add formatter integration after formatter runtime exists.
+// TODO: Publish watcher/file-edit events after watcher integration exists.
+// TODO: Add snapshots / undo after snapshot design exists.
+// TODO: Notify LSP and collect diagnostics after LSP runtime exists.
 // TODO: Design multi-file transactions / rollback if apply_patch needs atomic edits.
 // Until then, edits are sequential and report partial application.
 // TODO: Define crash recovery and idempotency for side effects between Tool.Called and durable settlement.

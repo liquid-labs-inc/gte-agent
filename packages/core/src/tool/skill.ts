@@ -2,11 +2,11 @@ export * as SkillTool from "./skill"
 
 import path from "path"
 import { pathToFileURL } from "url"
-import { Tool, ToolFailure, toolText } from "@opencode-ai/llm"
+import { Tool, ToolFailure, toolText } from "@gte-agent/llm"
 import { Cause, Effect, Layer, Schema } from "effect"
 import { FSUtil } from "../fs-util"
 import { PluginBoot } from "../plugin/boot"
-import { SkillV2 } from "../skill"
+import { Skill } from "../skill"
 import { ToolOutputStore } from "../tool-output-store"
 import { ToolRegistry } from "./registry"
 
@@ -25,7 +25,7 @@ export const Success = Schema.Struct({
   resource: ToolOutputStore.Resource.pipe(Schema.optional),
 })
 
-export const description = (skills: ReadonlyArray<SkillV2.Info>) =>
+export const description = (skills: ReadonlyArray<Skill.Info>) =>
   [
     "Load a specialized skill when the task at hand matches one of the available skills listed below.",
     "",
@@ -38,7 +38,7 @@ export const description = (skills: ReadonlyArray<SkillV2.Info>) =>
       : ["No skills are currently available."]),
   ].join("\n")
 
-export const toModelOutput = (skill: SkillV2.Info, files: ReadonlyArray<string>) => {
+export const toModelOutput = (skill: Skill.Info, files: ReadonlyArray<string>) => {
   const directory = path.dirname(skill.location)
   return [
     `<skill_content name="${skill.name}">`,
@@ -57,7 +57,7 @@ export const toModelOutput = (skill: SkillV2.Info, files: ReadonlyArray<string>)
   ].join("\n")
 }
 
-const notFound = (name: string, skills: ReadonlyArray<SkillV2.Info>) =>
+const notFound = (name: string, skills: ReadonlyArray<Skill.Info>) =>
   new ToolFailure({
     message: `Skill "${name}" not found. Available skills: ${skills.map((skill) => skill.name).join(", ") || "none"}`,
   })
@@ -67,7 +67,7 @@ export const layer = Layer.effectDiscard(
     const registry = yield* ToolRegistry.Service
     const fs = yield* FSUtil.Service
     const boot = yield* PluginBoot.Service
-    const skills = yield* SkillV2.Service
+    const skills = yield* Skill.Service
     const resources = yield* ToolOutputStore.Service
     yield* boot.wait()
     const available = yield* skills.list()

@@ -1,13 +1,13 @@
-export * as ProviderV2 from "./provider"
+export * as Provider from "./provider"
 
 import { withStatics } from "./schema"
 import { Schema } from "effect"
 
 export const ID = Schema.String.pipe(
-  Schema.brand("ProviderV2.ID"),
+  Schema.brand("Provider.ID"),
   withStatics((schema) => ({
     // Well-known providers
-    opencode: schema.make("opencode"),
+    gteAgent: schema.make("gte-agent"),
     anthropic: schema.make("anthropic"),
     openai: schema.make("openai"),
     google: schema.make("google"),
@@ -44,7 +44,7 @@ export const Request = Schema.Struct({
 })
 export type Request = typeof Request.Type
 
-export class Info extends Schema.Class<Info>("ProviderV2.Info")({
+export class Info extends Schema.Class<Info>("Provider.Info")({
   id: ID,
   name: Schema.String,
   enabled: Schema.Union([
@@ -52,10 +52,6 @@ export class Info extends Schema.Class<Info>("ProviderV2.Info")({
     Schema.Struct({
       via: Schema.Literal("env"),
       name: Schema.String,
-    }),
-    Schema.Struct({
-      via: Schema.Literal("account"),
-      service: Schema.String,
     }),
     Schema.Struct({
       via: Schema.Literal("custom"),

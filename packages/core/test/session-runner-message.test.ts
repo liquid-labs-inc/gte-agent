@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test"
-import { Message, Model } from "@opencode-ai/llm"
-import * as OpenAIChat from "@opencode-ai/llm/protocols/openai-chat"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { ProviderV2 } from "@opencode-ai/core/provider"
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { AgentAttachment, FileAttachment, ReferenceAttachment } from "@opencode-ai/core/session/prompt"
-import { toLLMMessages } from "@opencode-ai/core/session/runner/to-llm-message"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { ToolOutput } from "@opencode-ai/core/tool-output"
+import { Message, Model } from "@gte-agent/llm"
+import * as OpenAIChat from "@gte-agent/llm/protocols/openai-chat"
+import { ID } from "@gte-agent/core/model"
+import { Provider } from "@gte-agent/core/provider"
+import { SessionMessage } from "@gte-agent/core/session/message"
+import { AgentAttachment, FileAttachment, ReferenceAttachment } from "@gte-agent/core/session/prompt"
+import { toLLMMessages } from "@gte-agent/core/session/runner/to-llm-message"
+import { Session } from "@gte-agent/core/session"
+import { ToolOutput } from "@gte-agent/core/tool-output"
 import { DateTime } from "effect"
 
 const created = DateTime.makeUnsafe(0)
@@ -15,7 +15,7 @@ const id = (value: string) => SessionMessage.ID.make(`msg_${value}`)
 const model = Model.make({ id: "model", provider: "provider", route: OpenAIChat.route })
 
 describe("toLLMMessages", () => {
-  test("maps every top-level V2 Session message type", () => {
+  test("maps every top-level Session message type", () => {
     const file = new FileAttachment({ uri: "data:image/png;base64,aGVsbG8=", mime: "image/png", name: "hello.png" })
     const reference = new ReferenceAttachment({ name: "docs", kind: "local", uri: "file:///docs" })
     const messages = toLLMMessages(
@@ -29,7 +29,7 @@ describe("toLLMMessages", () => {
         new SessionMessage.ModelSwitched({
           id: id("model"),
           type: "model-switched",
-          model: { id: ModelV2.ID.make("model"), providerID: ProviderV2.ID.make("provider") },
+          model: { id: ID.make("model"), providerID: Provider.ID.make("provider") },
           time: { created },
         }),
         new SessionMessage.System({
@@ -50,7 +50,7 @@ describe("toLLMMessages", () => {
         new SessionMessage.Synthetic({
           id: id("synthetic"),
           type: "synthetic",
-          sessionID: SessionV2.ID.make("ses_translate"),
+          sessionID: Session.ID.make("ses_translate"),
           text: "Synthetic context",
           time: { created },
         }),
@@ -100,7 +100,7 @@ describe("toLLMMessages", () => {
           id: id("assistant"),
           type: "assistant",
           agent: "build",
-          model: { id: ModelV2.ID.make("model"), providerID: ProviderV2.ID.make("provider") },
+          model: { id: ID.make("model"), providerID: Provider.ID.make("provider") },
           content: [
             new SessionMessage.AssistantText({ type: "text", id: "text-1", text: "Checking" }),
             new SessionMessage.AssistantReasoning({
@@ -257,7 +257,7 @@ describe("toLLMMessages", () => {
           id: id("assistant-openai-reasoning"),
           type: "assistant",
           agent: "build",
-          model: { id: ModelV2.ID.make("model"), providerID: ProviderV2.ID.make("provider") },
+          model: { id: ID.make("model"), providerID: Provider.ID.make("provider") },
           content: [
             new SessionMessage.AssistantReasoning({
               type: "reasoning",
@@ -288,7 +288,7 @@ describe("toLLMMessages", () => {
           id: id("assistant-old-model"),
           type: "assistant",
           agent: "build",
-          model: { id: ModelV2.ID.make("old-model"), providerID: ProviderV2.ID.make("provider") },
+          model: { id: ID.make("old-model"), providerID: Provider.ID.make("provider") },
           content: [
             new SessionMessage.AssistantReasoning({
               type: "reasoning",

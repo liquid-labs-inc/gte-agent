@@ -1,9 +1,9 @@
 import { Effect } from "effect"
-import { PluginV2 } from "../../plugin"
-import { ProviderV2 } from "../../provider"
+import { Plugin } from "../../plugin"
+import { Provider } from "../../provider"
 
-export const XAIPlugin = PluginV2.define({
-  id: PluginV2.ID.make("xai"),
+export const XAIPlugin = Plugin.define({
+  id: Plugin.ID.make("xai"),
   effect: Effect.gen(function* () {
     return {
       "aisdk.sdk": Effect.fn(function* (evt) {
@@ -12,7 +12,7 @@ export const XAIPlugin = PluginV2.define({
         evt.sdk = mod.createXai(evt.options)
       }),
       "aisdk.language": Effect.fn(function* (evt) {
-        if (evt.model.providerID !== ProviderV2.ID.make("xai")) return
+        if (evt.model.providerID !== Provider.ID.make("xai")) return
         evt.language = evt.sdk.responses(evt.model.api.id)
       }),
     }

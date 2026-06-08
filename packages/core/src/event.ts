@@ -1,10 +1,10 @@
-export * as EventV2 from "./event"
+export * as Event from "./event"
 
 import { Cause, Context, Effect, Layer, Option, PubSub, Schema, Stream } from "effect"
 import { and, asc, eq, gt } from "drizzle-orm"
 import { Database } from "./database/database"
 import { EventSequenceTable, EventTable } from "./event/sql"
-import { Location } from "./location"
+import { RuntimeScope } from "./runtime-scope"
 import { externalID, type ExternalID, NonNegativeInt, withStatics } from "./schema"
 import { Identifier } from "./util/identifier"
 import { isDeepStrictEqual } from "node:util"
@@ -22,7 +22,7 @@ export type ID = typeof ID.Type
  * Durable aggregate continuation position for embedded replay streams.
  * TODO: Decide whether a future HTTP / SDK surface should expose an opaque cursor instead.
  */
-export const Cursor = NonNegativeInt.pipe(Schema.brand("EventV2.Cursor"))
+export const Cursor = NonNegativeInt.pipe(Schema.brand("Event.Cursor"))
 export type Cursor = typeof Cursor.Type
 
 export type Definition<Type extends string = string, DataSchema extends Schema.Top = Schema.Top> = {
@@ -43,7 +43,7 @@ export type Payload<D extends Definition = Definition> = {
   /** Durable aggregate order, populated while synchronized events are projected. */
   readonly seq?: number
   readonly version?: number
-  readonly location?: Location.Ref
+  readonly runtimeScope?: RuntimeScope.Ref
   readonly metadata?: Record<string, unknown>
   /** Internal replay marker for projectors that own non-replicated operational state. */
   readonly replay?: boolean
@@ -70,7 +70,7 @@ export type CursorEvent<E extends Payload = Payload> = {
 }
 
 export class InvalidSyncEventError extends Schema.TaggedErrorClass<InvalidSyncEventError>()(
-  "EventV2.InvalidSyncEvent",
+  "Event.InvalidSyncEvent",
   {
     type: Schema.String,
     message: Schema.String,
@@ -106,7 +106,7 @@ export function define<const Type extends string, Fields extends Schema.Struct.F
     metadata: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
     type: Schema.Literal(input.type),
     version: Schema.optional(Schema.Number),
-    location: Schema.optional(Location.Ref),
+    runtimeScope: Schema.optional(RuntimeScope.Ref),
     data: Data,
   }).annotate({ identifier: input.type })
 
@@ -138,7 +138,7 @@ export function definitions() {
 export interface PublishOptions {
   readonly id?: ID
   readonly metadata?: Record<string, unknown>
-  readonly location?: Location.Ref
+  readonly runtimeScope?: RuntimeScope.Ref
   /** Local operational projection committed atomically with a new synchronized event. Not replayed or serialized. */
   readonly commit?: (seq: number) => Effect.Effect<void>
 }
@@ -171,7 +171,7 @@ export interface Interface {
   readonly claim: (aggregateID: string, ownerID: string) => Effect.Effect<void>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/Event") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/Event") {}
 
 export interface LayerOptions {
   readonly beforeAggregateRead?: (aggregateID: string) => Effect.Effect<void>
@@ -431,19 +431,17 @@ export const layerWith = (options?: LayerOptions) =>
 
       function publish<D extends Definition>(definition: D, data: Data<D>, options?: PublishOptions) {
         return Effect.gen(function* () {
-          const serviceLocation = Option.getOrUndefined(yield* Effect.serviceOption(Location.Service))
-          const location =
-            options?.location ??
-            (serviceLocation
-              ? { directory: serviceLocation.directory, workspaceID: serviceLocation.workspaceID }
-              : undefined)
+          const serviceRuntimeScope = Option.getOrUndefined(yield* Effect.serviceOption(RuntimeScope.Service))
+          const runtimeScope =
+            options?.runtimeScope ??
+            (serviceRuntimeScope ? { directory: serviceRuntimeScope.directory } : undefined)
           return yield* publishEvent(
             {
               id: options?.id ?? ID.create(),
               ...(options?.metadata ? { metadata: options.metadata } : {}),
               type: definition.type,
               ...(definition.sync === undefined ? {} : { version: definition.sync.version }),
-              ...(location ? { location } : {}),
+              ...(runtimeScope ? { runtimeScope } : {}),
               data,
             } as Payload<D>,
             options?.commit,
