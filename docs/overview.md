@@ -8,22 +8,31 @@ The working premise is that coding agents and trading agents have different cent
 
 These docs are planning documents for future agents working in this repo. They intentionally describe the desired shape before implementation begins. Do not treat them as a completed architecture.
 
-## Current Repo Shape
+## Planning Status
 
-The repo is a Bun monorepo with several overlapping opencode generations and product surfaces. The package boundaries are not clean: newer runtime substrate still contains coding/project assumptions, and the older opencode package already contains bridge paths into newer APIs.
+This overview is documentation hardening only. It records target direction for future implementation, but it does not authorize implementation work by itself.
 
-- `packages/core`: the newer Effect-native core. It contains the strongest runtime substrate for GTE Agent: session admission, durable events, typed tools, permission primitives, context epochs, location-scoped service composition, local SQLite persistence, plugin hooks, provider/model plumbing, and the public core API. It also still contains project, filesystem, V1/config compatibility, provider catalog, GitHub Copilot, share, plugin, skill, and coding-tool assumptions that need classification.
-- `packages/server`: the newer HTTP API layer. It exposes typed route groups over the `packages/core` runtime, but still uses V2 naming and route organization.
+Milestone 1 has narrowed the repo shape. Milestones 2 and 3 should be treated as one long pre-MVP chain: first stabilize and rename the canonical runtime, then add the GTE auth and authority contract. There is no production user base and no migration compatibility burden for old OpenCode, V1, workspace, share, or account SQLite chains before MVP.
+
+## Current Stripped Repo Shape
+
+The repo has already been stripped to a smaller Bun monorepo skeleton. Active root workspaces are `packages/core`, `packages/server`, `packages/cli`, `packages/llm`, `packages/plugin`, `packages/sdk/js`, `packages/script`, `packages/http-recorder`, `packages/effect-drizzle-sqlite`, and `packages/effect-sqlite-node`.
+
+- `packages/core`: the newer Effect-native core. It contains the strongest runtime substrate for GTE Agent: session admission, durable events, typed tools, permission primitives, context epochs, scoped service composition, local SQLite persistence, plugin hooks, provider/model plumbing, and public core exports. It still contains project, filesystem, V1/config compatibility, provider catalog, GitHub Copilot, account, workspace, plugin, skill, and coding-tool assumptions that must be removed, renamed, or explicitly quarantined before MVP.
+- `packages/server`: the newer HTTP API layer. It exposes typed route groups over `packages/core`, but still uses V2 naming and route organization.
 - `packages/cli`: a thin newer CLI for the server/daemon flow. It is not the interactive TUI.
-- `packages/opencode`: the older/main opencode package. It contains the legacy interactive CLI/TUI, legacy session loop, coding tools, old HTTP server surfaces, auth/account glue, compatibility code, share/sync/workspace/MCP surfaces, and some newer API bridge paths.
-- `packages/sdk/js`: generated JavaScript SDK. It exports both older and newer clients, but the generation flow still points through older opencode surfaces.
-- `packages/app`, `packages/web`, `packages/docs`, `packages/desktop`, `packages/storybook`, `packages/ui`, `sdks/vscode`: browser UI, docs/web/share, desktop, storybook, shared browser UI, and editor-extension surfaces that are coding-product oriented.
-- `packages/console`, `packages/enterprise`, `packages/slack`, `packages/stats`, `github`, `.github`: hosted OpenCode product, sharing, analytics, Slack, GitHub action, release, CI, localization, and distribution surfaces that are removal targets. Any reusable value must be explicitly proven and carved out before deletion.
-- `packages/plugin`, `.opencode`, MCP, commands, and skills: extension mechanisms and inherited OpenCode content. The mechanisms are likely useful future substrate; inherited defaults and coding/product content need pruning.
-- `packages/llm`, `packages/effect-drizzle-sqlite`, `packages/effect-sqlite-node`, `packages/http-recorder`, `packages/script`, `packages/function`, `packages/containers`, `packages/identity`, `infra`, `nix`, `script`: runtime, persistence, testing, build, infrastructure, branding, and automation support surfaces that need explicit keep/remove/rework disposition.
-- `specs/`, `packages/opencode/specs`, package READMEs, translated root READMEs, and localized docs: inherited planning and product docs. They are historical unless promoted into the new GTE Agent planning docs.
+- `packages/sdk/js`: generated JavaScript SDK. It still exposes V2/OpenCode naming and its generator still points at the current V2 server API.
+- `packages/llm`: the generic LLM request/stream abstraction to preserve under GTE-owned provider/model policy.
+- `packages/plugin`: plugin mechanism substrate. The mechanism may be useful later, but inherited defaults must not be active by default.
+- `packages/effect-drizzle-sqlite`, `packages/effect-sqlite-node`, `packages/http-recorder`, and `packages/script`: runtime, persistence, testing, and build support packages.
 
-There are two generations of runtime code in the repo. GTE Agent should align with the newer architecture currently described as V2, but in GTE Agent this should not be called "V2"; it should be the only runtime.
+`packages/opencode` still exists on disk, but it is quarantined reference material only. It is excluded from root workspaces, should not be build-gated, and should not be imported by the active runtime. Its value is limited to mining TUI interaction patterns for a later carve-out.
+
+Removed OpenCode product surfaces include browser app, web/docs product, desktop, Storybook, VS Code extension, hosted console/stats/slack surfaces, localization docs, public sharing product surfaces, and release/deploy automation. Historical OpenCode docs/specs live under `docs/historical-opencode` unless explicitly promoted into GTE Agent planning docs.
+
+The active GTE Agent runtime should converge on the newer `packages/core` plus `packages/server` architecture. In target docs this is not "V2"; it is the only runtime.
+
+Legacy opencode routes, handlers, session loops, and server surfaces must be removed from, or unreachable by, the active runtime. Active CLI/API/SDK paths should not import `packages/opencode`, register its routes, or generate contracts from its legacy HTTP surface.
 
 ## GTE Agent Direction
 
@@ -51,6 +60,8 @@ GTE/server-side persistence should be production-canonical.
 
 Local SQLite is useful current substrate for local development, tests, and temporary runtime operation. It should not remain the final source of truth for production cross-entrypoint sessions tied to GTE login.
 
+Until MVP, local SQLite has no compatibility burden. Milestone work may replace schemas and baselines cleanly instead of preserving historical OpenCode, V1, workspace, share, or account migrations.
+
 The only UI surface to keep is the TUI.
 
 Desktop, browser app, old docs web app, storybook, public share, and editor-extension UI surfaces are not part of the target package shape. The root `docs/` folder is for internal retrofit planning; it is not the old shipped docs product. The TUI should be carved toward the canonical runtime instead of preserving legacy opencode session, server, tool, share, sync, or filesystem assumptions.
@@ -63,6 +74,8 @@ Remote workspace/control-plane sync should be removed.
 
 opencode's workspace/worktree sync model is coding-specific and should not be reframed as GTE Agent infrastructure in this pass. GTE Agent cross-entrypoint continuity should come from GTE/server-side sessions, not workspace/worktree sync.
 
+Legacy route surfaces that depend on workspace or legacy session semantics should be deleted from the active runtime or made unreachable. They should not be kept as compatibility paths.
+
 Generic LLM request/provider execution should stay, but provider/model policy should be GTE-owned.
 
 The runtime needs a model layer. GTE Agent should not retain opencode's provider marketplace, hosted-console provider config, public provider catalog, or product docs as the default policy unless GTE explicitly chooses that later.
@@ -73,11 +86,11 @@ Not all inherited OpenCode plugins, MCP defaults, commands, or skills should sta
 
 Root product documentation should collapse to one temporary English README plus internal planning docs.
 
-Translated root READMEs, localized docs content, `.opencode/glossary`, docs-locale sync automation, and old OpenCode product docs should be removed or rewritten during the strip milestone.
+Translated root READMEs, localized docs content, `.opencode/glossary`, docs-locale sync automation, and old OpenCode product docs were strip-milestone targets. Remaining docs should be treated as internal planning material unless explicitly promoted.
 
-Hosted OpenCode product and distribution surfaces should be stripped after proving deletion boundaries.
+Hosted OpenCode product and distribution surfaces should stay stripped.
 
-`packages/console`, `packages/stats`, `packages/slack`, `github`, `.github` workflows, release scripts, and related docs/tests/env/config are removal targets. Any concrete reusable GTE Agent substrate must be identified and carved out before deletion.
+Do not add back hosted OpenCode product, public share, release, localization, desktop, browser, or editor-extension surfaces unless a later milestone explicitly defines a GTE Agent product requirement for them.
 
 ## Runtime Substrate To Preserve
 
@@ -90,23 +103,23 @@ The following pieces look like strong reusable substrate for GTE Agent:
 - Permission ask/reply primitives, with trading-specific action/resource semantics added later.
 - Context epochs for recording exactly what privileged context was shown to the model.
 - The canonical LLM request/stream abstraction in `packages/llm`.
-- Local SQLite persistence as development/test/local substrate.
-- Location-scoped service composition, but with "Location" renamed and redefined for GTE Agent.
+- Local SQLite persistence as development/test/local substrate, with no historical migration compatibility burden before MVP.
+- Scoped service composition, but with "Location" replaced by a neutral runtime scope and stripped of filesystem/workspace semantics that are not needed for the local skeleton.
 - Extension mechanisms for plugins, MCP, commands, and skills, after inherited OpenCode defaults are pruned.
 
 These are substrate decisions, not direct drop-in product decisions. The domain vocabulary must change.
 
 ## GTE Agent Runtime Context
 
-The current runtime uses `Location`, which is filesystem/project/workspace oriented. GTE Agent needs a different runtime context.
+The current runtime uses `Location`, which is filesystem/project/workspace oriented. GTE Agent needs a different runtime context. Milestone 2 should introduce only a neutral local runtime scope needed for the skeleton. Milestone 3 should add authenticated principal and trading authority semantics after that scope exists.
 
-The rough shape is:
+The eventual shape is:
 
 - GTE user identity.
 - One authenticated GTE trading authority bound to the session.
 - Market/trading context needed by the active agent run.
 
-This is intentionally rough and must be fleshed out later. Do not prematurely lock a schema from this overview. The useful pattern to preserve is scoped runtime services; the specific opencode `Location` fields are not the GTE Agent domain.
+This is intentionally rough and must be fleshed out later. Do not prematurely lock a schema from this overview. The useful pattern to preserve is scoped runtime services; the specific opencode `Location`, `workspace`, and filesystem fields are not the GTE Agent domain.
 
 ## Tools
 
@@ -132,9 +145,9 @@ Do not confuse context epochs with trading memory. Context epochs help preserve 
 
 The target package should keep only the TUI as a user interface.
 
-The current interactive surface lives inside `packages/opencode/src/cli`, while the newer `packages/cli` is a server/daemon CLI. The target should be a TUI aligned to the canonical GTE Agent runtime. It may mine the old opencode TUI for interaction patterns, but should not preserve legacy session, API, tool, share, sync, server, or filesystem assumptions by default.
+The current interactive surface lives inside `packages/opencode/src/cli`, while the newer `packages/cli` is a server/daemon CLI. The target should be a TUI aligned to the canonical GTE Agent runtime. It may mine the old opencode TUI for interaction patterns, but should not preserve legacy session, API, route, tool, share, sync, server, auth/account, or filesystem assumptions by default.
 
-Keep the TUI experience and interaction patterns. Do not treat the current `packages/opencode` package as a keeper.
+Keep the TUI experience and interaction patterns. Do not treat the current `packages/opencode` package as a keeper or runtime dependency.
 
 ## Out Of Scope For This Pass
 
@@ -151,11 +164,11 @@ The following topics should be mentioned as future work, not designed here:
 - Final plugin/MCP/command/skill policy.
 - Final public or internal sharing/export/audit-report design.
 
-## Immediate Planning Goal
+## Milestone 1 Retrospective
 
-The first planning milestone is Milestone 1: Strip To Skeleton.
+The first planning milestone was Milestone 1: Strip To Skeleton.
 
-Its job is not to finish GTE Agent. It should:
+Its job was not to finish GTE Agent. It was meant to:
 
 1. Define and name the canonical runtime seam now that V2 becomes the only runtime.
 2. Map which packages and surfaces are keep, remove, rework, or defer.
@@ -165,17 +178,17 @@ Its job is not to finish GTE Agent. It should:
 6. Avoid designing trading tools, trading memory, real execution, and final GTE auth/persistence prematurely.
 7. Produce enough clarity that implementation can start without carrying legacy opencode ambiguity into every change.
 
-## Tentative Next Milestones
+## Next Milestones
 
-These are directional follow-ups, not fully planned milestones.
+Each milestone plan should include an explicit End State section. The End State should describe the expected repository and runnable app state after the milestone so future agents can work toward the same target instead of only following a task list.
 
-Milestone 2 may be canonical runtime rename and stabilization.
+Milestones 2 and 3 are a single pre-MVP hardening chain. See `docs/m_2-runtime-rename-plan.md` and `docs/m_3-auth-authority-plan.md`.
 
-The goal would be to make the newer runtime the only runtime in practice: remove V2 terminology, retire legacy session loop paths, point CLI/API/SDK at the canonical runtime, keep SQLite local/dev persistence working, and preserve a minimal runnable skeleton that can create sessions, send prompts, stream model responses, and replay local history.
+Milestone 2 is canonical runtime rename and stabilization. Its goal is to make the newer runtime the only runtime in practice: cleanly rename OpenCode/V2 identity to GTE Agent, remove legacy V1 and workspace/runtime-context assumptions from active packages, point CLI/API/SDK at the canonical runtime, keep SQLite local/dev persistence working from a clean pre-product baseline, remove legacy routes from the active runtime, and preserve a minimal runnable skeleton that can create sessions, send prompts, stream deterministic model responses, and replay local history.
 
-Milestone 3 may be the GTE auth and session authority contract.
+Milestone 3 is the GTE auth and session authority contract. See `docs/m_3-auth-authority-plan.md`.
 
-The goal would be to define the first real GTE boundary: GTE login shape, one GTE trading authority per session, production ownership checks, and the authority model that future tools must derive from. Trading execution should still remain out of scope except for authority modeling.
+The goal is to define the first real GTE boundary: GTE bearer-token validation or introspection, one immutable GTE trading authority per session, universal explicit authority selection during auth-enabled session creation, principal and authority ownership checks on canonical session reads and mutations, and the authority model that future tools must derive from. Trading execution remains out of scope.
 
 Milestone 4 may be the TUI carve-out.
 
