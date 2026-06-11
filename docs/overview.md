@@ -12,19 +12,23 @@ These docs are planning documents for future agents working in this repo. They i
 
 This overview is documentation hardening only. It records target direction for future implementation, but it does not authorize implementation work by itself.
 
-Phase 1 is complete as of 2026-06-11 (acceptance record: `docs/m_6-acceptance-record.md`). It turned the stripped OpenCode fork into a runnable, read-only GTE Agent terminal product:
+Phase 1 was provisionally accepted on 2026-06-11 (Milestone 6 record: `docs/m_6-acceptance-record.md`), but was reopened with Milestone 7: every agent reply was still the hardcoded demo stream, and Phase 1 cannot close while the agent has no real LLM. Phase 1 ends when the stripped OpenCode fork is a runnable, read-only GTE Agent terminal product with a real model behind it:
 
 - GTE Agent is runnable through the user-facing `gta` command.
 - `gta` launches the TUI, not a marketing shell or a browser app.
 - The canonical runtime remains `packages/core` plus `packages/server`.
-- Auth remains stubbed: no real GTE login, token storage, account binding, or trading authority selection UX.
+- Prompting a session streams a real LLM response from a user-selected model. The demo LLM client exists only behind `GTE_AGENT_LLM=demo` for tests and is never a silent fallback.
+- `/models` in the TUI lets the user pick from a curated, GTE-owned catalog of Anthropic and OpenAI models, and authenticate the chosen provider by pasting an API key or signing in (Anthropic setup-token paste; OpenAI ChatGPT PKCE OAuth). LLM-provider credentials live in `~/.gte-agent/auth.json`.
+- The model can call the read-only GTE data tools during a turn; tool results settle durably into the transcript.
+- The TUI prompt offers slash-command autocomplete (command names plus model-ref and market-symbol arguments).
+- GTE auth remains stubbed: no real GTE login, token storage, account binding, or trading authority selection UX. (LLM-provider auth above is separate from GTE auth.)
 - Data access uses `gte-ts` through read-only client surfaces. Until `gte-ts` is published, it is consumed as a vendored workspace package copied verbatim from the exchange monorepo.
 - Environment selection is configured through `GTE_AGENT_GTE_ENV`, whose valid values come from `gte-ts` named environment support (currently `hyperliquid-dev` and `hyperliquid-prod`).
 - No trading mutation, signing, order placement, order cancel/replace, TWAP mutation, leverage setting, or ready-to-submit order payload generation is exposed.
 
 Read-only in Phase 1 means no state-changing exchange calls. The agent may read public market data and public address-scoped account/portfolio data, and it may analyze that data. It must not submit, cancel, replace, preview, sign, or configure trades.
 
-All six Phase 1 milestones are complete. Milestones 1, 2, and 3 narrowed the repo, stabilized the canonical runtime, and added the auth/authority stub contract. Milestones 4, 5, and 6 closed Phase 1 by adding the `gta` TUI, read-only GTE data tools and panels, and whole-phase acceptance. There is no production user base and no migration compatibility burden for old OpenCode, V1, workspace, share, or account SQLite chains before MVP.
+Phase 1 is composed of Milestones 1 through 7. Milestones 1 through 6 are complete: 1, 2, and 3 narrowed the repo, stabilized the canonical runtime, and added the auth/authority stub contract; 4, 5, and 6 added the `gta` TUI, read-only GTE data tools and panels, and whole-phase acceptance of those surfaces. Milestone 7 (real LLM responses, `/models`, provider auth, prompt autocomplete — see `docs/m_7-llm-models-auth-plan.md`) is the remaining work; Phase 1 closes again with its acceptance record. There is no production user base and no migration compatibility burden for old OpenCode, V1, workspace, share, or account SQLite chains before MVP.
 
 `gte-agent` may remain as a developer or compatibility CLI alias for now. Phase 1 user-facing docs and acceptance should verify `gta`.
 
@@ -216,7 +220,7 @@ Its job was not to finish GTE Agent. It was meant to:
 
 Each milestone plan should include an explicit End State section. The End State should describe the expected repository and runnable app state after the milestone so future agents can work toward the same target instead of only following a task list.
 
-Phase 1 is composed of Milestones 1 through 6. All are complete; acceptance is recorded in `docs/m_6-acceptance-record.md`.
+Phase 1 is composed of Milestones 1 through 7. Milestones 1 through 6 are complete (Milestone 6 acceptance is recorded in `docs/m_6-acceptance-record.md`); Milestone 7 is planned and reopens Phase 1 until its own acceptance record lands.
 
 Completed Phase 1 milestones:
 
@@ -226,6 +230,10 @@ Completed Phase 1 milestones:
 - Milestone 4: `gta` TUI. See `docs/m_4-gta-tui-plan.md`.
 - Milestone 5: Read-Only GTE Data Tools. See `docs/m_5-read-only-gte-data-tools-plan.md`.
 - Milestone 6: Phase 1 Acceptance. See `docs/m_6-phase-1-acceptance-plan.md`.
+
+Remaining Phase 1 milestone:
+
+- Milestone 7: Real LLM Responses, `/models`, Provider Auth, And Prompt Autocomplete. See `docs/m_7-llm-models-auth-plan.md`.
 
 Milestone 2 was canonical runtime rename and stabilization. Its goal was to make the newer runtime the only runtime in practice: cleanly rename OpenCode/V2 identity to GTE Agent, remove legacy V1 and workspace/runtime-context assumptions from active packages, point CLI/API/SDK at the canonical runtime, keep SQLite local/dev persistence working from a clean pre-product baseline, remove legacy routes from the active runtime, and preserve a minimal runnable skeleton that can create sessions, send prompts, stream deterministic model responses, and replay local history.
 
@@ -237,4 +245,6 @@ Milestone 4 turned "keep the TUI experience" into an actual `gta` interface agai
 
 Milestone 5 added read-only GTE data tools and TUI panels backed by the vendored `gte-ts`: public market reads, address-scoped public account/portfolio reads, shared symbol/address resolution, live-by-default TUI panels fed over the existing SSE event channel, one-shot agent tools with provenance, and the automated import audit guarding the read-only boundary.
 
-Milestone 6 proved Phase 1 end to end: `gta` launches the TUI, sessions and prompt streaming work, data panels and slash commands use the same read-only tool layer as the agent, `GTE_AGENT_GTE_ENV` configures data access, auth remains stubbed, no hidden trading mutation path is exposed, and `packages/opencode` was deleted after all removal criteria passed. Results and carried-forward limitations are recorded in `docs/m_6-acceptance-record.md`.
+Milestone 6 proved the Phase 1 surfaces end to end: `gta` launches the TUI, sessions and prompt streaming work, data panels and slash commands use the same read-only tool layer as the agent, `GTE_AGENT_GTE_ENV` configures data access, auth remains stubbed, no hidden trading mutation path is exposed, and `packages/opencode` was deleted after all removal criteria passed. Results and carried-forward limitations are recorded in `docs/m_6-acceptance-record.md`.
+
+Milestone 7 makes the agent real: a curated Anthropic/OpenAI model catalog, the `/models` overlay with API-key paste and OAuth sign-in flows (Anthropic setup-token paste; OpenAI ChatGPT PKCE with a codex-responses adapter), LLM-provider credentials in `~/.gte-agent/auth.json`, per-session model selection with a global default, real streamed turns with the read-only data tools in the loop, a minimal GTE system prompt, and slash-command autocomplete in the prompt input. The demo LLM client moves behind `GTE_AGENT_LLM=demo`. Phase 1 closes when its acceptance record (`docs/m_7-acceptance-record.md`) lands.
