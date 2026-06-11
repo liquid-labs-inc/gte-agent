@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { createGteApi, type PanelType, type PinnedPanel } from "../src/api/gte"
-import {
-  executeSlashCommand,
-  parseSlashCommand,
-  SLASH_COMMANDS,
-  type CommandContext,
-} from "../src/commands/slash"
+import { executeSlashCommand, parseSlashCommand, SLASH_COMMANDS, type CommandContext } from "../src/commands/slash"
 import { createMockApi } from "./fixture/api"
 
 const BASE_URL = "http://gte-agent.internal"
@@ -67,6 +62,7 @@ type Harness = {
   infos: string[]
   errors: string[]
   focused: Array<{ panel: PanelType; key: string }>
+  modelsOpened: Array<{ providerID: string; modelID: string } | undefined>
 }
 
 function makeCtx(options?: {
@@ -79,6 +75,7 @@ function makeCtx(options?: {
   const infos: string[] = []
   const errors: string[] = []
   const focused: Array<{ panel: PanelType; key: string }> = []
+  const modelsOpened: Array<{ providerID: string; modelID: string } | undefined> = []
   const ctx: CommandContext = {
     gte: createGteApi({ baseUrl: BASE_URL, fetch: mock.fetch }),
     sessionID: "ses_slash",
@@ -87,10 +84,11 @@ function makeCtx(options?: {
     trackedAddress: options?.trackedAddress,
     pinnedPanels: options?.pinnedPanels ?? [],
     focusPanel: (panel, key) => focused.push({ panel, key }),
+    openModels: (target) => modelsOpened.push(target),
     info: (text) => infos.push(text),
     error: (text) => errors.push(text),
   }
-  return { mock, ctx, infos, errors, focused }
+  return { mock, ctx, infos, errors, focused, modelsOpened }
 }
 
 const run = (text: string, harness: Harness) => executeSlashCommand(parseSlashCommand(text)!, harness.ctx)
@@ -254,5 +252,44 @@ describe("executeSlashCommand", () => {
     const summary = body.summary as { fields?: Record<string, string> }
     expect(summary.fields?.env).toBe("hyperliquid-dev")
     expect(summary.fields?.validEnvs).toContain("hyperliquid-prod")
+  })
+})
+
+describe("/models", () => {
+  test("is registered with model-ref arg completion", () => {
+    const spec = SLASH_COMMANDS.find((candidate) => candidate.name === "models")
+    expect(spec).toBeDefined()
+    expect(spec?.usage).toBe("/models [provider/model]")
+    expect(spec?.argCompletions).toEqual(["model-ref"])
+  })
+
+  test("without args opens the picker overlay", async () => {
+    const harness = makeCtx()
+    await run("/models", harness)
+    expect(harness.errors).toEqual([])
+    expect(harness.modelsOpened).toEqual([undefined])
+  })
+
+  test("with a provider/model ref selects directly, skipping the picker", async () => {
+    const harness = makeCtx()
+    await run("/models anthropic/claude-fable-5", harness)
+    expect(harness.errors).toEqual([])
+    expect(harness.modelsOpened).toEqual([{ providerID: "anthropic", modelID: "claude-fable-5" }])
+  })
+
+  test("lowercases the provider segment but preserves the model id", async () => {
+    const harness = makeCtx()
+    await run("/models Anthropic/claude-fable-5", harness)
+    expect(harness.modelsOpened).toEqual([{ providerID: "anthropic", modelID: "claude-fable-5" }])
+  })
+
+  test("rejects refs that are not provider/model shaped", async () => {
+    for (const bad of ["bogus", "/claude", "anthropic/", "a/b/c"]) {
+      const harness = makeCtx()
+      await run(`/models ${bad}`, harness)
+      expect(harness.modelsOpened).toEqual([])
+      expect(harness.errors.length).toBe(1)
+      expect(harness.errors[0]).toContain("expected <provider>/<model>")
+    }
   })
 })

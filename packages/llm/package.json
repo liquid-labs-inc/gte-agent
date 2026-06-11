@@ -22,6 +22,7 @@
     "./providers/github-copilot": "./src/providers/github-copilot.ts",
     "./providers/google": "./src/providers/google.ts",
     "./providers/openai": "./src/providers/openai.ts",
+    "./providers/openai-codex": "./src/providers/openai-codex.ts",
     "./providers/openai-compatible": "./src/providers/openai-compatible.ts",
     "./providers/openai-compatible-profile": "./src/providers/openai-compatible-profile.ts",
     "./providers/openrouter": "./src/providers/openrouter.ts",
@@ -31,6 +32,7 @@
     "./protocols/bedrock-converse": "./src/protocols/bedrock-converse.ts",
     "./protocols/gemini": "./src/protocols/gemini.ts",
     "./protocols/openai-chat": "./src/protocols/openai-chat.ts",
+    "./protocols/openai-codex-responses": "./src/protocols/openai-codex-responses.ts",
     "./protocols/openai-compatible-chat": "./src/protocols/openai-compatible-chat.ts",
     "./protocols/openai-responses": "./src/protocols/openai-responses.ts"
   },

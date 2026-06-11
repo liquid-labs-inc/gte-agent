@@ -37,6 +37,32 @@ describe("seedFromMessages", () => {
     expect(assistant.status).toBe("done")
     expect(assistant.parts[0].text).toBe("GTE Agent demo response.")
   })
+
+  test("maps model-switched messages to info confirmations", () => {
+    const entries = seedFromMessages([
+      {
+        id: "msg_switch",
+        type: "model-switched",
+        model: { id: "claude-fable-5", providerID: "anthropic" },
+        time: { created: 3 },
+      },
+    ])
+    expect(entries).toEqual([{ kind: "info", id: "msg_switch", text: "model switched to anthropic/claude-fable-5" }])
+  })
+})
+
+describe("applyEvent model switches", () => {
+  test("a durable model-switched event lands as an info entry and replays idempotently", () => {
+    const event = envelope("session.next.model.switched", {
+      sessionID: "ses_alpha",
+      messageID: "msg_switch",
+      model: { id: "gpt-5.5", providerID: "openai" },
+    })
+    const entries = applyEvent([], event)
+    expect(entries).toEqual([{ kind: "info", id: "msg_switch", text: "model switched to openai/gpt-5.5" }])
+    // Replaying the same durable event upserts instead of duplicating.
+    expect(applyEvent(entries, event)).toEqual(entries)
+  })
 })
 
 describe("applyEvent", () => {
@@ -51,10 +77,7 @@ describe("applyEvent", () => {
     entries = applyEvent(entries, envelope("session.next.step.started", { assistantMessageID: "msg_a1" }))
     expect(isStreaming(entries)).toBe(true)
 
-    entries = applyEvent(
-      entries,
-      envelope("session.next.text.started", { assistantMessageID: "msg_a1", textID: "t1" }),
-    )
+    entries = applyEvent(entries, envelope("session.next.text.started", { assistantMessageID: "msg_a1", textID: "t1" }))
     entries = applyEvent(
       entries,
       envelope("session.next.text.delta", { assistantMessageID: "msg_a1", textID: "t1", delta: "GTE Agent " }),

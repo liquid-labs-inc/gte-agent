@@ -41,15 +41,65 @@ type IntentState = {
   pinnedPanels: { panel: string; key: string }[]
 }
 
+export type MockProvider = {
+  id: string
+  name: string
+  authed: boolean
+  method?: "api_key" | "oauth"
+  source?: "config" | "store" | "env"
+  models: { id: string; name: string }[]
+}
+
+const defaultProviders = (): MockProvider[] => [
+  {
+    id: "anthropic",
+    name: "Anthropic",
+    authed: true,
+    method: "api_key",
+    source: "env",
+    models: [
+      { id: "claude-fable-5", name: "Claude Fable 5" },
+      { id: "claude-haiku-4-5", name: "Claude Haiku 4.5" },
+    ],
+  },
+  {
+    id: "openai",
+    name: "OpenAI",
+    authed: false,
+    models: [
+      { id: "gpt-5.5", name: "GPT-5.5" },
+      { id: "gpt-5.4-mini", name: "GPT-5.4 mini" },
+    ],
+  },
+]
+
 export function createMockApi(input?: {
   sessions?: SessionInfo[]
   messages?: Record<string, SessionPublicMessage[]>
   /** Known market symbols for /api/gte/resolve-symbol (exact or uppercase match resolves). */
   markets?: string[]
+  /** Curated catalog served by /api/models (mutable: auth routes flip authed). */
+  providers?: MockProvider[]
+  /** Persisted global default model returned by /api/models. */
+  defaultModel?: { id: string; providerID: string }
+  /** Localhost callback listener state reported by oauth/start (default: listening on 1455). */
+  oauthListening?: boolean
 }) {
   const sessions = input?.sessions ?? []
   const messages = input?.messages ?? {}
   const markets = input?.markets ?? ["ETH-USD", "BTC-USD"]
+  const providers = input?.providers ?? defaultProviders()
+  let defaultModel = input?.defaultModel
+  const sessionModels = new Map<string, { id: string; providerID: string }>()
+  const selections: { providerID: string; modelID: string; sessionID?: string }[] = []
+  const apiKeys: { provider: string; key: string; type?: string }[] = []
+  const oauthStarts: { provider: string; flow: string }[] = []
+  const oauthCompletions: { provider: string; flow: string; redirect?: string }[] = []
+  // Completes without a redirect block (mirroring the server's callback wait)
+  // until the test resolves them via completeOauth/failOauth.
+  const pendingOauth = new Map<string, (outcome: "callback" | "timeout") => void>()
+  let flowCounter = 0
+  let modelsRequests = 0
   const prompts: { sessionID: string; text: string }[] = []
   const intents = new Map<string, IntentState>()
   const intentPatches: { sessionID: string; patch: Record<string, unknown> }[] = []
@@ -77,6 +127,130 @@ export function createMockApi(input?: {
 
     if (url.pathname === "/api/health") return json({ healthy: true })
 
+    // --- Model catalog + provider auth routes (M7) ---
+    const modelsAuth = (provider: MockProvider) =>
+      provider.authed
+        ? { authenticated: true, method: provider.method ?? "api_key", source: provider.source ?? "store" }
+        : { authenticated: false }
+    const providerAuthState = (provider: MockProvider) => ({
+      provider: provider.id,
+      method: provider.authed ? (provider.method ?? "api_key") : ("none" as const),
+      authed: provider.authed,
+      accountId: false,
+    })
+
+    if (url.pathname === "/api/models" && target.method === "GET") {
+      modelsRequests++
+      const sessionID = url.searchParams.get("sessionID")
+      return json({
+        data: {
+          providers: providers.map((provider) => ({
+            id: provider.id,
+            name: provider.name,
+            auth: modelsAuth(provider),
+            models: provider.models.map((model) => ({
+              id: model.id,
+              name: model.name,
+              status: "active",
+              released: 1735689600000,
+              capabilities: { tools: true },
+              limit: { context: 200000, output: 64000 },
+              isDefault:
+                defaultModel !== undefined && defaultModel.providerID === provider.id && defaultModel.id === model.id,
+            })),
+          })),
+          default: defaultModel,
+          session: sessionID === null ? undefined : { id: sessionID, model: sessionModels.get(sessionID) },
+        },
+      })
+    }
+
+    if (url.pathname === "/api/models/select" && target.method === "POST") {
+      const body = (await target.json()) as { providerID: string; modelID: string; sessionID?: string }
+      const provider = providers.find((candidate) => candidate.id === body.providerID)
+      if (provider === undefined) {
+        return json(
+          { _tag: "ProviderNotFoundError", message: `Unknown LLM provider: ${body.providerID}` },
+          { status: 404 },
+        )
+      }
+      const model = provider.models.find((candidate) => candidate.id === body.modelID)
+      if (model === undefined) {
+        return json(
+          { _tag: "ModelNotFoundError", message: `Unknown model: ${body.providerID}/${body.modelID}` },
+          { status: 404 },
+        )
+      }
+      selections.push(body)
+      defaultModel = { id: model.id, providerID: provider.id }
+      if (body.sessionID !== undefined) {
+        sessionModels.set(body.sessionID, defaultModel)
+        // Mirror the server: the durable switch event flows over the SSE stream.
+        const seq = ++eventCursor
+        emitTo(body.sessionID, {
+          cursor: seq,
+          event: {
+            id: `evt_model_${seq}`,
+            type: "session.next.model.switched",
+            data: { sessionID: body.sessionID, messageID: `msg_model_${seq}`, model: defaultModel },
+          },
+        })
+      }
+      return json({ data: { model: defaultModel, name: model.name, auth: modelsAuth(provider) } })
+    }
+
+    if (parts[0] === "api" && parts[1] === "auth") {
+      if (url.pathname === "/api/auth/status") return json({ data: providers.map(providerAuthState) })
+      const provider = providers.find((candidate) => candidate.id === parts[2])
+      if (provider === undefined) {
+        return json({ _tag: "ProviderNotFoundError", message: `Unknown LLM provider: ${parts[2]}` }, { status: 404 })
+      }
+      if (parts[3] === "api-key" && target.method === "POST") {
+        const body = (await target.json()) as { key: string; type?: string }
+        apiKeys.push({ provider: provider.id, key: body.key, type: body.type })
+        provider.authed = true
+        provider.method = body.type === "setup_token" || body.key.startsWith("sk-ant-oat") ? "oauth" : "api_key"
+        provider.source = "store"
+        return json({ data: providerAuthState(provider) })
+      }
+      if (parts[3] === "oauth" && parts[4] === "start" && target.method === "POST") {
+        const flow = `flow_${++flowCounter}`
+        oauthStarts.push({ provider: provider.id, flow })
+        const listening = input?.oauthListening ?? true
+        return json({
+          data: {
+            flow,
+            url: `https://auth.openai.com/oauth/authorize?client=mock&state=${flow}`,
+            callback: { listening, ...(listening ? { port: 1455 } : {}) },
+          },
+        })
+      }
+      if (parts[3] === "oauth" && parts[4] === "complete" && target.method === "POST") {
+        const body = (await target.json()) as { flow: string; redirect?: string }
+        oauthCompletions.push({ provider: provider.id, flow: body.flow, redirect: body.redirect })
+        const succeed = () => {
+          provider.authed = true
+          provider.method = "oauth"
+          provider.source = "store"
+          return json({ data: providerAuthState(provider) })
+        }
+        if (body.redirect !== undefined) return succeed()
+        return new Promise<Response>((resolve) => {
+          pendingOauth.set(body.flow, (outcome) => {
+            pendingOauth.delete(body.flow)
+            if (outcome === "callback") return resolve(succeed())
+            resolve(
+              json(
+                { _tag: "ServiceUnavailableError", message: "Timed out waiting for the browser callback" },
+                { status: 503 },
+              ),
+            )
+          })
+        })
+      }
+      return json({ _tag: "InvalidRequestError", message: `no mock for ${url.pathname}` }, { status: 400 })
+    }
+
     // --- Read-only GTE data routes (M5) ---
     if (parts[0] === "api" && parts[1] === "gte") {
       gteRequests.push(url.pathname + url.search)
@@ -97,12 +271,20 @@ export function createMockApi(input?: {
       if (url.pathname === "/api/gte/resolve-symbol") {
         const q = url.searchParams.get("q") ?? ""
         const exact = markets.find((symbol) => symbol === q || symbol === q.toUpperCase())
-        if (exact) return json({ provenance: provenance(), data: { outcome: "resolved", symbol: exact, market: { symbol: exact } } })
+        if (exact)
+          return json({
+            provenance: provenance(),
+            data: { outcome: "resolved", symbol: exact, market: { symbol: exact } },
+          })
         const hits = markets.filter((symbol) => symbol.toUpperCase().includes(q.toUpperCase()))
         if (hits.length === 1) {
-          return json({ provenance: provenance(), data: { outcome: "resolved", symbol: hits[0], market: { symbol: hits[0] } } })
+          return json({
+            provenance: provenance(),
+            data: { outcome: "resolved", symbol: hits[0], market: { symbol: hits[0] } },
+          })
         }
-        if (hits.length > 1) return json({ provenance: provenance(), data: { outcome: "ambiguous", query: q, candidates: hits } })
+        if (hits.length > 1)
+          return json({ provenance: provenance(), data: { outcome: "ambiguous", query: q, candidates: hits } })
         return json({ provenance: provenance(), data: { outcome: "notFound", query: q } })
       }
       if (parts[2] === "market" && parts.length >= 4) {
@@ -152,7 +334,7 @@ export function createMockApi(input?: {
         const patch = (await target.json()) as Record<string, unknown>
         intentPatches.push({ sessionID, patch })
         const current = intents.get(sessionID) ?? { pinnedPanels: [] }
-        const resolve = <T,>(next: unknown, existing: T | undefined): T | undefined =>
+        const resolve = <T>(next: unknown, existing: T | undefined): T | undefined =>
           next === null ? undefined : ((next ?? existing) as T | undefined)
         const next: IntentState = {
           selectedMarket: resolve(patch.selectedMarket, current.selectedMarket),
@@ -210,9 +392,7 @@ export function createMockApi(input?: {
             handle = {
               push(envelope) {
                 const id = envelope.cursor === undefined ? "" : `id: ${envelope.cursor}\n`
-                controller.enqueue(
-                  encoder.encode(`event: message\n${id}data: ${JSON.stringify(envelope)}\n\n`),
-                )
+                controller.enqueue(encoder.encode(`event: message\n${id}data: ${JSON.stringify(envelope)}\n\n`))
               },
               close() {
                 try {
@@ -255,6 +435,33 @@ export function createMockApi(input?: {
     intentPatches,
     snapshots,
     gteRequests,
+    providers,
+    selections,
+    apiKeys,
+    oauthStarts,
+    oauthCompletions,
+    sessionModels,
+    get defaultModel() {
+      return defaultModel
+    },
+    get modelsRequests() {
+      return modelsRequests
+    },
+    /** Resolve a blocked oauth/complete wait as if the browser callback landed. */
+    completeOauth(flow: string) {
+      const resolve = pendingOauth.get(flow)
+      if (resolve === undefined) throw new Error(`no pending oauth completion for ${flow}`)
+      resolve("callback")
+    },
+    /** Resolve a blocked oauth/complete wait as a timeout (paste fallback path). */
+    failOauth(flow: string) {
+      const resolve = pendingOauth.get(flow)
+      if (resolve === undefined) throw new Error(`no pending oauth completion for ${flow}`)
+      resolve("timeout")
+    },
+    hasPendingOauth(flow: string) {
+      return pendingOauth.has(flow)
+    },
     emit(sessionID: string, envelope: SessionEventEnvelope) {
       const handles = streams.get(sessionID) ?? []
       if (handles.length === 0) throw new Error(`no event stream subscribed for ${sessionID}`)

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { existsSync } from "fs"
 import path from "path"
 import { SqliteClient } from "@effect/sql-sqlite-bun"
 import { EffectDrizzleSqlite } from "@gte-agent/effect-drizzle-sqlite"
@@ -103,7 +104,14 @@ describe("DatabaseMigration", () => {
         new Bun.Glob("*.ts").scan({ cwd: path.join(coreRoot, "src/database/migration"), onlyFiles: true }),
       ),
     ).toEqual([`${baseline}.ts`])
-    expect(await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: path.join(coreRoot, "migration"), onlyFiles: true })))
-      .toEqual([])
+    // The legacy drizzle out dir was emptied when the clean baseline landed; git
+    // drops empty directories, so a fresh checkout has no dir at all. Absence
+    // satisfies "no legacy migrations remain" (Bun.Glob.scan throws on a missing cwd).
+    const legacyDir = path.join(coreRoot, "migration")
+    expect(
+      existsSync(legacyDir)
+        ? await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: legacyDir, onlyFiles: true }))
+        : [],
+    ).toEqual([])
   })
 })

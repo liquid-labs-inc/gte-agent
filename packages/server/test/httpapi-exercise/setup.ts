@@ -36,6 +36,9 @@ for (const key of [
   "GTE_AGENT_AUTH_TOKEN",
   "GTE_AGENT_PRINCIPAL_ID",
   "GTE_AGENT_AUTHORITY_IDS",
+  // Provider credential env fallbacks consulted by the auth-provider routes.
+  "ANTHROPIC_API_KEY",
+  "OPENAI_API_KEY",
 ]) {
   delete process.env[key]
 }

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "metadata": {
+    "name": "openai-codex-responses/streams-a-tool-call-turn",
+    "recordedAt": "2026-06-11T00:00:00.000Z",
+    "tags": [
+      "prefix:openai-codex-responses",
+      "provider:openai",
+      "protocol:openai-codex-responses",
+      "tool",
+      "hand-authored"
+    ]
+  },
+  "interactions": [
+    {
+      "transport": "http",
+      "request": {
+        "method": "POST",
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": "{\"model\":\"gpt-5.5\",\"input\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"What is the weather in Paris?\"}]}],\"instructions\":\"Use the get_weather tool, then answer in one short sentence.\",\"tools\":[{\"type\":\"function\",\"name\":\"get_weather\",\"description\":\"Get current weather for a city.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"additionalProperties\":false}}],\"store\":false,\"include\":[\"reasoning.encrypted_content\"],\"reasoning\":{\"effort\":\"medium\",\"summary\":\"auto\"},\"text\":{\"verbosity\":\"low\"},\"stream\":true}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8"
+        },
+        "body": "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_codex_tool_1\"},\"sequence_number\":0}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"function_call\",\"id\":\"fc_codex_1\",\"call_id\":\"call_codex_1\",\"name\":\"get_weather\",\"arguments\":\"\"},\"sequence_number\":1}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"fc_codex_1\",\"delta\":\"{\\\"city\\\":\",\"sequence_number\":2}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"fc_codex_1\",\"delta\":\"\\\"Paris\\\"}\",\"sequence_number\":3}\n\nevent: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"function_call\",\"id\":\"fc_codex_1\",\"call_id\":\"call_codex_1\",\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\",\"status\":\"completed\"},\"sequence_number\":4}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_codex_tool_1\",\"usage\":{\"input_tokens\":88,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":16,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":104}},\"sequence_number\":5}\n\n"
+      }
+    }
+  ]
+}

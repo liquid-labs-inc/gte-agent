@@ -1,16 +1,18 @@
 import { LLM, LLMClient, LLMError, LLMEvent, SystemPart } from "@gte-agent/llm"
-import { Cause, DateTime, Effect, FiberSet, Layer, Semaphore, Stream } from "effect"
+import { Cause, DateTime, Effect, FiberSet, Layer, Option, Semaphore, Stream } from "effect"
 import { Event } from "../../event"
 import { Model } from "../../model"
 import { Provider } from "../../provider"
 import { SessionSchema } from "../schema"
 import { SessionEvent } from "../event"
+import { SessionMessage } from "../message"
 import { SessionStore } from "../store"
 import { Service, StepLimitExceededError } from "./index"
 import { createLLMEventPublisher } from "./publish-llm-event"
 import { toLLMMessages } from "./to-llm-message"
 import { ToolRegistry } from "../../tool/registry"
 import { SessionRunnerModel } from "./model"
+import { SessionRunnerSystemPrompt } from "./system-prompt"
 import { Database } from "../../database/database"
 import { SessionInput } from "../input"
 import { Question } from "../../question"
@@ -79,6 +81,32 @@ import { SessionContextEpoch } from "../context-epoch"
 // QUESTION: Did this exist previously, or did we add this limit? Does it make sense?
 const MAX_STEPS = 25
 
+/**
+ * Human-readable transcript message for a model-resolution failure. Selection
+ * and credentials are managed through `/models`, so every message points
+ * there. Never includes credential material (none of these errors carry any).
+ */
+const describeModelError = (error: SessionRunnerModel.Error): string => {
+  switch (error._tag) {
+    case "SessionRunnerModel.ModelNotSelectedError":
+      return "No model is selected for this session and no global default is configured. Use /models to choose a model."
+    case "Catalog.ProviderNotFound":
+      return `The selected provider "${error.providerID}" is not in the model catalog. Use /models to choose a supported model.`
+    case "Catalog.ModelNotFound":
+      return `The selected model "${error.providerID}/${error.modelID}" is not in the model catalog. Use /models to choose a supported model.`
+    case "SessionRunnerModel.UnsupportedApiError":
+      return `The selected model "${error.providerID}/${error.modelID}" has no supported route (${error.api}). Use /models to choose a supported model.`
+    case "AuthStore.MissingCredentialsError":
+      return `No credentials are configured for provider "${error.providerID}". Use /models to authenticate.`
+    case "AuthStore.InvalidAuthFileError":
+      return `The credential store at ${error.path} could not be read. Re-authenticate with /models.`
+    case "AuthOpenAI.RefreshError":
+      return `Refreshing the ChatGPT sign-in failed (${error.reason}). Use /models to re-authenticate OpenAI.`
+    default:
+      return `Model resolution failed: ${String(error)}. Use /models to select and authenticate a model.`
+  }
+}
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -88,6 +116,9 @@ export const layer = Layer.effect(
     const models = yield* SessionRunnerModel.Service
     const store = yield* SessionStore.Service
     const systemContext = yield* SystemContextRegistry.Service
+    // Optional product prompt (GTE persona + session context). Compositions
+    // without it (tests, embedders) run with the epoch baseline alone.
+    const systemPrompt = Option.getOrUndefined(yield* Effect.serviceOption(SessionRunnerSystemPrompt.Service))
     const db = (yield* Database.Service).db
     const getSession = Effect.fn("SessionRunner.getSession")(function* (sessionID: SessionSchema.ID) {
       const session = yield* store.get(sessionID)
@@ -133,7 +164,6 @@ export const layer = Layer.effect(
     ) {
       const session = yield* getSession(sessionID)
       const initialized = yield* SessionContextEpoch.initialize(db, systemContext, session.id, session.runtimeScope)
-      const model = yield* models.resolve(session)
       const toolFibers = yield* FiberSet.make<void, never>()
       let needsContinuation = false
       if (promotion) {
@@ -144,12 +174,41 @@ export const layer = Layer.effect(
           yield* SessionInput.promoteSteers(db, events, session.id, cutoff)
         }
       }
+      // Resolved after prompt promotion so a selection or credential failure
+      // lands in the transcript after the user message it answers. The typed
+      // error still propagates; the published step is the visible surface
+      // directing the user to /models.
+      const model = yield* models.resolve(session).pipe(
+        Effect.tapError((error) =>
+          Effect.gen(function* () {
+            const assistantMessageID = SessionMessage.ID.create()
+            const timestamp = yield* DateTime.now
+            yield* events.publish(SessionEvent.Step.Started, {
+              sessionID: session.id,
+              timestamp,
+              assistantMessageID,
+              agent: session.agent ?? "build",
+              model: session.model ?? { id: Model.ID.make("unconfigured"), providerID: Provider.ID.gteAgent },
+            })
+            yield* events.publish(SessionEvent.Step.Failed, {
+              sessionID: session.id,
+              timestamp,
+              assistantMessageID,
+              error: { type: "unknown", message: describeModelError(error) },
+            })
+          }),
+        ),
+      )
       const system =
         initialized ?? (yield* SessionContextEpoch.prepare(db, events, systemContext, session.id, session.runtimeScope))
       const context = yield* store.runnerContext(session.id, system.baselineSeq)
+      const gteBaseline = systemPrompt === undefined ? undefined : yield* systemPrompt.baseline(session)
       const request = LLM.request({
         model,
-        system: system.baseline.length > 0 ? [SystemPart.make(system.baseline)] : [],
+        system: [
+          ...(gteBaseline === undefined || gteBaseline.length === 0 ? [] : [SystemPart.make(gteBaseline)]),
+          ...(system.baseline.length > 0 ? [SystemPart.make(system.baseline)] : []),
+        ],
         messages: toLLMMessages(context, model),
         tools: yield* tools.definitions(),
       })

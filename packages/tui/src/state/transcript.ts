@@ -74,6 +74,13 @@ export function seedFromMessages(messages: readonly SessionPublicMessage[]): Tra
       case "system":
         entries.push({ kind: "info", id: String(message.id), text: message.text })
         break
+      case "model-switched":
+        entries.push({
+          kind: "info",
+          id: String(message.id),
+          text: `model switched to ${message.model.providerID}/${message.model.id}`,
+        })
+        break
       case "compaction":
         entries.push({ kind: "info", id: String(message.id), text: `[compaction] ${message.summary}` })
         break
@@ -237,6 +244,22 @@ export function applyEvent(entries: readonly TranscriptEntry[], envelope: Sessio
         key: typeof data["key"] === "string" ? data["key"] : undefined,
         summary,
         provenance,
+      }
+      const index = entries.findIndex((existing) => existing.id === id)
+      if (index < 0) return [...entries, entry]
+      const next = [...entries]
+      next[index] = entry
+      return next
+    }
+    case "session.next.model.switched": {
+      // Durable selection confirmation from /models; keyed by messageID so
+      // replay over seeded history upserts instead of duplicating.
+      const id = str("messageID")
+      const model = data["model"] as { id?: unknown; providerID?: unknown } | undefined
+      const entry: TranscriptEntry = {
+        kind: "info",
+        id,
+        text: `model switched to ${String(model?.providerID ?? "?")}/${String(model?.id ?? "?")}`,
       }
       const index = entries.findIndex((existing) => existing.id === id)
       if (index < 0) return [...entries, entry]

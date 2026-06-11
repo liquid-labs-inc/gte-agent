@@ -233,15 +233,17 @@ describe("Catalog", () => {
       const providerID = Provider.ID.make("test")
       const transform = yield* catalog.transform()
 
+      // Release dates beyond every curated catalog entry so the newest-model
+      // fallback selects from this test provider deterministically.
       yield* transform((catalog) => {
         catalog.provider.update(providerID, (provider) => {
           provider.enabled = { via: "custom", data: {} }
         })
         catalog.model.update(providerID, Model.ID.make("old"), (model) => {
-          model.time.released = DateTime.makeUnsafe(1000)
+          model.time.released = DateTime.makeUnsafe(Date.parse("2099-01-01"))
         })
         catalog.model.update(providerID, Model.ID.make("new"), (model) => {
-          model.time.released = DateTime.makeUnsafe(2000)
+          model.time.released = DateTime.makeUnsafe(Date.parse("2099-02-01"))
         })
       })
 
@@ -262,10 +264,10 @@ describe("Catalog", () => {
           provider.enabled = { via: "custom", data: {} }
         })
         catalog.model.update(providerID, old, (model) => {
-          model.time.released = DateTime.makeUnsafe(1000)
+          model.time.released = DateTime.makeUnsafe(Date.parse("2099-01-01"))
         })
         catalog.model.update(providerID, newest, (model) => {
-          model.time.released = DateTime.makeUnsafe(2000)
+          model.time.released = DateTime.makeUnsafe(Date.parse("2099-02-01"))
         })
       }
 
@@ -319,8 +321,8 @@ describe("Catalog", () => {
         catalog.model.update(providerID, Model.ID.make("model"), () => {})
       })
 
-      expect(yield* catalog.provider.all()).toEqual([])
-      expect(yield* catalog.model.all()).toEqual([])
+      expect((yield* catalog.provider.all()).map((provider) => provider.id)).not.toContain(providerID)
+      expect((yield* catalog.model.all()).map((model) => model.providerID)).not.toContain(providerID)
       expect(yield* catalog.provider.get(providerID).pipe(Effect.option)).toEqual(Option.none())
     }),
   )

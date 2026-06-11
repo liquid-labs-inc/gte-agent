@@ -10,6 +10,7 @@ import { readAuthStatus } from "./api/auth"
 import { createApi } from "./api/client"
 import { createEventSubscriber } from "./api/events"
 import { createGteApi } from "./api/gte"
+import { createModelsApi } from "./api/models"
 import type { CliOptions } from "./cli"
 import { VERSION } from "./cli"
 import { startServerBridge, VIRTUAL_ORIGIN } from "./server/bridge"
@@ -40,6 +41,7 @@ export async function runTui(options: CliOptions): Promise<void> {
     if (!healthy) throw new Error("GTE Agent server reported unhealthy")
 
     const gte = createGteApi({ baseUrl, fetch: fetcher })
+    const models = createModelsApi({ baseUrl, fetch: fetcher })
     const subscribe = createEventSubscriber({ baseUrl, fetch: fetcher })
     const auth = readAuthStatus()
 
@@ -72,6 +74,7 @@ export async function runTui(options: CliOptions): Promise<void> {
           <App
             api={api}
             gte={gte}
+            models={models}
             subscribe={subscribe}
             auth={auth}
             server={server}

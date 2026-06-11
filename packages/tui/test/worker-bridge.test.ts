@@ -16,6 +16,9 @@ beforeAll(async () => {
       GTE_AGENT_HOME: home,
       GTE_AGENT_DB: ":memory:",
       GTE_AGENT_AUTH_MODE: "disabled",
+      // The server composes the gated default runner (Milestone 7); the
+      // deterministic demo stream this test asserts on is opt-in only.
+      GTE_AGENT_LLM: "demo",
     },
   })
 })

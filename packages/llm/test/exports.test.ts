@@ -6,12 +6,13 @@ import {
   CloudflareAIGateway,
   CloudflareWorkersAI,
   OpenAI,
+  OpenAICodex,
   OpenAICompatible,
   OpenRouter,
   XAI,
 } from "@gte-agent/llm/providers"
 import * as GitHubCopilot from "@gte-agent/llm/providers/github-copilot"
-import { OpenAIChat, OpenAICompatibleChat, OpenAIResponses } from "@gte-agent/llm/protocols"
+import { OpenAIChat, OpenAICodexResponses, OpenAICompatibleChat, OpenAIResponses } from "@gte-agent/llm/protocols"
 import * as AnthropicMessages from "@gte-agent/llm/protocols/anthropic-messages"
 
 describe("public exports", () => {
@@ -34,6 +35,10 @@ describe("public exports", () => {
     expect(OpenAI.provider.responses).toBe(OpenAI.responses)
     expect(OpenAI.provider.responsesWebSocket).toBe(OpenAI.responsesWebSocket)
     expect(OpenAI.configure({ apiKey: "fixture" }).responses).toBeFunction()
+    expect(OpenAICodex.configure).toBeFunction()
+    expect(OpenAICodex.provider.configure).toBe(OpenAICodex.configure)
+    expect(OpenAICodex.configure({ accessToken: "fixture" }).model("gpt-5.5").route.id).toBe("openai-codex-responses")
+    expect(OpenAICodex.configure({ accessToken: "fixture" }).model("gpt-5.5").provider).toBe(OpenAI.id)
     expect(OpenAICompatible.deepseek.model).toBeFunction()
     expect(CloudflareAIGateway.configure).toBeFunction()
     expect(CloudflareAIGateway.configure({ accountId: "fixture", gatewayApiKey: "fixture" }).model).toBeFunction()
@@ -57,6 +62,8 @@ describe("public exports", () => {
     expect(OpenAICompatibleChat.route.id).toBe("openai-compatible-chat")
     expect(OpenAIResponses.route.id).toBe("openai-responses")
     expect(OpenAIResponses.webSocketRoute.id).toBe("openai-responses-websocket")
+    expect(OpenAICodexResponses.route.id).toBe("openai-codex-responses")
+    expect(OpenAICodexResponses.protocol.body.schema).toBe(OpenAIResponses.protocol.body.schema)
     expect(AnthropicMessages.route.id).toBe("anthropic-messages")
   })
 })

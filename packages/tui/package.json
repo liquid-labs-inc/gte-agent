@@ -19,6 +19,7 @@
     "@gte-agent/server": "workspace:*",
     "@opentui/core": "catalog:",
     "@opentui/solid": "catalog:",
+    "fuzzysort": "catalog:",
     "solid-js": "catalog:"
   },
   "devDependencies": {

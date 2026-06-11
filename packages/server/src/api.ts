@@ -1,5 +1,7 @@
 import { HttpApi, OpenApi } from "effect/unstable/httpapi"
 import { SchemaErrorMiddleware } from "./middleware/schema-error"
+import { AuthProviderGroup } from "./groups/auth-provider"
+import { ModelsGroup } from "./groups/models"
 import { MessageGroup } from "./groups/message"
 import { SessionGroup } from "./groups/session"
 import { SessionSnapshotGroup } from "./groups/session-snapshot"
@@ -12,6 +14,8 @@ export const GTEAgentApi = HttpApi.make("gte-agent")
   .add(SessionSnapshotGroup)
   .add(MessageGroup)
   .add(GteDataGroup)
+  .add(AuthProviderGroup)
+  .add(ModelsGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "GTE Agent API",

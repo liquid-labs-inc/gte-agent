@@ -5,6 +5,7 @@ import { readAuthStatus } from "../src/api/auth"
 import { createApi } from "../src/api/client"
 import { createEventSubscriber } from "../src/api/events"
 import { createGteApi } from "../src/api/gte"
+import { createModelsApi } from "../src/api/models"
 import { App } from "../src/ui/app"
 import { createMockApi, makeSession } from "./fixture/api"
 
@@ -23,6 +24,7 @@ function mount(mock: ReturnType<typeof createMockApi>, options?: { onExit?: () =
       <App
         api={createApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
         gte={createGteApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
+        models={createModelsApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
         subscribe={createEventSubscriber({ baseUrl: BASE_URL, fetch: mock.fetch })}
         auth={readAuthStatus({})}
         server={{ mode: "in-process", url: BASE_URL }}
@@ -181,6 +183,7 @@ test("navigating away while history loads does not leak the stale session into t
       <App
         api={createApi({ baseUrl: BASE_URL, fetch: gatedFetch })}
         gte={createGteApi({ baseUrl: BASE_URL, fetch: gatedFetch })}
+        models={createModelsApi({ baseUrl: BASE_URL, fetch: gatedFetch })}
         subscribe={createEventSubscriber({ baseUrl: BASE_URL, fetch: gatedFetch })}
         auth={readAuthStatus({})}
         server={{ mode: "in-process", url: BASE_URL }}
@@ -234,6 +237,7 @@ test("errors from the API surface in the error banner", async () => {
       <App
         api={createApi({ baseUrl: BASE_URL, fetch: failingFetch })}
         gte={createGteApi({ baseUrl: BASE_URL, fetch: failingFetch })}
+        models={createModelsApi({ baseUrl: BASE_URL, fetch: failingFetch })}
         subscribe={createEventSubscriber({ baseUrl: BASE_URL, fetch: failingFetch })}
         auth={readAuthStatus({})}
         server={{ mode: "in-process", url: BASE_URL }}

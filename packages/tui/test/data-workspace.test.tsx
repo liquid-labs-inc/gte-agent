@@ -15,6 +15,7 @@ import { readAuthStatus } from "../src/api/auth"
 import { createApi } from "../src/api/client"
 import { createEventSubscriber } from "../src/api/events"
 import { createGteApi } from "../src/api/gte"
+import { createModelsApi } from "../src/api/models"
 import { App } from "../src/ui/app"
 import { createMockApi, makeSession } from "./fixture/api"
 
@@ -33,6 +34,7 @@ function mount(mock: ReturnType<typeof createMockApi>) {
       <App
         api={createApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
         gte={createGteApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
+        models={createModelsApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
         subscribe={createEventSubscriber({ baseUrl: BASE_URL, fetch: mock.fetch })}
         auth={readAuthStatus({})}
         server={{ mode: "in-process", url: BASE_URL }}
@@ -165,9 +167,7 @@ test("degraded panels fall back to HTTP snapshot polling with an honest source l
   // shows the snapshot-fallback source instead of pretending it is live.
   const frame = await active!.waitForFrame((current) => current.includes("snapshot (fallback)"))
   expect(frame).toContain("ws unavailable")
-  await active!.waitFor(
-    () => mock.gteRequests.filter((path) => path.includes("/book")).length > requestsBefore,
-  )
+  await active!.waitFor(() => mock.gteRequests.filter((path) => path.includes("/book")).length > requestsBefore)
 })
 
 test("reopening a session restores panels from durable intent", async () => {

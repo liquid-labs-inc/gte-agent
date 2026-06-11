@@ -15,6 +15,7 @@
  */
 import type { GteApi, GteProvenance, PanelType, PinnedPanel, SnapshotSummary } from "../api/gte"
 import { CANDLE_INTERVALS, GteRequestError } from "../api/gte"
+import { parseModelTarget, type ModelTarget } from "../state/models"
 import { summarizeData } from "../state/summarize"
 
 export const MAX_PINNED_PANELS = 8
@@ -26,12 +27,24 @@ export type ParsedCommand = { readonly name: string; readonly args: readonly str
 export function parseSlashCommand(text: string): ParsedCommand | undefined {
   const trimmed = text.trim()
   if (!trimmed.startsWith("/")) return undefined
-  const parts = trimmed.slice(1).split(/\s+/).filter((part) => part.length > 0)
+  const parts = trimmed
+    .slice(1)
+    .split(/\s+/)
+    .filter((part) => part.length > 0)
   if (parts.length === 0) return { name: "", args: [] }
   return { name: parts[0].toLowerCase(), args: parts.slice(1) }
 }
 
 type CommandKind = "market-panel" | "market-read" | "address-panel" | "address-read" | "misc"
+
+/**
+ * Arg-completion source kinds for prompt autocomplete. Adding a kind here plus
+ * a data provider in `state/autocomplete.ts` (`createCompletionSources`) is
+ * the whole extension surface — the dropdown wiring is source-agnostic.
+ * `model-ref` completes `<provider>/<model>` refs for the upcoming /models
+ * command; its provider returns nothing until the catalog surface lands.
+ */
+export type ArgCompletionSource = "symbol" | "model-ref"
 
 export type CommandSpec = {
   readonly name: string
@@ -39,18 +52,32 @@ export type CommandSpec = {
   readonly kind: CommandKind
   /** Panel opened by this command (panel commands only). */
   readonly panel?: PanelType
+  /** Positional arg-completion sources: index N completes arg N. */
+  readonly argCompletions?: ReadonlyArray<ArgCompletionSource | undefined>
 }
 
 export const SLASH_COMMANDS: readonly CommandSpec[] = [
   { name: "markets", usage: "/markets [query]", kind: "market-read" },
-  { name: "market", usage: "/market <symbol>", kind: "market-read" },
-  { name: "data", usage: "/data <symbol>", kind: "market-panel", panel: "marketData" },
-  { name: "book", usage: "/book <symbol>", kind: "market-panel", panel: "book" },
-  { name: "trades", usage: "/trades <symbol>", kind: "market-panel", panel: "trades" },
-  { name: "chart", usage: "/chart <symbol> [interval]", kind: "market-panel", panel: "candles" },
-  { name: "context", usage: "/context <symbol>", kind: "market-read" },
-  { name: "quote", usage: "/quote <symbol> <buy|sell> <size>", kind: "market-read" },
-  { name: "liquidations", usage: "/liquidations <symbol>", kind: "market-panel", panel: "liquidations" },
+  { name: "market", usage: "/market <symbol>", kind: "market-read", argCompletions: ["symbol"] },
+  { name: "data", usage: "/data <symbol>", kind: "market-panel", panel: "marketData", argCompletions: ["symbol"] },
+  { name: "book", usage: "/book <symbol>", kind: "market-panel", panel: "book", argCompletions: ["symbol"] },
+  { name: "trades", usage: "/trades <symbol>", kind: "market-panel", panel: "trades", argCompletions: ["symbol"] },
+  {
+    name: "chart",
+    usage: "/chart <symbol> [interval]",
+    kind: "market-panel",
+    panel: "candles",
+    argCompletions: ["symbol"],
+  },
+  { name: "context", usage: "/context <symbol>", kind: "market-read", argCompletions: ["symbol"] },
+  { name: "quote", usage: "/quote <symbol> <buy|sell> <size>", kind: "market-read", argCompletions: ["symbol"] },
+  {
+    name: "liquidations",
+    usage: "/liquidations <symbol>",
+    kind: "market-panel",
+    panel: "liquidations",
+    argCompletions: ["symbol"],
+  },
   { name: "positions", usage: "/positions [address]", kind: "address-panel", panel: "positions" },
   { name: "open-orders", usage: "/open-orders [address]", kind: "address-panel", panel: "openOrders" },
   { name: "order-history", usage: "/order-history [address]", kind: "address-panel", panel: "orderHistory" },
@@ -63,8 +90,19 @@ export const SLASH_COMMANDS: readonly CommandSpec[] = [
   { name: "fees", usage: "/fees [address]", kind: "address-read" },
   { name: "twap-history", usage: "/twap-history [address]", kind: "address-panel", panel: "twapHistory" },
   { name: "next-subaccount", usage: "/next-subaccount [address]", kind: "address-read" },
-  { name: "allowance", usage: "/allowance <address> [symbol]", kind: "address-read" },
-  { name: "leverage", usage: "/leverage <address> <symbol>", kind: "address-read" },
+  {
+    name: "allowance",
+    usage: "/allowance <address> [symbol]",
+    kind: "address-read",
+    argCompletions: [undefined, "symbol"],
+  },
+  {
+    name: "leverage",
+    usage: "/leverage <address> <symbol>",
+    kind: "address-read",
+    argCompletions: [undefined, "symbol"],
+  },
+  { name: "models", usage: "/models [provider/model]", kind: "misc", argCompletions: ["model-ref"] },
   { name: "health", usage: "/health", kind: "misc" },
   { name: "bench-metrics", usage: "/bench-metrics", kind: "misc" },
   { name: "track", usage: "/track <address>|clear", kind: "misc" },
@@ -86,6 +124,13 @@ export type CommandContext = {
   readonly trackedAddress?: string
   readonly pinnedPanels: readonly PinnedPanel[]
   readonly focusPanel: (panel: PanelType, key: string) => void
+  /**
+   * Open the /models overlay. Without a target it shows the picker; with one
+   * (from `/models <provider>/<model>`) it selects directly — chaining into
+   * the auth wizard when the provider needs setup. Validation against the
+   * curated catalog happens inside the overlay via the strict select route.
+   */
+  readonly openModels: (target?: ModelTarget) => void
   /** Local (non-persisted) command feedback line in the transcript. */
   readonly info: (text: string) => void
   readonly error: (text: string) => void
@@ -107,7 +152,9 @@ function resolveAddress(ctx: CommandContext, candidate: string | undefined, usag
     return candidate.toLowerCase()
   }
   if (ctx.trackedAddress !== undefined) return ctx.trackedAddress
-  ctx.error(`No address given and no tracked address set. Pass an address or set one with /track <address>. Usage: ${usage}`)
+  ctx.error(
+    `No address given and no tracked address set. Pass an address or set one with /track <address>. Usage: ${usage}`,
+  )
   return undefined
 }
 
@@ -142,7 +189,9 @@ async function openPanel(
 ): Promise<boolean> {
   const exists = ctx.pinnedPanels.some((pin) => pin.panel === panel && pin.key === key)
   if (!exists && ctx.pinnedPanels.length >= MAX_PINNED_PANELS) {
-    ctx.error(`Panel limit reached (${MAX_PINNED_PANELS} pinned). Close a panel first (update intent) before opening another.`)
+    ctx.error(
+      `Panel limit reached (${MAX_PINNED_PANELS} pinned). Close a panel first (update intent) before opening another.`,
+    )
     return false
   }
   const pinnedPanels = exists ? ctx.pinnedPanels : [...ctx.pinnedPanels, { panel, key }]
@@ -190,7 +239,10 @@ async function run(spec: CommandSpec, args: readonly string[], ctx: CommandConte
       command,
       ...(extras?.panel === undefined ? {} : { panel: extras.panel }),
       ...(extras?.key === undefined ? {} : { key: extras.key }),
-      summary: extras?.note === undefined ? summary : { ...summary, note: summary.note === undefined ? extras.note : `${extras.note} · ${summary.note}` },
+      summary:
+        extras?.note === undefined
+          ? summary
+          : { ...summary, note: summary.note === undefined ? extras.note : `${extras.note} · ${summary.note}` },
       provenance: result.provenance,
     })
   }
@@ -240,7 +292,11 @@ async function run(spec: CommandSpec, args: readonly string[], ctx: CommandConte
   }
 
   /** Address pure-read command. */
-  const addressRead = async (fetch: (address: string) => Promise<{ provenance: GteProvenance; data: unknown }>, label: string, candidate: string | undefined) => {
+  const addressRead = async (
+    fetch: (address: string) => Promise<{ provenance: GteProvenance; data: unknown }>,
+    label: string,
+    candidate: string | undefined,
+  ) => {
     const address = resolveAddress(ctx, candidate, spec.usage)
     if (address === undefined) return
     await snap(`/${spec.name}`, () => fetch(address), `${label} ${address}`)
@@ -248,7 +304,11 @@ async function run(spec: CommandSpec, args: readonly string[], ctx: CommandConte
 
   switch (spec.name) {
     case "markets":
-      await snap("/markets", () => gte.markets(args.join(" ") || undefined), args.length > 0 ? `markets matching "${args.join(" ")}"` : "markets")
+      await snap(
+        "/markets",
+        () => gte.markets(args.join(" ") || undefined),
+        args.length > 0 ? `markets matching "${args.join(" ")}"` : "markets",
+      )
       return
     case "market": {
       if (args[0] === undefined) return ctx.error(`Usage: ${spec.usage}`)
@@ -287,12 +347,9 @@ async function run(spec: CommandSpec, args: readonly string[], ctx: CommandConte
       }
       const symbol = await resolveSymbol(ctx, rawSymbol)
       if (symbol === undefined) return
-      await snap(
-        "/quote",
-        () => gte.quote(symbol, side, size),
-        `ESTIMATE ONLY: ${side} ${size} ${symbol}`,
-        { note: "Book-derived estimate only — not an order preview; no balances or margin inspected, no order payload." },
-      )
+      await snap("/quote", () => gte.quote(symbol, side, size), `ESTIMATE ONLY: ${side} ${size} ${symbol}`, {
+        note: "Book-derived estimate only — not an order preview; no balances or margin inspected, no order payload.",
+      })
       return
     }
     case "liquidations":
@@ -345,6 +402,15 @@ async function run(spec: CommandSpec, args: readonly string[], ctx: CommandConte
       await snap("/leverage", () => gte.leverage(address, symbol), `leverage ${symbol} ${address}`)
       return
     }
+    case "models": {
+      if (args[0] === undefined) return ctx.openModels()
+      const target = parseModelTarget(args[0])
+      if (target === undefined) {
+        return ctx.error(`Invalid model ref "${args[0]}" — expected <provider>/<model>. Usage: ${spec.usage}`)
+      }
+      ctx.openModels(target)
+      return
+    }
     case "health":
       await snap("/health", () => gte.health(), "GTE data API health")
       return
@@ -362,7 +428,9 @@ async function run(spec: CommandSpec, args: readonly string[], ctx: CommandConte
     case "track": {
       const target = args[0]
       if (target === undefined) {
-        return ctx.error(`Usage: ${spec.usage}${ctx.trackedAddress === undefined ? "" : ` (currently tracking ${ctx.trackedAddress})`}`)
+        return ctx.error(
+          `Usage: ${spec.usage}${ctx.trackedAddress === undefined ? "" : ` (currently tracking ${ctx.trackedAddress})`}`,
+        )
       }
       if (target.toLowerCase() === "clear") {
         await gte.updateIntent(ctx.sessionID, { trackedAddress: null })

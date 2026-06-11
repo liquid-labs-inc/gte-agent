@@ -10,9 +10,6 @@ import type { SessionInfo, SessionInputAdmitted, SessionPublicMessage } from "@g
 
 export type { SessionInfo, SessionInputAdmitted, SessionPublicMessage }
 
-/** Deterministic demo model wired in the canonical runtime; no API keys needed. */
-export const DEMO_MODEL = { id: "gte-agent-demo", providerID: "gte-agent-demo" } as const
-
 export interface Api {
   health(): Promise<boolean>
   listSessions(): Promise<SessionInfo[]>
@@ -50,10 +47,12 @@ export function createApi(input: { baseUrl: string; fetch: typeof fetch }): Api 
     },
 
     async createSession({ directory }) {
+      // No model pinned at create time: sessions inherit the global default
+      // from ~/.gte-agent/config.json; without one the runner errors visibly
+      // and points at /models (strict, no silent fallback).
       const result = await client.session.create({
         sessionCreateRequest: {
           runtimeScope: { directory },
-          model: { ...DEMO_MODEL },
         },
       })
       if (result.error !== undefined) throw new Error(describeError(result.error, "Failed to create session"))

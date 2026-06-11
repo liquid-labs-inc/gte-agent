@@ -2,6 +2,7 @@ export * as Catalog from "./catalog"
 
 import { Context, Effect, Layer, Option, Order, pipe, Schema, Array, Scope, Stream } from "effect"
 import { castDraft, enableMapSet, type Draft } from "immer"
+import { CatalogCurated } from "./catalog-curated"
 import { Model } from "./model"
 import { Plugin } from "./plugin"
 import { Provider } from "./provider"
@@ -136,7 +137,11 @@ export const layer = Layer.effect(
     }
 
     const state = State.create<Data, Editor>({
-      initial: () => ({ providers: new Map() }),
+      // The catalog baseline is the curated, static, GTE-owned provider/model
+      // list. Transforms (config overrides, plugins, policy) layer on top and
+      // replay over this baseline on every rebuild; there is no network
+      // catalog source.
+      initial: () => ({ providers: CatalogCurated.providers() }),
       editor: (draft) => {
         const result: Editor = {
           provider: {
