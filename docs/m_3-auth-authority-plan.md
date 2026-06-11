@@ -2,6 +2,8 @@
 
 This document is the source-of-truth plan for Milestone 3 of the GTE Agent retrofit.
 
+Phase 1 status: completed in the current Phase 1 branch as an auth/authority stub contract. This document remains as the source-of-truth plan and retrospective for the boundary. Real GTE login, token introspection, authenticated user address defaults, and production authority policy remain later-phase work.
+
 Milestone 3 defines the first real GTE boundary: authenticated requests, one immutable trading authority per session, and authorization checks that future tools must derive from. It should not implement trading tools or production persistence.
 
 Milestone 3 is documentation for future implementation. It is part of the same pre-MVP hardening chain as Milestone 2, with no separate migration compatibility burden for old OpenCode, V1, workspace, share, or account data.

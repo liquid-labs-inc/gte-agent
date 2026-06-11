@@ -2,6 +2,8 @@
 
 This document is the source-of-truth plan for Milestone 2 of the GTE Agent retrofit.
 
+Phase 1 status: completed in the current Phase 1 branch. This document remains as the source-of-truth plan and retrospective for the runtime rename/stabilization milestone. Later Phase 1 docs supersede the user-facing CLI command detail: `gta` is the TUI access command, while `gte-agent` may remain as a developer or compatibility alias.
+
 Milestone 2 should make the canonical runtime clean, runnable, and GTE Agent named end to end. It should not implement GTE auth, trading tools, trading memory, market data, balances, risk checks, or execution semantics.
 
 Milestone 2 is documentation for future implementation. It is part of one long pre-MVP hardening chain with Milestone 3. There is no migration compatibility burden for old OpenCode, V1, workspace, share, or account data before MVP.
