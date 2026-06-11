@@ -83,6 +83,22 @@ export const ModelSwitched = Event.define({
 })
 export type ModelSwitched = typeof ModelSwitched.Type
 
+/**
+ * Session-scoped UI intent changed. Carries the full resulting intent state
+ * (absent field means cleared) so projection and replay stay idempotent.
+ */
+export const IntentUpdated = Event.define({
+  type: "session.intent.updated",
+  ...options,
+  schema: {
+    ...Base,
+    selectedMarket: Schema.String.pipe(Schema.optional),
+    trackedAddress: SessionSchema.TrackedAddress.pipe(Schema.optional),
+    pinnedPanels: SessionSchema.PinnedPanels.pipe(Schema.optional),
+  },
+})
+export type IntentUpdated = typeof IntentUpdated.Type
+
 export const Moved = Event.define({
   type: "session.next.moved",
   ...options,
@@ -461,10 +477,72 @@ export namespace Compaction {
   export type Ended = typeof Ended.Type
 }
 
+/** Primitive cell value allowed in a snapshot row (no nesting; keeps payloads compact). */
+export const SnapshotCell = Schema.Union([Schema.String, Schema.Number, Schema.Boolean, Schema.Null]).annotate({
+  identifier: "Session.SnapshotCell",
+})
+export type SnapshotCell = typeof SnapshotCell.Type
+
+export const SnapshotRow = Schema.Record(Schema.String, SnapshotCell).annotate({
+  identifier: "Session.SnapshotRow",
+})
+export type SnapshotRow = typeof SnapshotRow.Type
+
+/** Hard cap on tabular rows persisted per transcript snapshot. */
+export const MAX_SNAPSHOT_ROWS = 10
+
+/**
+ * Compact, schema-bounded summary recorded into the transcript by read-only
+ * data commands. Never raw stream payloads: at most a title, a small field
+ * map, up to MAX_SNAPSHOT_ROWS trimmed rows, and a note.
+ */
+export const SnapshotSummary = Schema.Struct({
+  title: Schema.String.pipe(Schema.optional),
+  fields: Schema.Record(Schema.String, Schema.String).pipe(Schema.optional),
+  rows: Schema.Array(SnapshotRow).check(Schema.isMaxLength(MAX_SNAPSHOT_ROWS)).pipe(Schema.optional),
+  note: Schema.String.pipe(Schema.optional),
+}).annotate({ identifier: "Session.SnapshotSummary" })
+export type SnapshotSummary = typeof SnapshotSummary.Type
+
+/**
+ * Provenance persisted with a snapshot. `env` is a plain string (not the
+ * gte-ts literal union) so durable replay never breaks when upstream renames
+ * or adds environments.
+ */
+export const SnapshotProvenance = Schema.Struct({
+  env: Schema.String,
+  source: Schema.Literals(["http", "ws", "fallback"]),
+  timestamp: Schema.String,
+  symbol: Schema.String.pipe(Schema.optional),
+  address: Schema.String.pipe(Schema.optional),
+  params: Schema.Record(Schema.String, Schema.Unknown).pipe(Schema.optional),
+}).annotate({ identifier: "Session.SnapshotProvenance" })
+export type SnapshotProvenance = typeof SnapshotProvenance.Type
+
+/**
+ * Durable transcript record of a one-shot read-only data snapshot (slash
+ * command or tool surface). Continuous panel updates never produce these.
+ */
+export const SnapshotRecorded = Event.define({
+  type: "session.snapshot.recorded",
+  ...options,
+  schema: {
+    ...Base,
+    /** Command or surface that produced the snapshot, e.g. "/book" or "markets". */
+    command: Schema.String,
+    panel: SessionSchema.PanelType.pipe(Schema.optional),
+    key: Schema.String.pipe(Schema.optional),
+    summary: SnapshotSummary,
+    provenance: SnapshotProvenance,
+  },
+})
+export type SnapshotRecorded = typeof SnapshotRecorded.Type
+
 const DurableDefinitions = [
   Created,
   AgentSwitched,
   ModelSwitched,
+  IntentUpdated,
   Moved,
   Prompted,
   PromptLifecycle.Admitted,
@@ -490,6 +568,7 @@ const DurableDefinitions = [
   Compaction.Started,
   Compaction.Delta,
   Compaction.Ended,
+  SnapshotRecorded,
 ] as const
 const EphemeralDefinitions = [Text.Delta, Tool.Input.Delta, Reasoning.Delta] as const
 

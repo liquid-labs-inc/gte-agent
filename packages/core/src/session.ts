@@ -73,6 +73,14 @@ type CreateInput = {
   authorityID?: GTEAuth.AuthorityID
 }
 
+/** Session-scoped UI intent patch: `undefined` leaves a field unchanged, `null` clears it. */
+type UpdateIntentInput = {
+  sessionID: SessionSchema.ID
+  selectedMarket?: string | null
+  trackedAddress?: SessionSchema.TrackedAddress | null
+  pinnedPanels?: SessionSchema.PinnedPanels | null
+}
+
 export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("Session.NotFoundError", {
   sessionID: SessionSchema.ID,
 }) {}
@@ -108,6 +116,9 @@ export interface Interface {
     GTEAuth.AuthorityRequiredError | GTEAuth.MutationDeniedError | GTEAuth.AuthorityConflictError
   >
   readonly get: (sessionID: SessionSchema.ID) => Effect.Effect<SessionSchema.Info, NotFoundError | GTEAuth.ReadDeniedError>
+  readonly updateIntent: (
+    input: UpdateIntentInput,
+  ) => Effect.Effect<SessionSchema.Info, NotFoundError | GTEAuth.ReadDeniedError | GTEAuth.MutationDeniedError>
   readonly messages: (input: {
     sessionID: SessionSchema.ID
     limit?: number
@@ -279,6 +290,31 @@ export const layer = Layer.effect(
           })
         }
         return session
+      }),
+      updateIntent: Effect.fn("Session.updateIntent")(function* (input) {
+        const recorded = yield* result.get(input.sessionID)
+        if (!GTEAuth.canAct(auth, recorded.authorityID)) {
+          return yield* new GTEAuth.MutationDeniedError({
+            sessionID: input.sessionID,
+            principalID: auth.principalID,
+            authorityID: recorded.authorityID,
+          })
+        }
+        // The HTTP handler forwards omitted fields as undefined, so an empty patch
+        // must not append a durable no-op event or bump time_updated.
+        if (input.selectedMarket === undefined && input.trackedAddress === undefined && input.pinnedPanels === undefined) {
+          return recorded
+        }
+        const resolve = <T>(next: T | null | undefined, current: T | undefined) =>
+          next === null ? undefined : (next ?? current)
+        yield* events.publish(SessionEvent.IntentUpdated, {
+          sessionID: input.sessionID,
+          timestamp: DateTime.makeUnsafe(Date.now()),
+          selectedMarket: resolve(input.selectedMarket, recorded.selectedMarket),
+          trackedAddress: resolve(input.trackedAddress, recorded.trackedAddress),
+          pinnedPanels: resolve(input.pinnedPanels, recorded.pinnedPanels),
+        })
+        return yield* result.get(input.sessionID)
       }),
       list: Effect.fn("Session.list")(function* (input = {}) {
         const direction = input.anchor?.direction ?? "next"

@@ -1,0 +1,24 @@
+name: audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gte-import-audit:
+    name: gte read-only import audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      # The audit script has no dependencies; install validates the lockfile.
+      # --ignore-scripts skips workspace postinstall steps the audit does not need.
+      - run: bun install --frozen-lockfile --ignore-scripts
+      # Prove the gate detects forbidden imports, then run it against the tree.
+      # (Tests must run from a subdirectory; root bunfig blocks `bun test`.)
+      - run: bun test audit-gte-imports.test.ts
+        working-directory: script
+      - run: bun run audit:gte

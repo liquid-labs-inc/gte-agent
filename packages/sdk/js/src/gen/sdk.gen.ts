@@ -3,6 +3,56 @@
 import { client } from "./client.gen.js"
 import { buildClientParams, type Client, type Options as Options2, type TDataShape } from "./client/index.js"
 import type {
+  GteDataAccountErrors,
+  GteDataAccountResponses,
+  GteDataAllowanceErrors,
+  GteDataAllowanceResponses,
+  GteDataBalanceHistoryErrors,
+  GteDataBalanceHistoryResponses,
+  GteDataBalancesErrors,
+  GteDataBalancesResponses,
+  GteDataBookErrors,
+  GteDataBookResponses,
+  GteDataCandlesErrors,
+  GteDataCandlesResponses,
+  GteDataContextErrors,
+  GteDataContextResponses,
+  GteDataFeesErrors,
+  GteDataFeesResponses,
+  GteDataFundingErrors,
+  GteDataFundingResponses,
+  GteDataHealthErrors,
+  GteDataHealthResponses,
+  GteDataLeverageErrors,
+  GteDataLeverageResponses,
+  GteDataMarketDataErrors,
+  GteDataMarketDataResponses,
+  GteDataMarketErrors,
+  GteDataMarketResponses,
+  GteDataMarketsErrors,
+  GteDataMarketsResponses,
+  GteDataNextSubaccountErrors,
+  GteDataNextSubaccountResponses,
+  GteDataOpenOrdersErrors,
+  GteDataOpenOrdersResponses,
+  GteDataOrdersErrors,
+  GteDataOrdersResponses,
+  GteDataPnlErrors,
+  GteDataPnlResponses,
+  GteDataPositionsErrors,
+  GteDataPositionsResponses,
+  GteDataTradeHistoryErrors,
+  GteDataTradeHistoryResponses,
+  GteDataTradesErrors,
+  GteDataTradesResponses,
+  GteDataTwapHistoryErrors,
+  GteDataTwapHistoryResponses,
+  GteEnvErrors,
+  GteEnvResponses,
+  GteQuoteErrors,
+  GteQuoteResponses,
+  GteResolveSymbolErrors,
+  GteResolveSymbolResponses,
   HealthGetErrors,
   HealthGetResponses,
   Prompt,
@@ -13,12 +63,18 @@ import type {
   SessionCreateResponses,
   SessionEventsErrors,
   SessionEventsResponses,
+  SessionIntentUpdateErrors,
+  SessionIntentUpdateRequest,
+  SessionIntentUpdateResponses,
   SessionListErrors,
   SessionListResponses,
   SessionMessagesErrors,
   SessionMessagesResponses,
   SessionPromptErrors,
   SessionPromptResponses,
+  SessionSnapshotRecordErrors,
+  SessionSnapshotRecordRequest,
+  SessionSnapshotRecordResponses,
 } from "./types.gen.js"
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean> = Options2<
@@ -74,6 +130,88 @@ export class Health extends HeyApiClient {
     return (options?.client ?? this.client).get<HealthGetResponses, HealthGetErrors, ThrowOnError>({
       url: "/api/health",
       ...options,
+    })
+  }
+}
+
+export class Intent extends HeyApiClient {
+  /**
+   * Update session intent
+   *
+   * Update session-scoped UI intent (selected market, tracked address, pinned panels). Omitted fields stay unchanged; explicit null clears a field.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: unknown
+      sessionIntentUpdateRequest: SessionIntentUpdateRequest
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { key: "sessionIntentUpdateRequest", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<
+      SessionIntentUpdateResponses,
+      SessionIntentUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/api/session/{sessionID}/intent",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Snapshot extends HeyApiClient {
+  /**
+   * Record a transcript data snapshot
+   *
+   * Durably record a compact one-shot read-only data snapshot (with provenance) into the session transcript. Ownership-checked like the intent route.
+   */
+  public record<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: unknown
+      sessionSnapshotRecordRequest: SessionSnapshotRecordRequest
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { key: "sessionSnapshotRecordRequest", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      SessionSnapshotRecordResponses,
+      SessionSnapshotRecordErrors,
+      ThrowOnError
+    >({
+      url: "/api/session/{sessionID}/snapshot",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 }
@@ -266,6 +404,626 @@ export class Session extends HeyApiClient {
       ...params,
     })
   }
+
+  private _intent?: Intent
+  get intent(): Intent {
+    return (this._intent ??= new Intent({ client: this.client }))
+  }
+
+  private _snapshot?: Snapshot
+  get snapshot(): Snapshot {
+    return (this._snapshot ??= new Snapshot({ client: this.client }))
+  }
+}
+
+export class Gte extends HeyApiClient {
+  /**
+   * Get resolved GTE environment
+   *
+   * Resolved gte-ts environment for this server plus provenance basics, for TUI display.
+   */
+  public env<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<GteEnvResponses, GteEnvErrors, ThrowOnError>({
+      url: "/api/gte/env",
+      ...options,
+    })
+  }
+
+  /**
+   * Resolve a market symbol
+   *
+   * Shared deterministic symbol resolution (exact, uppercase, search). Returns resolved, ambiguous (with candidates), or notFound; never guesses.
+   */
+  public resolveSymbol<ThrowOnError extends boolean = false>(
+    parameters: {
+      q: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "q" }] }])
+    return (options?.client ?? this.client).get<GteResolveSymbolResponses, GteResolveSymbolErrors, ThrowOnError>({
+      url: "/api/gte/resolve-symbol",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Estimate a fill from the public order book
+   *
+   * Book-derived estimate only. Provide exactly one of baseSize or quoteSize. Not an order preview: no balance or margin checks, no order payload.
+   */
+  public quote<ThrowOnError extends boolean = false>(
+    parameters: {
+      symbol: string
+      side: "buy" | "sell"
+      baseSize?: string | null
+      quoteSize?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "symbol" },
+            { in: "query", key: "side" },
+            { in: "query", key: "baseSize" },
+            { in: "query", key: "quoteSize" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GteQuoteResponses, GteQuoteErrors, ThrowOnError>({
+      url: "/api/gte/market/{symbol}/quote",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class GteData extends HeyApiClient {
+  public health<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<GteDataHealthResponses, GteDataHealthErrors, ThrowOnError>({
+      url: "/api/gte/health",
+      ...options,
+    })
+  }
+
+  public markets<ThrowOnError extends boolean = false>(
+    parameters?: {
+      query?: string | null
+      limit?: string | null
+      cursor?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "query" },
+            { in: "query", key: "limit" },
+            { in: "query", key: "cursor" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GteDataMarketsResponses, GteDataMarketsErrors, ThrowOnError>({
+      url: "/api/gte/markets",
+      ...options,
+      ...params,
+    })
+  }
+
+  public market<ThrowOnError extends boolean = false>(
+    parameters: {
+      symbol: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "symbol" }] }])
+    return (options?.client ?? this.client).get<GteDataMarketResponses, GteDataMarketErrors, ThrowOnError>({
+      url: "/api/gte/market/{symbol}",
+      ...options,
+      ...params,
+    })
+  }
+
+  public marketData<ThrowOnError extends boolean = false>(
+    parameters: {
+      symbol: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "symbol" }] }])
+    return (options?.client ?? this.client).get<GteDataMarketDataResponses, GteDataMarketDataErrors, ThrowOnError>({
+      url: "/api/gte/market/{symbol}/data",
+      ...options,
+      ...params,
+    })
+  }
+
+  public book<ThrowOnError extends boolean = false>(
+    parameters: {
+      symbol: string
+      limit?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "symbol" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GteDataBookResponses, GteDataBookErrors, ThrowOnError>({
+      url: "/api/gte/market/{symbol}/book",
+      ...options,
+      ...params,
+    })
+  }
+
+  public trades<ThrowOnError extends boolean = false>(
+    parameters: {
+      symbol: string
+      limit?: string | null
+      cursor?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "symbol" },
+            { in: "query", key: "limit" },
+            { in: "query", key: "cursor" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GteDataTradesResponses, GteDataTradesErrors, ThrowOnError>({
+      url: "/api/gte/market/{symbol}/trades",
+      ...options,
+      ...params,
+    })
+  }
+
+  public candles<ThrowOnError extends boolean = false>(
+    parameters: {
+      symbol: string
+      interval?: "1m" | "2m" | "3m" | "5m" | "10m" | "15m" | "20m" | "30m" | "1h" | "4h" | "1d" | "1w" | null
+      from?: string | null
+      to?: string | null
+      limit?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "symbol" },
+            { in: "query", key: "interval" },
+            { in: "query", key: "from" },
+            { in: "query", key: "to" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GteDataCandlesResponses, GteDataCandlesErrors, ThrowOnError>({
+      url: "/api/gte/market/{symbol}/candles",
+      ...options,
+      ...params,
+    })
+  }
+
+  public context<ThrowOnError extends boolean = false>(
+    parameters: {
+      symbol: string
+      from?: string | null
+      to?: string | null
+      cursor?: string | null
+      limit?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "symbol" },
+            { in: "query", key: "from" },
+            { in: "query", key: "to" },
+            { in: "query", key: "cursor" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GteDataContextResponses, GteDataContextErrors, ThrowOnError>({
+      url: "/api/gte/market/{symbol}/context",
+      ...options,
+      ...params,
+    })
+  }
+
+  public positions<ThrowOnError extends boolean = false>(
+    parameters: {
+      address: string
+      symbol?: string | null
+      subaccountId?: string | null
+      cursor?: string | null
+      limit?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "address" },
+            { in: "query", key: "symbol" },
+            { in: "query", key: "subaccountId" },
+            { in: "query", key: "cursor" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GteDataPositionsResponses, GteDataPositionsErrors, ThrowOnError>({
+      url: "/api/gte/address/{address}/positions",
+      ...options,
+      ...params,
+    })
+  }
+
+  public openOrders<ThrowOnError extends boolean = false>(
+    parameters: {
+      address: string
+      symbol?: string | null
+      subaccountId?: string | null
+      cursor?: string | null
+      limit?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "address" },
+            { in: "query", key: "symbol" },
+            { in: "query", key: "subaccountId" },
+            { in: "query", key: "cursor" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GteDataOpenOrdersResponses, GteDataOpenOrdersErrors, ThrowOnError>({
+      url: "/api/gte/address/{address}/open-orders",
+      ...options,
+      ...params,
+    })
+  }
+
+  public orders<ThrowOnError extends boolean = false>(
+    parameters: {
+      address: string
+      symbol?: string | null
+      cursor?: string | null
+      limit?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "address" },
+            { in: "query", key: "symbol" },
+            { in: "query", key: "cursor" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GteDataOrdersResponses, GteDataOrdersErrors, ThrowOnError>({
+      url: "/api/gte/address/{address}/orders",
+      ...options,
+      ...params,
+    })
+  }
+
+  public tradeHistory<ThrowOnError extends boolean = false>(
+    parameters: {
+      address: string
+      symbol?: string | null
+      startTime?: string | null
+      endTime?: string | null
+      cursor?: string | null
+      limit?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "address" },
+            { in: "query", key: "symbol" },
+            { in: "query", key: "startTime" },
+            { in: "query", key: "endTime" },
+            { in: "query", key: "cursor" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GteDataTradeHistoryResponses, GteDataTradeHistoryErrors, ThrowOnError>({
+      url: "/api/gte/address/{address}/trade-history",
+      ...options,
+      ...params,
+    })
+  }
+
+  public balances<ThrowOnError extends boolean = false>(
+    parameters: {
+      address: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "address" }] }])
+    return (options?.client ?? this.client).get<GteDataBalancesResponses, GteDataBalancesErrors, ThrowOnError>({
+      url: "/api/gte/address/{address}/balances",
+      ...options,
+      ...params,
+    })
+  }
+
+  public balanceHistory<ThrowOnError extends boolean = false>(
+    parameters: {
+      address: string
+      from?: string | null
+      to?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "address" },
+            { in: "query", key: "from" },
+            { in: "query", key: "to" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      GteDataBalanceHistoryResponses,
+      GteDataBalanceHistoryErrors,
+      ThrowOnError
+    >({
+      url: "/api/gte/address/{address}/balance-history",
+      ...options,
+      ...params,
+    })
+  }
+
+  public pnl<ThrowOnError extends boolean = false>(
+    parameters: {
+      address: string
+      from?: string | null
+      to?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "address" },
+            { in: "query", key: "from" },
+            { in: "query", key: "to" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GteDataPnlResponses, GteDataPnlErrors, ThrowOnError>({
+      url: "/api/gte/address/{address}/pnl",
+      ...options,
+      ...params,
+    })
+  }
+
+  public funding<ThrowOnError extends boolean = false>(
+    parameters: {
+      address: string
+      symbol?: string | null
+      cursor?: string | null
+      limit?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "address" },
+            { in: "query", key: "symbol" },
+            { in: "query", key: "cursor" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GteDataFundingResponses, GteDataFundingErrors, ThrowOnError>({
+      url: "/api/gte/address/{address}/funding",
+      ...options,
+      ...params,
+    })
+  }
+
+  public account<ThrowOnError extends boolean = false>(
+    parameters: {
+      address: string
+      subaccountId?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "address" },
+            { in: "query", key: "subaccountId" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GteDataAccountResponses, GteDataAccountErrors, ThrowOnError>({
+      url: "/api/gte/address/{address}/account",
+      ...options,
+      ...params,
+    })
+  }
+
+  public allowance<ThrowOnError extends boolean = false>(
+    parameters: {
+      address: string
+      symbol: string
+      subaccountId?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "address" },
+            { in: "query", key: "symbol" },
+            { in: "query", key: "subaccountId" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GteDataAllowanceResponses, GteDataAllowanceErrors, ThrowOnError>({
+      url: "/api/gte/address/{address}/allowance",
+      ...options,
+      ...params,
+    })
+  }
+
+  public leverage<ThrowOnError extends boolean = false>(
+    parameters: {
+      address: string
+      symbol: string
+      subaccountId?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "address" },
+            { in: "query", key: "symbol" },
+            { in: "query", key: "subaccountId" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GteDataLeverageResponses, GteDataLeverageErrors, ThrowOnError>({
+      url: "/api/gte/address/{address}/leverage",
+      ...options,
+      ...params,
+    })
+  }
+
+  public fees<ThrowOnError extends boolean = false>(
+    parameters: {
+      address: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "address" }] }])
+    return (options?.client ?? this.client).get<GteDataFeesResponses, GteDataFeesErrors, ThrowOnError>({
+      url: "/api/gte/address/{address}/fees",
+      ...options,
+      ...params,
+    })
+  }
+
+  public twapHistory<ThrowOnError extends boolean = false>(
+    parameters: {
+      address: string
+      symbol?: string | null
+      cursor?: string | null
+      limit?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "address" },
+            { in: "query", key: "symbol" },
+            { in: "query", key: "cursor" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GteDataTwapHistoryResponses, GteDataTwapHistoryErrors, ThrowOnError>({
+      url: "/api/gte/address/{address}/twap-history",
+      ...options,
+      ...params,
+    })
+  }
+
+  public nextSubaccount<ThrowOnError extends boolean = false>(
+    parameters: {
+      address: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "address" }] }])
+    return (options?.client ?? this.client).get<
+      GteDataNextSubaccountResponses,
+      GteDataNextSubaccountErrors,
+      ThrowOnError
+    >({
+      url: "/api/gte/address/{address}/next-subaccount",
+      ...options,
+      ...params,
+    })
+  }
 }
 
 export class GteAgentClient extends HeyApiClient {
@@ -284,5 +1042,15 @@ export class GteAgentClient extends HeyApiClient {
   private _session?: Session
   get session(): Session {
     return (this._session ??= new Session({ client: this.client }))
+  }
+
+  private _gte?: Gte
+  get gte(): Gte {
+    return (this._gte ??= new Gte({ client: this.client }))
+  }
+
+  private _gteData?: GteData
+  get gteData(): GteData {
+    return (this._gteData ??= new GteData({ client: this.client }))
   }
 }

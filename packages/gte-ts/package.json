@@ -1,0 +1,75 @@
+{
+  "name": "gte-ts",
+  "version": "0.0.1",
+  "description": "GTE TypeScript SDK",
+  "type": "module",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "publishConfig": {
+    "main": "./dist/index.cjs",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "import": {
+          "types": "./dist/index.d.ts",
+          "default": "./dist/index.js"
+        },
+        "require": {
+          "types": "./dist/index.d.cts",
+          "default": "./dist/index.cjs"
+        }
+      }
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "typecheck": "tsc --noEmit && pnpm run typecheck:public-api",
+    "typecheck:public-api": "tsc --noEmit -p tsconfig.public-api.json",
+    "generate": "pnpm run generate:openapi",
+    "generate:openapi": "openapi-ts",
+    "test:smoke": "tsx tests/smoke/run.ts",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@nktkas/hyperliquid": "0.31.0",
+    "valibot": "1.2.0",
+    "viem": "2.21.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@hey-api/openapi-ts": "0.90.2",
+    "@types/node": "24.5.2",
+    "tsup": "8.3.5",
+    "tsx": "4.19.0",
+    "typescript": "5.7.2",
+    "vitest": "4.0.16",
+    "ws": "8.18.3"
+  },
+  "engines": {
+    "node": ">=24.5"
+  },
+  "packageManager": "pnpm@10.26.1",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liquid-labs-inc/liquid-labs"
+  },
+  "keywords": ["gte", "sdk", "typescript"]
+}

@@ -1,6 +1,6 @@
 export * as SessionSchema from "./schema"
 
-import { Schema } from "effect"
+import { Schema, SchemaGetter } from "effect"
 import { Model } from "../model"
 import { Project } from "../project"
 import { externalID, type ExternalID, RelativePath, optionalOmitUndefined, withStatics } from "../schema"
@@ -22,6 +22,57 @@ export const ID = Schema.String.check(Schema.isStartsWith("ses")).pipe(
   }),
 )
 export type ID = typeof ID.Type
+
+/**
+ * Canonical EVM address tracked by a session. Accepts mixed-case input and
+ * normalizes to lowercase so persisted values compare bytewise.
+ */
+export const TrackedAddress = Schema.String.check(Schema.isPattern(/^0x[0-9a-fA-F]{40}$/))
+  .pipe(
+    Schema.decode({
+      decode: SchemaGetter.transform((address: string) => address.toLowerCase()),
+      encode: SchemaGetter.transform((address: string) => address.toLowerCase()),
+    }),
+    Schema.brand("TrackedAddress"),
+  )
+  // Type-side guard: `make` must reject non-normalized values, otherwise a live
+  // projection could persist mixed case while the durable event stores lowercase.
+  .check(Schema.isPattern(/^0x[0-9a-f]{40}$/))
+export type TrackedAddress = typeof TrackedAddress.Type
+
+/**
+ * Data panels the TUI can pin to a session. Milestone 4 persists the intent;
+ * Milestone 5 renders the panels.
+ */
+export const PanelType = Schema.Literals([
+  "book",
+  "trades",
+  "candles",
+  "marketData",
+  "positions",
+  "openOrders",
+  "orders",
+  "orderHistory",
+  "balances",
+  "funding",
+  "twapHistory",
+  "leverage",
+  "accountMetrics",
+  "liquidations",
+  "benchMetrics",
+])
+export type PanelType = typeof PanelType.Type
+
+export const PinnedPanel = Schema.Struct({
+  panel: PanelType,
+  key: Schema.String,
+}).annotate({ identifier: "Session.PinnedPanel" })
+export type PinnedPanel = typeof PinnedPanel.Type
+
+export const MAX_PINNED_PANELS = 8
+
+export const PinnedPanels = Schema.Array(PinnedPanel).check(Schema.isMaxLength(MAX_PINNED_PANELS))
+export type PinnedPanels = typeof PinnedPanels.Type
 
 export class Info extends Schema.Class<Info>("Session.Info")({
   id: ID,
@@ -49,4 +100,7 @@ export class Info extends Schema.Class<Info>("Session.Info")({
   title: Schema.String,
   runtimeScope: RuntimeScope.Ref,
   subpath: RelativePath.pipe(Schema.optional),
+  selectedMarket: Schema.String.pipe(Schema.optional),
+  trackedAddress: TrackedAddress.pipe(Schema.optional),
+  pinnedPanels: PinnedPanels.pipe(Schema.optional),
 }) {}

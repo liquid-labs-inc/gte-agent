@@ -10,6 +10,8 @@ import { Agent } from "@gte-agent/core/agent"
 import { Model } from "@gte-agent/core/model"
 import { Provider } from "@gte-agent/core/provider"
 import { Event } from "@gte-agent/core/event"
+import { GtePanelManager } from "@gte-agent/core/gte-data/panel-manager"
+import { liveSessionEvents } from "../live-session-events"
 import {
   ConflictError,
   ForbiddenError,
@@ -41,6 +43,8 @@ function eventData(input: unknown, id?: string): Sse.Event {
 export const sessionHandlers = HttpApiBuilder.group(GTEAgentApi, "session", (handlers) =>
   Effect.gen(function* () {
     const session = yield* Session.Service
+    const events = yield* Event.Service
+    const panels = yield* GtePanelManager.Service
 
     return handlers
       .handle(
@@ -122,6 +126,29 @@ export const sessionHandlers = HttpApiBuilder.group(GTEAgentApi, "session", (han
           }
         }),
       )
+      .handle(
+        "updateIntent",
+        Effect.fn(function* (ctx) {
+          return {
+            data: yield* session
+              .updateIntent({
+                sessionID: ctx.params.sessionID,
+                selectedMarket: ctx.payload.selectedMarket,
+                trackedAddress: ctx.payload.trackedAddress,
+                pinnedPanels: ctx.payload.pinnedPanels,
+              })
+              .pipe(
+                Effect.catchTag("Session.NotFoundError", (error) => Effect.fail(notFound(error.sessionID))),
+                Effect.catchTag("GTEAuth.ReadDeniedError", (error) =>
+                  Effect.fail(forbidden(`Principal ${error.principalID} cannot read authority ${error.authorityID}`)),
+                ),
+                Effect.catchTag("GTEAuth.MutationDeniedError", (error) =>
+                  Effect.fail(forbidden(`Principal ${error.principalID} cannot act for authority ${error.authorityID}`)),
+                ),
+              ),
+          }
+        }),
+      )
       .handleRaw(
         "events",
         Effect.fn("session.events")(function* (ctx: {
@@ -135,9 +162,20 @@ export const sessionHandlers = HttpApiBuilder.group(GTEAgentApi, "session", (han
           )
           if (status !== 200) return HttpServerResponse.empty({ status })
 
+          // Durable replay + live durable events keep their cursors; live-only
+          // ephemeral panel events are merged in WITHOUT cursors and panel
+          // subscriptions are refcounted to this stream's lifetime.
           return HttpServerResponse.stream(
-            session.events({ sessionID: ctx.params.sessionID, after: ctx.query.after }).pipe(
-              Stream.map((event) => eventData(event, String(event.cursor))),
+            liveSessionEvents(
+              { events, panels },
+              {
+                sessionID: ctx.params.sessionID,
+                durable: session.events({ sessionID: ctx.params.sessionID, after: ctx.query.after }),
+              },
+            ).pipe(
+              Stream.map((envelope) =>
+                eventData(envelope, envelope.cursor === undefined ? undefined : String(envelope.cursor)),
+              ),
               Stream.pipeThroughChannel(Sse.encode()),
               Stream.encodeText,
             ),

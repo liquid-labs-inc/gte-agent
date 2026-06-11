@@ -95,6 +95,7 @@
     "effect": "catalog:",
     "fuzzysort": "3.1.0",
     "gitlab-ai-provider": "6.8.0",
+    "gte-ts": "workspace:*",
     "glob": "13.0.5",
     "google-auth-library": "10.5.0",
     "gray-matter": "4.0.3",

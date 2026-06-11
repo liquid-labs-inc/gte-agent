@@ -130,6 +130,31 @@ export const SessionGroup = HttpApiGroup.make("session")
     ),
   )
   .add(
+    HttpApiEndpoint.patch("updateIntent", "/api/session/:sessionID/intent", {
+      params: { sessionID: Session.ID },
+      payload: Schema.Struct({
+        selectedMarket: Schema.NullOr(Schema.String).pipe(Schema.optional).annotate({
+          description: "Canonical market symbol the session is focused on. Omit to keep, null to clear.",
+        }),
+        trackedAddress: Schema.NullOr(Session.TrackedAddress).pipe(Schema.optional).annotate({
+          description: "EVM address (0x + 40 hex chars) tracked by the session. Omit to keep, null to clear.",
+        }),
+        pinnedPanels: Schema.NullOr(Session.PinnedPanels).pipe(Schema.optional).annotate({
+          description: `Pinned data panels (at most ${Session.MAX_PINNED_PANELS}). Omit to keep, null to clear.`,
+        }),
+      }).annotate({ identifier: "SessionIntentUpdateRequest" }),
+      success: Schema.Struct({ data: Session.Info }).annotate({ identifier: "SessionIntentUpdateResponse" }),
+      error: [ForbiddenError, SessionNotFoundError, InvalidRequestError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "session.intent.update",
+        summary: "Update session intent",
+        description:
+          "Update session-scoped UI intent (selected market, tracked address, pinned panels). Omitted fields stay unchanged; explicit null clears a field.",
+      }),
+    ),
+  )
+  .add(
     HttpApiEndpoint.get("events", "/api/session/:sessionID/event", {
       params: { sessionID: Session.ID },
       query: Schema.Struct({

@@ -54,6 +54,9 @@ export const SessionTable = sqliteTable(
       providerID: string
       variant?: string
     }>(),
+    selected_market: text(),
+    tracked_address: text().$type<SessionSchema.TrackedAddress>(),
+    pinned_panels: text({ mode: "json" }).$type<SessionSchema.PinnedPanels>(),
     ...Timestamps,
     time_compacting: integer(),
     time_archived: integer(),

@@ -39,6 +39,9 @@ export function fromRow(row: typeof SessionTable.$inferSelect): SessionSchema.In
       directory: AbsolutePath.make(row.directory),
     }),
     subpath: row.path ? RelativePath.make(row.path) : undefined,
+    selectedMarket: row.selected_market ?? undefined,
+    trackedAddress: row.tracked_address ?? undefined,
+    pinnedPanels: row.pinned_panels ?? undefined,
     time: {
       created: DateTime.makeUnsafe(row.time_created),
       updated: DateTime.makeUnsafe(row.time_updated),

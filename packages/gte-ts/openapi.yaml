@@ -1,0 +1,2471 @@
+openapi: 3.1.0
+info:
+  title: GTE Gateway API
+  description: HTTP API surface for the GTE gateway.
+  version: 0.1.0
+  license:
+    name: proprietary
+    identifier: proprietary
+servers:
+- url: http://localhost:8080/v1
+  description: Local devnet
+tags:
+- name: System
+- name: Markets
+- name: Orders
+- name: Accounts
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags:
+      - System
+      summary: Server health status
+      responses:
+        '200':
+          description: Current gateway health snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerHealthStatus'
+  /markets:
+    get:
+      operationId: getMarkets
+      tags:
+      - Markets
+      summary: List markets
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: marketType
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/MarketType'
+      - name: token
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: sortBy
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/MarketSortBy'
+      responses:
+        '200':
+          description: Paginated market list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetMarketsResponse'
+  /markets/search:
+    get:
+      operationId: searchMarkets
+      tags:
+      - Markets
+      summary: Search markets by query
+      parameters:
+      - name: query
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: marketType
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/MarketType'
+      responses:
+        '200':
+          description: Matching markets.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Market'
+  /markets/{marketSymbol}:
+    get:
+      operationId: getMarket
+      tags:
+      - Markets
+      summary: Get a single market by symbol
+      parameters:
+      - name: marketSymbol
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Market definition.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Market'
+  /markets/{marketSymbol}/data:
+    get:
+      operationId: getMarketData
+      tags:
+      - Markets
+      summary: Get live market data for a symbol
+      parameters:
+      - name: marketSymbol
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Live market data snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketDataPerps'
+  /markets/{marketSymbol}/config:
+    get:
+      operationId: getMarketConfig
+      tags:
+      - Markets
+      summary: Get the market configuration for a symbol
+      parameters:
+      - name: marketSymbol
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Market configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketConfigPerps'
+  /markets/{marketSymbol}/context/history:
+    get:
+      operationId: getMarketContextHistory
+      tags:
+      - Markets
+      summary: Get recent mark/index/funding/open-interest snapshots for a symbol
+      parameters:
+      - name: marketSymbol
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: int64
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: int64
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      responses:
+        '200':
+          description: Recent public market context history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetMarketContextHistoryResponse'
+  /markets/{marketSymbol}/book:
+    get:
+      operationId: getOrderBook
+      tags:
+      - Markets
+      summary: Get the order book for a symbol
+      parameters:
+      - name: marketSymbol
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      responses:
+        '200':
+          description: Aggregated order book levels.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpBook'
+  /markets/{marketSymbol}/trades:
+    get:
+      operationId: getMarketTrades
+      tags:
+      - Markets
+      summary: Get recent public trades for a symbol
+      parameters:
+      - name: marketSymbol
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: user
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      responses:
+        '200':
+          description: Public trade history for the market.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetTradesResponse'
+  /markets/{marketSymbol}/candles:
+    get:
+      operationId: getMarketCandles
+      tags:
+      - Markets
+      summary: Get OHLCV candles for a symbol
+      parameters:
+      - name: marketSymbol
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: true
+        description: Inclusive start timestamp in milliseconds.
+        schema:
+          type: string
+      - name: to
+        in: query
+        required: false
+        description: Exclusive end timestamp in milliseconds.
+        schema:
+          type: string
+      - name: interval
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/CandleInterval'
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      responses:
+        '200':
+          description: Candle series.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Candle'
+  /orders:
+    post:
+      operationId: createOrders
+      tags:
+      - Orders
+      summary: Submit one or more orders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrdersRequest'
+      responses:
+        '200':
+          description: Per-order placement results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateOrdersResponse'
+  /orders/cancel:
+    post:
+      operationId: cancelOrders
+      tags:
+      - Orders
+      summary: Cancel one or more orders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelOrdersRequest'
+      responses:
+        '200':
+          description: Per-order cancel results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelOrdersResponse'
+  /orders/twap:
+    post:
+      operationId: createTwap
+      tags:
+      - Orders
+      summary: Submit a TWAP order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTwapRequest'
+      responses:
+        '200':
+          description: TWAP placement result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateTwapResponse'
+  /orders/twap/cancel:
+    post:
+      operationId: cancelTwap
+      tags:
+      - Orders
+      summary: Cancel a TWAP order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelTwapRequest'
+      responses:
+        '200':
+          description: TWAP cancel result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelTwapResponse'
+  /orders/replace:
+    post:
+      operationId: replaceOrders
+      tags:
+      - Orders
+      summary: Replace one or more orders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceOrdersRequest'
+      responses:
+        '200':
+          description: Per-order replace results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplaceOrdersResponse'
+  /accounts/{userAddress}/orders:
+    get:
+      operationId: getOrders
+      tags:
+      - Accounts
+      summary: Get historical orders for an account
+      parameters:
+      - name: userAddress
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: symbol
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: subaccountId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+      - name: minVersion
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      responses:
+        '200':
+          description: Paginated order history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetOrdersResponse'
+  /accounts/{userAddress}/orders/open:
+    get:
+      operationId: getOpenOrders
+      tags:
+      - Accounts
+      summary: Get open orders for an account
+      parameters:
+      - name: userAddress
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: symbol
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: clientId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: subaccountId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+      - name: minVersion
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      responses:
+        '200':
+          description: Open orders currently resting on markets.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetOpenOrdersResponse'
+  /accounts/{userAddress}/positions:
+    get:
+      operationId: getPositions
+      tags:
+      - Accounts
+      summary: Get open positions for an account
+      parameters:
+      - name: userAddress
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: symbol
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: subaccountId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+      - name: minVersion
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      responses:
+        '200':
+          description: Open positions for the account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetPositionsResponse'
+  /accounts/{userAddress}/funding:
+    get:
+      operationId: getFundingHistory
+      tags:
+      - Accounts
+      summary: Get funding payment history for an account
+      parameters:
+      - name: userAddress
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: symbol
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      responses:
+        '200':
+          description: Funding payment history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetFundingHistoryResponse'
+  /accounts/{userAddress}/fees:
+    get:
+      operationId: getFees
+      tags:
+      - Accounts
+      summary: Get fee schedule/tier for an account
+      parameters:
+      - name: userAddress
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Account fee tier and volume.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetFeesResponse'
+  /accounts/{userAddress}/balances:
+    get:
+      operationId: getBalances
+      tags:
+      - Accounts
+      summary: Get token balances for an account
+      parameters:
+      - name: userAddress
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: minVersion
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      responses:
+        '200':
+          description: Account token balances.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetBalancesResponse'
+  /accounts/{userAddress}/allowance:
+    get:
+      operationId: getAllowance
+      tags:
+      - Accounts
+      summary: Get margin engine allowance for an account
+      parameters:
+      - name: userAddress
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: symbol
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: subaccountId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+      responses:
+        '200':
+          description: Allowance snapshot for the account/subaccount.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetAllowanceResponse'
+  /accounts/{userAddress}/metrics:
+    get:
+      operationId: getAccountMetrics
+      tags:
+      - Accounts
+      summary: Get live account risk metrics
+      parameters:
+      - name: userAddress
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: minVersion
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      responses:
+        '200':
+          description: Account metrics (collateral, margin ratio, PnL).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetAccountMetricsResponse'
+  /accounts/{userAddress}/trades:
+    get:
+      operationId: getUserTrades
+      tags:
+      - Accounts
+      summary: Get trade history for an account
+      parameters:
+      - name: userAddress
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: symbol
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+      - name: startTime
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: endTime
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: subaccountId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+      - name: minVersion
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      responses:
+        '200':
+          description: User trade history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetUserTradesResponse'
+  /accounts/{userAddress}/leverage:
+    get:
+      operationId: getLeverage
+      tags:
+      - Accounts
+      summary: Get leverage setting for an account/market
+      parameters:
+      - name: userAddress
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: symbol
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: subaccountId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+      responses:
+        '200':
+          description: Current leverage setting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetLeverageResponse'
+    post:
+      operationId: setLeverage
+      tags:
+      - Accounts
+      summary: Update leverage setting for an account/market
+      parameters:
+      - name: userAddress
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetLeverageBody'
+      responses:
+        '200':
+          description: Updated leverage setting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetLeverageResponse'
+  /accounts/{userAddress}/next-subaccount:
+    get:
+      operationId: getNextSubaccount
+      tags:
+      - Accounts
+      summary: Get the next available subaccount id for an account
+      parameters:
+      - name: userAddress
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Next allocatable subaccount id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetNextSubaccountResponse'
+  /accounts/{userAddress}/balances/history:
+    get:
+      operationId: getBalanceHistory
+      tags:
+      - Accounts
+      summary: Get historical balance snapshots for an account
+      parameters:
+      - name: userAddress
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: true
+        description: Inclusive start timestamp in milliseconds. Account history queries are bounded to protect projection-backed reads.
+        schema:
+          type: string
+      - name: to
+        in: query
+        required: true
+        description: Exclusive end timestamp in milliseconds. The requested window must fit the account history retention window served by this API.
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        description: Maximum number of points returned across spot and perp series. Defaults to 5000 and is capped at 5000.
+        schema:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 5000
+      responses:
+        '200':
+          description: Historical balance series.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetBalanceHistoryResponse'
+  /accounts/{userAddress}/pnl/history:
+    get:
+      operationId: getPnlHistory
+      tags:
+      - Accounts
+      summary: Get historical PnL snapshots for an account
+      parameters:
+      - name: userAddress
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: true
+        description: Inclusive start timestamp in milliseconds. Account history queries are bounded to protect projection-backed reads.
+        schema:
+          type: string
+      - name: to
+        in: query
+        required: true
+        description: Exclusive end timestamp in milliseconds. The requested window must fit the account history retention window served by this API.
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        description: Maximum number of points returned across spot and perp series. Defaults to 5000 and is capped at 5000.
+        schema:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 5000
+      responses:
+        '200':
+          description: Historical PnL series.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetPnlHistoryResponse'
+  /accounts/{userAddress}/twaps:
+    get:
+      operationId: getTwapHistory
+      tags:
+      - Accounts
+      summary: Get TWAP order history for an account
+      parameters:
+      - name: userAddress
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: symbol
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      responses:
+        '200':
+          description: Paginated TWAP history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetTwapHistoryResponse'
+components:
+  schemas:
+    CandleInterval:
+      type: string
+      enum:
+      - 1m
+      - 2m
+      - 3m
+      - 5m
+      - 10m
+      - 15m
+      - 20m
+      - 30m
+      - 1h
+      - 4h
+      - 1d
+      - 1w
+    OrderRejectReason:
+      type: string
+      enum:
+      - invalid_session
+      - invalid_account
+      - invalid_market
+      - invalid_side
+      - invalid_price
+      - invalid_quantity
+      - insufficient_allowance
+      - order_not_found
+      - market_closed
+      - rate_limit_exceeded
+      - invalid_signature
+      - unauthorized_signer
+      - signature_expired
+      - invalid_nonce
+      - no_allowance
+      - allowance_expired
+      - invalid_order
+      - book_at_capacity
+    OrderStatus:
+      type: string
+      enum:
+      - new
+      - partially_filled
+      - filled
+      - cancelled
+      - rejected
+      - expired
+      - replaced
+      - pending_new
+    OrderType:
+      type: string
+      enum:
+      - market
+      - limit
+      - stop_limit
+      - stop_market
+      - liquidation
+    PositionSide:
+      type: string
+      enum:
+      - long
+      - short
+    Side:
+      type: string
+      enum:
+      - buy
+      - sell
+    TimeInForce:
+      type: string
+      enum:
+      - gtc
+      - ioc
+      - fok
+      - gtd
+    TokenType:
+      type: string
+      enum:
+      - crypto
+      - stablecoin
+      - equities
+      - commodities
+    Tpsl:
+      type: string
+      enum:
+      - tp
+      - sl
+    TradeDirection:
+      type: string
+      enum:
+      - open_long
+      - open_short
+      - long_to_short
+      - short_to_long
+      - close_long
+      - close_short
+    TwapStatus:
+      type: string
+      enum:
+      - activated
+      - finished
+      - terminated
+      - error
+    SetLeverageBody:
+      x-rust-type: crate::models::SetLeverageBody
+      type: object
+      required:
+      - symbol
+      - leverage
+      - subaccountId
+      - nonce
+      - signature
+      properties:
+        symbol:
+          type: string
+        leverage:
+          type: integer
+          format: int32
+        subaccountId:
+          type: integer
+          format: int32
+          minimum: 0
+        nonce:
+          type: number
+        signature:
+          type: string
+
+    PerpPosition:
+      x-rust-type: turbo_rpc::api::PerpPosition
+      type: object
+      required:
+      - accountId
+      - marketSymbol
+      - size
+      - positionValue
+      - side
+      - entryPrice
+      - markPrice
+      - liquidationPrice
+      - leverage
+      - margin
+      - funding
+      - isCross
+      - subaccountId
+      - unrealizedPnl
+      - timestamp
+      properties:
+        accountId:
+          type: string
+        marketSymbol:
+          type: string
+        size:
+          type: string
+        positionValue:
+          type: string
+        side:
+          $ref: '#/components/schemas/PositionSide'
+        entryPrice:
+          type: string
+        markPrice:
+          type: string
+        liquidationPrice:
+          type: string
+        leverage:
+          type: integer
+          format: int32
+        margin:
+          type: string
+        funding:
+          type: string
+        isCross:
+          type: boolean
+        subaccountId:
+          type: integer
+          format: int32
+          minimum: 0
+        unrealizedPnl:
+          type: string
+        timestamp:
+          type: string
+          format: int64
+    AllPerpPosition:
+      type: object
+      required:
+      - accountId
+      - marketSymbol
+      - size
+      - positionValue
+      - side
+      - entryPrice
+      - markPrice
+      - liquidationPrice
+      - leverage
+      - margin
+      - funding
+      - isCross
+      - subaccountId
+      - unrealizedPnl
+      - timestamp
+      properties:
+        accountId:
+          type: string
+        marketSymbol:
+          type: string
+        size:
+          type: string
+        positionValue:
+          type: string
+        side:
+          $ref: '#/components/schemas/PositionSide'
+        entryPrice:
+          type: string
+        markPrice:
+          type: string
+        liquidationPrice:
+          type: string
+        leverage:
+          type: integer
+          format: int32
+        margin:
+          type: string
+        funding:
+          type: string
+        isCross:
+          type: boolean
+        subaccountId:
+          type: integer
+          format: int32
+          minimum: 0
+        unrealizedPnl:
+          type: string
+        timestamp:
+          type: string
+          format: int64
+    BalanceSnapshot:
+      x-rust-type: turbo_rpc::api::BalanceSnapshot
+      type: object
+      required:
+      - timestamp
+      - balanceUsd
+      properties:
+        timestamp:
+          type: string
+          format: int64
+          description: Snapshot time as epoch **milliseconds**.
+        balanceUsd:
+          type: number
+          format: double
+    CancelOrdersRequest:
+      type: object
+      required:
+      - orders
+      - nonce
+      - signature
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/HttpCancelOrderRequest'
+        nonce:
+          type: number
+        signature:
+          type: string
+    CancelOrdersResponse:
+      type: object
+      required:
+      - results
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderResult'
+    CancelTwapRequest:
+      type: object
+      required:
+      - account
+      - symbol
+      - side
+      - nonce
+      - signature
+      - subaccountId
+      - twapId
+      properties:
+        account:
+          type: string
+        symbol:
+          type: string
+        side:
+          $ref: '#/components/schemas/Side'
+        nonce:
+          type: number
+        signature:
+          type: string
+        subaccountId:
+          type: integer
+          format: int32
+          minimum: 0
+        twapId:
+          type: string
+          format: int64
+    CancelTwapResponse:
+      type: object
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          enum:
+          - success
+    Candle:
+      x-rust-type: turbo_rpc::api::Candle
+      type: object
+      required:
+      - timestamp
+      - open
+      - high
+      - low
+      - close
+      - volume
+      properties:
+        timestamp:
+          type: string
+          format: int64
+          description: |-
+            Candle open-time as epoch **milliseconds**.
+        open:
+          type: number
+          format: double
+        high:
+          type: number
+          format: double
+        low:
+          type: number
+          format: double
+        close:
+          type: number
+          format: double
+        volume:
+          type: number
+          format: double
+        tradesChecksum:
+          type:
+          - string
+          - 'null'
+    CreateOrdersRequest:
+      type: object
+      required:
+      - orders
+      - nonce
+      - signature
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/HttpNewOrderRequest'
+        nonce:
+          type: number
+        signature:
+          type: string
+    CreateOrdersResponse:
+      type: object
+      required:
+      - results
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderResult'
+    CreateTwapRequest:
+      type: object
+      required:
+      - account
+      - symbol
+      - side
+      - quantity
+      - reduceOnly
+      - nonce
+      - signature
+      - subaccountId
+      - twap
+      properties:
+        account:
+          type: string
+        symbol:
+          type: string
+        side:
+          $ref: '#/components/schemas/Side'
+        quantity:
+          type: string
+        reduceOnly:
+          type: boolean
+        nonce:
+          type: number
+        signature:
+          type: string
+        subaccountId:
+          type: integer
+          format: int32
+          minimum: 0
+        twap:
+          $ref: '#/components/schemas/TwapOrderParams'
+    CreateTwapResponse:
+      type: object
+      required:
+      - twapId
+      properties:
+        twapId:
+          type: string
+          format: int64
+    FeeTier:
+      x-rust-type: turbo_rpc::api::FeeTier
+      type: object
+      required:
+      - volume
+      - makerFee
+      - takerFee
+      - tier
+      properties:
+        volume:
+          type: array
+          items:
+            $ref: '#/components/schemas/VolumeEntry'
+        makerFee:
+          type: number
+          format: double
+        takerFee:
+          type: number
+          format: double
+        tier:
+          type: string
+    FundingPayment:
+      x-rust-type: turbo_rpc::api::FundingPayment
+      type: object
+      required:
+      - marketSymbol
+      - timestamp
+      - side
+      - payment
+      - size
+      - fundingRate
+      properties:
+        marketSymbol:
+          type: string
+        timestamp:
+          type: string
+          format: int64
+        side:
+          $ref: '#/components/schemas/PositionSide'
+        payment:
+          type: string
+        size:
+          type: string
+        fundingRate:
+          type: string
+        blockNumber:
+          type: string
+          format: int64
+        txnIndex:
+          type: integer
+          format: int32
+          minimum: 0
+    GetAccountMetricsResponse:
+      type: object
+      required:
+      - accountValue
+      - unrealizedPnl
+      - maintenanceMargin
+      - crossMarginRatio
+      - totalMarginUsed
+      - totalNotional
+      - totalVolume
+      - totalTrades
+      - freeCollateral
+      - tradingAllowance
+      - version
+      properties:
+        accountValue:
+          type: string
+        unrealizedPnl:
+          type: string
+        maintenanceMargin:
+          type: string
+        crossMarginRatio:
+          type: number
+          format: double
+        totalMarginUsed:
+          type: string
+        totalNotional:
+          type: string
+        totalVolume:
+          type: string
+        totalTrades:
+          type: integer
+          format: int32
+        freeCollateral:
+          type: string
+        tradingAllowance:
+          type: string
+        version:
+          type: integer
+          format: int64
+    GetAllPositionsResponse:
+      type: object
+      required:
+      - positions
+      properties:
+        positions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllPerpPosition'
+    GetAllowanceResponse:
+      type: object
+      required:
+      - account
+      - symbol
+      - allowance
+      - subaccountId
+      - marketId
+      - availableMargin
+      properties:
+        account:
+          type: string
+        symbol:
+          type: string
+        allowance:
+          type: string
+        subaccountId:
+          type: integer
+          format: int32
+          minimum: 0
+        marketId:
+          type: string
+        availableMargin:
+          type: string
+    GetBalanceHistoryResponse:
+      type: object
+      required:
+      - spot
+      - perps
+      properties:
+        spot:
+          type: array
+          items:
+            $ref: '#/components/schemas/BalanceSnapshot'
+        perps:
+          type: array
+          items:
+            $ref: '#/components/schemas/BalanceSnapshot'
+    GetBalancesResponse:
+      type: object
+      required:
+      - spot
+      - perps
+      - version
+      properties:
+        spot:
+          type: array
+          items:
+            $ref: '#/components/schemas/TokenBalance'
+        perps:
+          type: array
+          items:
+            $ref: '#/components/schemas/TokenBalance'
+        version:
+          type: integer
+          format: int64
+    GetFeesResponse:
+      type: object
+      properties:
+        perps:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/FeeTier'
+        spot:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/FeeTier'
+    GetFundingHistoryResponse:
+      type: object
+      required:
+      - payments
+      properties:
+        nextCursor:
+          type:
+          - string
+          - 'null'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/FundingPayment'
+    GetLeverageResponse:
+      type: object
+      required:
+      - leverage
+      properties:
+        leverage:
+          type: integer
+          format: int32
+    GetMarketContextHistoryResponse:
+      type: object
+      required:
+      - snapshots
+      properties:
+        nextCursor:
+          type:
+          - string
+          - 'null'
+        snapshots:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketContextSnapshot'
+    GetMarketsResponse:
+      type: object
+      required:
+      - markets
+      properties:
+        nextCursor:
+          type:
+          - string
+          - 'null'
+        markets:
+          type: array
+          items:
+            $ref: '#/components/schemas/Market'
+    GetNextSubaccountResponse:
+      type: object
+      required:
+      - subaccountId
+      properties:
+        subaccountId:
+          type: integer
+          format: int32
+          minimum: 0
+    GetOpenOrdersResponse:
+      type: object
+      required:
+      - orders
+      - version
+      properties:
+        nextCursor:
+          type:
+          - string
+          - 'null'
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/PerpOpenOrder'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    GetOrdersResponse:
+      type: object
+      required:
+      - orders
+      - version
+      properties:
+        nextCursor:
+          type:
+          - string
+          - 'null'
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/PerpOrder'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    GetPnlHistoryResponse:
+      type: object
+      required:
+      - spot
+      - perps
+      properties:
+        spot:
+          type: array
+          items:
+            $ref: '#/components/schemas/PnlSnapshot'
+        perps:
+          type: array
+          items:
+            $ref: '#/components/schemas/PnlSnapshot'
+    GetPositionsResponse:
+      type: object
+      required:
+      - positions
+      - version
+      properties:
+        nextCursor:
+          type:
+          - string
+          - 'null'
+        positions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PerpPosition'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    GetTradesResponse:
+      type: object
+      required:
+      - trades
+      properties:
+        nextCursor:
+          type:
+          - string
+          - 'null'
+        trades:
+          type: array
+          items:
+            $ref: '#/components/schemas/Trade'
+    GetTwapHistoryResponse:
+      type: object
+      required:
+      - twaps
+      properties:
+        nextCursor:
+          type:
+          - string
+          - 'null'
+        twaps:
+          type: array
+          items:
+            $ref: '#/components/schemas/TwapHistoryEntry'
+    GetUserTradesResponse:
+      type: object
+      required:
+      - trades
+      - version
+      properties:
+        trades:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserTrade'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    HttpBook:
+      x-rust-type: turbo_rpc::api::HttpBook
+      type: object
+      required:
+      - asks
+      - bids
+      - timestamp
+      properties:
+        asks:
+          type: array
+          items:
+            $ref: '#/components/schemas/HttpBookLevel'
+        bids:
+          type: array
+          items:
+            $ref: '#/components/schemas/HttpBookLevel'
+        timestamp:
+          type: string
+          format: int64
+    HttpBookLevel:
+      x-rust-type: turbo_rpc::api::HttpBookLevel
+      type: object
+      required:
+      - price
+      - qty
+      - numOrders
+      properties:
+        price:
+          type: number
+          format: double
+        qty:
+          type: string
+          format: int64
+          minimum: 0
+        numOrders:
+          type: integer
+          format: int32
+    HttpCancelOrderRequest:
+      x-rust-type: turbo_rpc::api::HttpCancelOrderRequest
+      type: object
+      required:
+      - clientOrderId
+      - account
+      - symbol
+      - side
+      - subaccountId
+      properties:
+        clientOrderId:
+          type: string
+        origClientOrderId:
+          type: string
+        account:
+          type: string
+        symbol:
+          type: string
+        side:
+          $ref: '#/components/schemas/Side'
+        subaccountId:
+          type: integer
+          format: int32
+          minimum: 0
+        origOrderId:
+          type: string
+    HttpNewOrderRequest:
+      x-rust-type: turbo_rpc::api::HttpNewOrderRequest
+      type: object
+      required:
+      - clientOrderId
+      - account
+      - symbol
+      - side
+      - orderType
+      - price
+      - quantity
+      - timeInForce
+      - reduceOnly
+      - subaccountId
+      - tpsl
+      properties:
+        clientOrderId:
+          type: string
+        account:
+          type: string
+        symbol:
+          type: string
+        side:
+          $ref: '#/components/schemas/Side'
+        orderType:
+          $ref: '#/components/schemas/OrderType'
+        price:
+          type: string
+        quantity:
+          type: string
+        timeInForce:
+          $ref: '#/components/schemas/TimeInForce'
+        reduceOnly:
+          type: boolean
+        subaccountId:
+          type: integer
+          format: int32
+          minimum: 0
+        triggerPrice:
+          type: string
+        goodTilTime:
+          type:
+          - string
+          - 'null'
+          format: int64
+          minimum: 0
+        tpsl:
+          $ref: '#/components/schemas/Tpsl'
+        slippageBps:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: |-
+            Optional max slippage for market orders in basis points.
+            If omitted or zero, MC applies the default market-order protection.
+            Custom stop_market slippage is rejected; triggered stop-market
+            orders use MC's default market-order protection.
+          minimum: 0
+    HttpReplaceOrderRequest:
+      x-rust-type: turbo_rpc::api::HttpReplaceOrderRequest
+      type: object
+      required:
+      - clientOrderId
+      - account
+      - symbol
+      - side
+      - orderType
+      - price
+      - quantity
+      - subaccountId
+      - tpsl
+      properties:
+        clientOrderId:
+          type: string
+        originalClientOrderId:
+          type: string
+        account:
+          type: string
+        symbol:
+          type: string
+        side:
+          $ref: '#/components/schemas/Side'
+        orderType:
+          $ref: '#/components/schemas/OrderType'
+        price:
+          type: string
+        quantity:
+          type: string
+        subaccountId:
+          type: integer
+          format: int32
+          minimum: 0
+        originalOrderId:
+          type: string
+        triggerPrice:
+          type: string
+        goodTilTime:
+          type:
+          - string
+          - 'null'
+          format: int64
+          minimum: 0
+        reduceOnly:
+          type: boolean
+        tpsl:
+          $ref: '#/components/schemas/Tpsl'
+    Market:
+      x-rust-type: turbo_rpc::api::Market
+      type: object
+      required:
+      - symbol
+      - marketType
+      - price
+      - volume24hrUsd
+      - priceChange24hr
+      properties:
+        symbol:
+          type: string
+        marketType:
+          $ref: '#/components/schemas/MarketType'
+        address:
+          type: string
+        baseToken:
+          $ref: '#/components/schemas/Token'
+        quoteToken:
+          $ref: '#/components/schemas/Token'
+        price:
+          type: number
+          format: double
+        volume24hrUsd:
+          type: number
+          format: double
+        priceChange24hr:
+          type: number
+          format: double
+        createdAt:
+          type: string
+          format: int64
+        marketConfig:
+          $ref: '#/components/schemas/MarketConfigPerps'
+    MarketConfigPerps:
+      x-rust-type: turbo_rpc::api::MarketConfigPerps
+      type: object
+      required:
+      - maintenanceMarginRatio
+      - lotSize
+      - tickSize
+      - maxLeverage
+      - minOrderSize
+      - lastFundingTime
+      - fundingInterval
+      - onlyIso
+      - imRate
+      - mmRate
+      properties:
+        maintenanceMarginRatio:
+          type: number
+          format: double
+        lotSize:
+          type: string
+        tickSize:
+          type: string
+        maxLeverage:
+          type: integer
+          format: int32
+        minOrderSize:
+          type: string
+        lastFundingTime:
+          type: string
+          format: int64
+        fundingInterval:
+          type: string
+          format: int64
+        onlyIso:
+          type: boolean
+        imRate:
+          type: number
+          format: double
+        mmRate:
+          type: number
+          format: double
+    MarketDataPerps:
+      x-rust-type: turbo_rpc::api::MarketDataPerps
+      type: object
+      required:
+      - openInterest
+      - markPrice
+      - indexPrice
+      - midPrice
+      - fundingRate
+      properties:
+        openInterest:
+          type: number
+          format: double
+        markPrice:
+          type: number
+          format: double
+        indexPrice:
+          type: number
+          format: double
+        midPrice:
+          type: number
+          format: double
+        fundingRate:
+          type: number
+          format: double
+        bestBid:
+          type:
+          - number
+          - 'null'
+          format: double
+        bestAsk:
+          type:
+          - number
+          - 'null'
+          format: double
+        bestBidVolume:
+          type:
+          - number
+          - 'null'
+          format: double
+        bestAskVolume:
+          type:
+          - number
+          - 'null'
+          format: double
+        impactPrice:
+          type:
+          - number
+          - 'null'
+          format: double
+        volume24h:
+          type:
+          - number
+          - 'null'
+          format: double
+        prevDayPrice:
+          type:
+          - number
+          - 'null'
+          format: double
+    MarketContextSnapshot:
+      type: object
+      required:
+      - timestamp
+      properties:
+        timestamp:
+          type: string
+          format: int64
+        markPrice:
+          type:
+          - number
+          - 'null'
+          format: double
+        indexPrice:
+          type:
+          - number
+          - 'null'
+          format: double
+        midPrice:
+          type:
+          - number
+          - 'null'
+          format: double
+        openInterest:
+          type:
+          - number
+          - 'null'
+          format: double
+        fundingRate:
+          type:
+          - number
+          - 'null'
+          format: double
+        premium:
+          type:
+          - number
+          - 'null'
+          format: double
+        impactBidPrice:
+          type:
+          - number
+          - 'null'
+          format: double
+        impactAskPrice:
+          type:
+          - number
+          - 'null'
+          format: double
+        volume24h:
+          type:
+          - number
+          - 'null'
+          format: double
+        prevDayPrice:
+          type:
+          - number
+          - 'null'
+          format: double
+    MarketSortBy:
+      x-rust-type: turbo_rpc::api::MarketSortBy
+      type: string
+      enum:
+      - market_cap
+      - created_at
+      - volume
+    MarketType:
+      x-rust-type: turbo_rpc::api::MarketType
+      type: string
+      enum:
+      - perp
+    OrderResult:
+      x-rust-type: turbo_rpc::api::OrderResult
+      type: object
+      required:
+      - orderId
+      - clientOrderId
+      - status
+      - timestamp
+      - rejectReason
+      properties:
+        orderId:
+          type: string
+          format: int64
+          minimum: 0
+        clientOrderId:
+          type: string
+          format: int64
+          minimum: 0
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        timestamp:
+          type: string
+          format: int64
+        error:
+          type:
+          - string
+          - 'null'
+        rejectReason:
+          $ref: '#/components/schemas/OrderRejectReason'
+    PerpOpenOrder:
+      x-rust-type: turbo_rpc::api::PerpOpenOrder
+      type: object
+      required:
+      - marketSymbol
+      - timestamp
+      - currentSize
+      - originalSize
+      - isReduceOnly
+      - side
+      - orderValue
+      - orderId
+      - limitPrice
+      - orderType
+      properties:
+        marketSymbol:
+          type: string
+        timestamp:
+          type: string
+          format: int64
+        currentSize:
+          type: string
+        originalSize:
+          type: string
+        isReduceOnly:
+          type: boolean
+        side:
+          $ref: '#/components/schemas/Side'
+        orderValue:
+          type: string
+        orderId:
+          type: string
+        limitPrice:
+          type: string
+        clientId:
+          type:
+          - string
+          - 'null'
+        orderType:
+          $ref: '#/components/schemas/OrderType'
+        triggerPrice:
+          type: string
+          description: Trigger price for resting stop orders. Absent for regular CLOB orders.
+        tpsl:
+          $ref: '#/components/schemas/Tpsl'
+    PerpOrder:
+      x-rust-type: turbo_rpc::api::PerpOrder
+      type: object
+      required:
+      - marketSymbol
+      - timestamp
+      - orderId
+      - originalSize
+      - side
+      - currentSize
+      - orderValue
+      - price
+      - isReduceOnly
+      - orderType
+      - status
+      - leverage
+      properties:
+        marketSymbol:
+          type: string
+        timestamp:
+          type: string
+          format: int64
+        orderId:
+          type: string
+        originalSize:
+          type: string
+        side:
+          $ref: '#/components/schemas/Side'
+        currentSize:
+          type: string
+        orderValue:
+          type: string
+        price:
+          type: string
+        isReduceOnly:
+          type: boolean
+        orderType:
+          $ref: '#/components/schemas/OrderType'
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        clientId:
+          type:
+          - string
+          - 'null'
+        triggerPrice:
+          type: string
+        tpsl:
+          $ref: '#/components/schemas/Tpsl'
+        leverage:
+          type: string
+          format: int64
+    PnlSnapshot:
+      x-rust-type: turbo_rpc::api::PnlSnapshot
+      type: object
+      required:
+      - timestamp
+      - pnlUsd
+      properties:
+        timestamp:
+          type: string
+          format: int64
+          description: Snapshot time as epoch **milliseconds**.
+        pnlUsd:
+          type: number
+          format: double
+    ReplaceOrdersRequest:
+      type: object
+      required:
+      - orders
+      - nonce
+      - signature
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/HttpReplaceOrderRequest'
+        nonce:
+          type: number
+        signature:
+          type: string
+    ReplaceOrdersResponse:
+      type: object
+      required:
+      - results
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderResult'
+    ServerHealthStatus:
+      x-rust-type: turbo_rpc::api::ServerHealthStatus
+      type: object
+      required:
+      - status
+      - version
+      - uptimeSeconds
+      properties:
+        status:
+          type: string
+        version:
+          type: string
+        uptimeSeconds:
+          type: string
+          format: int64
+    SetLeverageResponse:
+      type: object
+      required:
+      - success
+      - leverage
+      properties:
+        success:
+          type: boolean
+        leverage:
+          type: integer
+          format: int32
+    Token:
+      x-rust-type: turbo_rpc::api::Token
+      type: object
+      required:
+      - symbol
+      - name
+      - decimals
+      - logoUrl
+      - tokenType
+      properties:
+        symbol:
+          type: string
+        name:
+          type: string
+        address:
+          type:
+          - string
+          - 'null'
+        decimals:
+          type: integer
+          format: int32
+          minimum: 0
+        logoUrl:
+          type: string
+        tokenType:
+          $ref: '#/components/schemas/TokenType'
+    TokenBalance:
+      x-rust-type: turbo_rpc::api::TokenBalance
+      type: object
+      required:
+      - totalBalance
+      - balanceUsd
+      - freeCollateral
+      - tradingAllowance
+      properties:
+        token:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/Token'
+        totalBalance:
+          type: number
+          format: double
+        balanceUsd:
+          type: number
+          format: double
+        freeCollateral:
+          type: number
+          format: double
+        tradingAllowance:
+          type: number
+          format: double
+    Trade:
+      x-rust-type: turbo_rpc::api::Trade
+      type: object
+      required:
+      - id
+      - marketSymbol
+      - timestamp
+      - maker
+      - taker
+      - price
+      - size
+      - side
+      - isLiquidation
+      properties:
+        id:
+          type: string
+        marketSymbol:
+          type: string
+        timestamp:
+          type: string
+          format: int64
+          description: |-
+            Fill time as epoch **milliseconds**
+        maker:
+          type: string
+        taker:
+          type: string
+        price:
+          type: string
+        size:
+          type: string
+        side:
+          $ref: '#/components/schemas/Side'
+        makerOrderId:
+          type:
+          - string
+          - 'null'
+        takerOrderId:
+          type:
+          - string
+          - 'null'
+        clientId:
+          type:
+          - string
+          - 'null'
+        direction:
+          oneOf:
+          - type: "null"
+          - $ref: '#/components/schemas/TradeDirection'
+        isLiquidation:
+          type: boolean
+    TwapHistoryEntry:
+      x-rust-type: turbo_rpc::api::TwapHistoryEntry
+      type: object
+      required:
+      - symbol
+      - side
+      - size
+      - executedSize
+      - executedNotional
+      - minutes
+      - reduceOnly
+      - randomize
+      - timestamp
+      - status
+      properties:
+        symbol:
+          type: string
+        side:
+          $ref: '#/components/schemas/Side'
+        size:
+          type: string
+        executedSize:
+          type: string
+        executedNotional:
+          type: string
+        minutes:
+          type: integer
+          format: int32
+          minimum: 0
+        reduceOnly:
+          type: boolean
+        randomize:
+          type: boolean
+        timestamp:
+          type: string
+          format: int64
+          description: TWAP creation time as epoch **milliseconds**.
+        status:
+          $ref: '#/components/schemas/TwapStatus'
+        twapId:
+          type: string
+          format: int64
+    TwapOrderParams:
+      x-rust-type: turbo_rpc::api::TwapOrderParams
+      type: object
+      required:
+      - duration
+      - randomize
+      properties:
+        duration:
+          type: integer
+          format: int32
+          minimum: 5
+          maximum: 1440
+          description: TWAP duration in minutes. Total order size is sliced across this window.
+        randomize:
+          type: boolean
+          description: When true, slice timing and sizes are randomized within the duration window.
+    UserTrade:
+      x-rust-type: turbo_rpc::api::UserTrade
+      type: object
+      required:
+      - id
+      - marketSymbol
+      - price
+      - size
+      - side
+      - direction
+      - timestamp
+      - isLiquidation
+      - leverage
+      properties:
+        id:
+          type: string
+        marketSymbol:
+          type: string
+        price:
+          type: string
+        size:
+          type: string
+        side:
+          $ref: '#/components/schemas/Side'
+        direction:
+          $ref: '#/components/schemas/TradeDirection'
+        timestamp:
+          type: string
+          format: int64
+          description: |-
+            Fill time as epoch **milliseconds**.
+        closedPnl:
+          type:
+          - string
+          - 'null'
+        isLiquidation:
+          type: boolean
+        fee:
+          type:
+          - string
+          - 'null'
+        startPosition:
+          type:
+          - string
+          - 'null'
+        leverage:
+          type: string
+          format: int64
+    VolumeEntry:
+      x-rust-type: turbo_rpc::api::VolumeEntry
+      type: object
+      required:
+      - date
+      - size
+      properties:
+        date:
+          type: string
+        size:
+          type: string

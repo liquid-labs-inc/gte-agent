@@ -12,7 +12,7 @@ These docs are planning documents for future agents working in this repo. They i
 
 This overview is documentation hardening only. It records target direction for future implementation, but it does not authorize implementation work by itself.
 
-Phase 1 is the current pre-MVP target. It turns the stripped OpenCode fork into a runnable, read-only GTE Agent terminal product:
+Phase 1 is complete as of 2026-06-11 (acceptance record: `docs/m_6-acceptance-record.md`). It turned the stripped OpenCode fork into a runnable, read-only GTE Agent terminal product:
 
 - GTE Agent is runnable through the user-facing `gta` command.
 - `gta` launches the TUI, not a marketing shell or a browser app.
@@ -24,13 +24,13 @@ Phase 1 is the current pre-MVP target. It turns the stripped OpenCode fork into 
 
 Read-only in Phase 1 means no state-changing exchange calls. The agent may read public market data and public address-scoped account/portfolio data, and it may analyze that data. It must not submit, cancel, replace, preview, sign, or configure trades.
 
-Milestones 1, 2, and 3 are completed Phase 1 milestones. They narrowed the repo, stabilized the canonical runtime, and added the auth/authority stub contract. Milestones 4, 5, and 6 close Phase 1 by adding the `gta` TUI, read-only GTE data tools and panels, and whole-phase acceptance. There is no production user base and no migration compatibility burden for old OpenCode, V1, workspace, share, or account SQLite chains before MVP.
+All six Phase 1 milestones are complete. Milestones 1, 2, and 3 narrowed the repo, stabilized the canonical runtime, and added the auth/authority stub contract. Milestones 4, 5, and 6 closed Phase 1 by adding the `gta` TUI, read-only GTE data tools and panels, and whole-phase acceptance. There is no production user base and no migration compatibility burden for old OpenCode, V1, workspace, share, or account SQLite chains before MVP.
 
 `gte-agent` may remain as a developer or compatibility CLI alias for now. Phase 1 user-facing docs and acceptance should verify `gta`.
 
 ## Current Stripped Repo Shape
 
-The repo has already been stripped to a smaller Bun monorepo skeleton. Active root workspaces are `packages/core`, `packages/server`, `packages/cli`, `packages/llm`, `packages/plugin`, `packages/sdk/js`, `packages/script`, `packages/http-recorder`, `packages/effect-drizzle-sqlite`, and `packages/effect-sqlite-node`. Milestone 4 adds `packages/tui` (the `gta` TUI) and Milestone 5 adds `packages/gte-ts` (the vendored data SDK) to this list.
+The repo has already been stripped to a smaller Bun monorepo skeleton. Active root workspaces are `packages/core`, `packages/server`, `packages/cli`, `packages/llm`, `packages/plugin`, `packages/sdk/js`, `packages/script`, `packages/http-recorder`, `packages/effect-drizzle-sqlite`, and `packages/effect-sqlite-node`, plus `packages/tui` (the `gta` TUI, added in Milestone 4) and `packages/gte-ts` (the vendored data SDK, added in Milestone 5).
 
 - `packages/core`: the newer Effect-native core. It contains the strongest runtime substrate for GTE Agent: session admission, durable events, typed tools, permission primitives, context epochs, scoped service composition, local SQLite persistence, plugin hooks, provider/model plumbing, and public core exports. It still contains project, filesystem, V1/config compatibility, provider catalog, GitHub Copilot, account, workspace, plugin, skill, and coding-tool assumptions that must be removed, renamed, or explicitly quarantined before MVP.
 - `packages/server`: the newer HTTP API layer. It exposes typed route groups over `packages/core`, but still uses V2 naming and route organization.
@@ -40,7 +40,7 @@ The repo has already been stripped to a smaller Bun monorepo skeleton. Active ro
 - `packages/plugin`: plugin mechanism substrate. The mechanism may be useful later, but inherited defaults must not be active by default.
 - `packages/effect-drizzle-sqlite`, `packages/effect-sqlite-node`, `packages/http-recorder`, and `packages/script`: runtime, persistence, testing, and build support packages.
 
-`packages/opencode` still exists on disk, but it is quarantined reference material only. It is excluded from root workspaces, should not be build-gated, and should not be imported by the active runtime. Its value is limited to mining TUI interaction patterns for a later carve-out.
+`packages/opencode` was deleted in Milestone 6 after all removal criteria were met: its TUI interaction patterns and test-harness patterns (worker-hosted server, `httpapi-exercise` route DSL, `@opentui/core/testing` component tests, `cli-process` subprocess smoke tests) were extracted or deliberately rejected, as recorded in `docs/m_4-opencode-pattern-notes.md`. The package remains available in git history as historical reference.
 
 Removed OpenCode product surfaces include browser app, web/docs product, desktop, Storybook, VS Code extension, hosted console/stats/slack surfaces, localization docs, public sharing product surfaces, and release/deploy automation. Historical OpenCode docs/specs live under `docs/historical-opencode` unless explicitly promoted into GTE Agent planning docs.
 
@@ -171,9 +171,7 @@ The target package should keep only the TUI as a user interface.
 
 The user-facing TUI command is `gta`.
 
-The current interactive surface lives inside `packages/opencode/src/cli`, while the newer `packages/cli` is a server/daemon CLI. The target should be a TUI aligned to the canonical GTE Agent runtime. It may mine the old opencode TUI for interaction patterns, but should not preserve legacy session, API, route, tool, share, sync, server, auth/account, or filesystem assumptions by default.
-
-Keep the TUI experience and interaction patterns. Do not treat the current `packages/opencode` package as a keeper or runtime dependency.
+The TUI lives in `packages/tui` (the `gta` command), aligned to the canonical GTE Agent runtime, while `packages/cli` is the server/daemon CLI. The old opencode TUI was mined for interaction patterns (rewritten, never imported) and the package was deleted in Milestone 6; it carried no legacy session, API, route, tool, share, sync, server, auth/account, or filesystem assumptions into the new TUI.
 
 Phase 1 TUI scope is a minimal GTE Agent workspace:
 
@@ -218,13 +216,16 @@ Its job was not to finish GTE Agent. It was meant to:
 
 Each milestone plan should include an explicit End State section. The End State should describe the expected repository and runnable app state after the milestone so future agents can work toward the same target instead of only following a task list.
 
-Phase 1 is composed of Milestones 1 through 6.
+Phase 1 is composed of Milestones 1 through 6. All are complete; acceptance is recorded in `docs/m_6-acceptance-record.md`.
 
 Completed Phase 1 milestones:
 
 - Milestone 1: Strip To Skeleton. See `docs/m_1-strip-plan.md`.
 - Milestone 2: Runtime Rename And Stabilization. See `docs/m_2-runtime-rename-plan.md`.
 - Milestone 3: GTE Auth And Session Authority. See `docs/m_3-auth-authority-plan.md`.
+- Milestone 4: `gta` TUI. See `docs/m_4-gta-tui-plan.md`.
+- Milestone 5: Read-Only GTE Data Tools. See `docs/m_5-read-only-gte-data-tools-plan.md`.
+- Milestone 6: Phase 1 Acceptance. See `docs/m_6-phase-1-acceptance-plan.md`.
 
 Milestone 2 was canonical runtime rename and stabilization. Its goal was to make the newer runtime the only runtime in practice: cleanly rename OpenCode/V2 identity to GTE Agent, remove legacy V1 and workspace/runtime-context assumptions from active packages, point CLI/API/SDK at the canonical runtime, keep SQLite local/dev persistence working from a clean pre-product baseline, remove legacy routes from the active runtime, and preserve a minimal runnable skeleton that can create sessions, send prompts, stream deterministic model responses, and replay local history.
 
@@ -232,14 +233,8 @@ Milestone 3 was the GTE auth and session authority contract. See `docs/m_3-auth-
 
 The goal is to define the first real GTE boundary: GTE bearer-token validation or introspection, one immutable GTE trading authority per session, universal explicit authority selection during auth-enabled session creation, principal and authority ownership checks on canonical session reads and mutations, and the authority model that future tools must derive from. Trading execution remains out of scope.
 
-Remaining Phase 1 milestones:
+Milestone 4 turned "keep the TUI experience" into an actual `gta` interface against the canonical runtime: a new `packages/tui` workspace built on OpenTUI plus Solid, an in-process worker server, no coding-specific panels/actions/default tools, prompt/session/status ergonomics preserved, the data workspace reserved, and `packages/opencode` interaction and test-harness patterns mined ahead of deletion.
 
-- Milestone 4: `gta` TUI. See `docs/m_4-gta-tui-plan.md`.
-- Milestone 5: Read-Only GTE Data Tools. See `docs/m_5-read-only-gte-data-tools-plan.md`.
-- Milestone 6: Phase 1 Acceptance. See `docs/m_6-phase-1-acceptance-plan.md`.
+Milestone 5 added read-only GTE data tools and TUI panels backed by the vendored `gte-ts`: public market reads, address-scoped public account/portfolio reads, shared symbol/address resolution, live-by-default TUI panels fed over the existing SSE event channel, one-shot agent tools with provenance, and the automated import audit guarding the read-only boundary.
 
-Milestone 4 turns "keep the TUI experience" into an actual `gta` interface against the canonical runtime: a new `packages/tui` workspace built on OpenTUI plus Solid, an in-process worker server, remove coding-specific panels/actions/default tools, keep prompt/session/status ergonomics, reserve the data workspace, and keep `packages/opencode` quarantined as reference-only material whose interaction patterns and test harness patterns are mined before deletion.
-
-Milestone 5 adds read-only GTE data tools and TUI panels backed by the vendored `gte-ts`: public market reads, address-scoped public account/portfolio reads, shared symbol/address resolution, live-by-default TUI panels fed over the existing SSE event channel, and one-shot agent tools with provenance.
-
-Milestone 6 proves Phase 1 end to end: `gta` launches the TUI, sessions and prompt streaming work, data panels and slash commands use the same read-only tool layer as the agent, `GTE_AGENT_GTE_ENV` configures data access, auth remains stubbed, and no hidden trading mutation path is exposed.
+Milestone 6 proved Phase 1 end to end: `gta` launches the TUI, sessions and prompt streaming work, data panels and slash commands use the same read-only tool layer as the agent, `GTE_AGENT_GTE_ENV` configures data access, auth remains stubbed, no hidden trading mutation path is exposed, and `packages/opencode` was deleted after all removal criteria passed. Results and carried-forward limitations are recorded in `docs/m_6-acceptance-record.md`.

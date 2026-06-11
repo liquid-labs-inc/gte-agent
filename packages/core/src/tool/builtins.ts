@@ -6,6 +6,7 @@ import { ApplyPatchTool } from "./apply-patch"
 import { EditTool } from "./edit"
 import { GlobTool } from "./glob"
 import { GrepTool } from "./grep"
+import { GteTools } from "./gte/tools"
 import { QuestionTool } from "./question"
 import { ReadTool } from "./read"
 import { SkillTool } from "./skill"
@@ -33,6 +34,11 @@ export const runtimeScopeLayer = Layer.mergeAll(
   EditTool.layer,
   GlobTool.layer,
   GrepTool.layer,
+  // Read-only GTE data tools bound to the shared env-configured GteData
+  // service. Adds GteData.ConfigError to this layer's error channel on
+  // purpose: an invalid GTE_AGENT_GTE_ENV should fail the composition root
+  // eagerly (fail fast at startup) rather than on the first gte_* call.
+  GteTools.runtimeScopeLayer,
   QuestionTool.layer,
   ReadTool.layer,
   SkillTool.layer,

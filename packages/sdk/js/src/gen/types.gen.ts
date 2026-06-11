@@ -32,6 +32,26 @@ export type SessionCreateRequest = {
   } | null
 }
 
+export type SessionPinnedPanel = {
+  panel:
+    | "book"
+    | "trades"
+    | "candles"
+    | "marketData"
+    | "positions"
+    | "openOrders"
+    | "orders"
+    | "orderHistory"
+    | "balances"
+    | "funding"
+    | "twapHistory"
+    | "leverage"
+    | "accountMetrics"
+    | "liquidations"
+    | "benchMetrics"
+  key: string
+}
+
 export type SessionInfo = {
   id: unknown
   parentID?: unknown
@@ -62,6 +82,9 @@ export type SessionInfo = {
   title: string
   runtimeScope: RuntimeScopeRef
   subpath?: string | null
+  selectedMarket?: string | null
+  trackedAddress?: unknown | null
+  pinnedPanels?: unknown | null
 }
 
 export type SessionCreateResponse = {
@@ -97,6 +120,25 @@ export type SessionsResponse = {
 export type InvalidCursorError = {
   _tag: "InvalidCursorError"
   message: string
+}
+
+export type SessionIntentUpdateRequest = {
+  /**
+   * Canonical market symbol the session is focused on. Omit to keep, null to clear.
+   */
+  selectedMarket?: string | null | null
+  /**
+   * EVM address (0x + 40 hex chars) tracked by the session. Omit to keep, null to clear.
+   */
+  trackedAddress?: unknown | null | null
+  /**
+   * Pinned data panels (at most 8). Omit to keep, null to clear.
+   */
+  pinnedPanels?: unknown | null | null
+}
+
+export type SessionIntentUpdateResponse = {
+  data: SessionInfo
 }
 
 export type SessionNotFoundError = {
@@ -403,12 +445,151 @@ export type UnknownError = {
   ref?: string | null
 }
 
+export type SessionSnapshotCell =
+  | string
+  | number
+  | "NaN"
+  | "Infinity"
+  | "-Infinity"
+  | "Infinity"
+  | "-Infinity"
+  | "NaN"
+  | boolean
+  | null
+
+export type SessionSnapshotRow = {
+  [key: string]: SessionSnapshotCell
+}
+
+export type SessionSnapshotSummary = {
+  title?: string | null
+  fields?: {
+    [key: string]: string
+  } | null
+  rows?: unknown | null
+  note?: string | null
+}
+
+export type SessionSnapshotProvenance = {
+  env: string
+  source: "http" | "ws" | "fallback"
+  timestamp: string
+  symbol?: string | null
+  address?: string | null
+  params?: {
+    [key: string]: unknown
+  } | null
+}
+
+export type SessionSnapshotRecordRequest = {
+  /**
+   * Command or surface that produced the snapshot, e.g. "/book".
+   */
+  command: string
+  panel?:
+    | "book"
+    | "trades"
+    | "candles"
+    | "marketData"
+    | "positions"
+    | "openOrders"
+    | "orders"
+    | "orderHistory"
+    | "balances"
+    | "funding"
+    | "twapHistory"
+    | "leverage"
+    | "accountMetrics"
+    | "liquidations"
+    | "benchMetrics"
+    | null
+  key?: string | null
+  summary: SessionSnapshotSummary
+  provenance: SessionSnapshotProvenance
+}
+
+export type SessionSnapshotRecordResponse = {
+  data: {
+    sessionID: unknown
+    command: string
+    panel?:
+      | "book"
+      | "trades"
+      | "candles"
+      | "marketData"
+      | "positions"
+      | "openOrders"
+      | "orders"
+      | "orderHistory"
+      | "balances"
+      | "funding"
+      | "twapHistory"
+      | "leverage"
+      | "accountMetrics"
+      | "liquidations"
+      | "benchMetrics"
+      | null
+    key?: string | null
+    seq?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN" | null
+  }
+}
+
 export type SessionMessagesResponse = {
   data: Array<SessionPublicMessage>
   cursor: {
     previous?: string | null
     next?: string | null
   }
+}
+
+export type GteEnvResponse = {
+  env: "hyperliquid-dev" | "hyperliquid-prod"
+  source: "http"
+  timestamp: string
+  validEnvs: Array<string>
+}
+
+export type GteDataProvenance = {
+  env: "hyperliquid-dev" | "hyperliquid-prod"
+  source: "http"
+  timestamp: string
+  symbol?: string | null
+  address?: string | null
+  params?: {
+    [key: string]: unknown
+  } | null
+}
+
+export type GteDataSnapshot = {
+  provenance: GteDataProvenance
+  data: unknown
+}
+
+export type ServiceUnavailableError = {
+  _tag: "ServiceUnavailableError"
+  message: string
+  service?: string | null
+}
+
+export type GteDataSymbolResolution =
+  | {
+      outcome: "resolved"
+      symbol: string
+      market: unknown
+    }
+  | {
+      outcome: "ambiguous"
+      query: string
+      candidates: Array<string>
+    }
+  | {
+      outcome: "notFound"
+      query: string
+    }
+
+export type GteResolveSymbolResponse = {
+  provenance: GteDataProvenance
+  data: GteDataSymbolResolution
 }
 
 export type HealthGetData = {
@@ -525,6 +706,45 @@ export type SessionCreateResponses = {
 }
 
 export type SessionCreateResponse2 = SessionCreateResponses[keyof SessionCreateResponses]
+
+export type SessionIntentUpdateData = {
+  body: SessionIntentUpdateRequest
+  path: {
+    sessionID: unknown
+  }
+  query?: never
+  url: "/api/session/{sessionID}/intent"
+}
+
+export type SessionIntentUpdateErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ForbiddenError
+   */
+  403: ForbiddenError
+  /**
+   * SessionNotFoundError
+   */
+  404: SessionNotFoundError
+}
+
+export type SessionIntentUpdateError = SessionIntentUpdateErrors[keyof SessionIntentUpdateErrors]
+
+export type SessionIntentUpdateResponses = {
+  /**
+   * SessionIntentUpdateResponse
+   */
+  200: SessionIntentUpdateResponse
+}
+
+export type SessionIntentUpdateResponse2 = SessionIntentUpdateResponses[keyof SessionIntentUpdateResponses]
 
 export type SessionEventsData = {
   body?: never
@@ -662,6 +882,45 @@ export type SessionContextResponses = {
 
 export type SessionContextResponse = SessionContextResponses[keyof SessionContextResponses]
 
+export type SessionSnapshotRecordData = {
+  body: SessionSnapshotRecordRequest
+  path: {
+    sessionID: unknown
+  }
+  query?: never
+  url: "/api/session/{sessionID}/snapshot"
+}
+
+export type SessionSnapshotRecordErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ForbiddenError
+   */
+  403: ForbiddenError
+  /**
+   * SessionNotFoundError
+   */
+  404: SessionNotFoundError
+}
+
+export type SessionSnapshotRecordError = SessionSnapshotRecordErrors[keyof SessionSnapshotRecordErrors]
+
+export type SessionSnapshotRecordResponses = {
+  /**
+   * SessionSnapshotRecordResponse
+   */
+  200: SessionSnapshotRecordResponse
+}
+
+export type SessionSnapshotRecordResponse2 = SessionSnapshotRecordResponses[keyof SessionSnapshotRecordResponses]
+
 export type SessionMessagesData = {
   body?: never
   path: {
@@ -714,3 +973,954 @@ export type SessionMessagesResponses = {
 }
 
 export type SessionMessagesResponse2 = SessionMessagesResponses[keyof SessionMessagesResponses]
+
+export type GteEnvData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/api/gte/env"
+}
+
+export type GteEnvErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+}
+
+export type GteEnvError = GteEnvErrors[keyof GteEnvErrors]
+
+export type GteEnvResponses = {
+  /**
+   * GteEnvResponse
+   */
+  200: GteEnvResponse
+}
+
+export type GteEnvResponse2 = GteEnvResponses[keyof GteEnvResponses]
+
+export type GteDataHealthData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/api/gte/health"
+}
+
+export type GteDataHealthErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataHealthError = GteDataHealthErrors[keyof GteDataHealthErrors]
+
+export type GteDataHealthResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataHealthResponse = GteDataHealthResponses[keyof GteDataHealthResponses]
+
+export type GteDataMarketsData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Optional search query. Omit to list markets.
+     */
+    query?: string | null
+    limit?: string | null
+    cursor?: string | null
+  }
+  url: "/api/gte/markets"
+}
+
+export type GteDataMarketsErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataMarketsError = GteDataMarketsErrors[keyof GteDataMarketsErrors]
+
+export type GteDataMarketsResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataMarketsResponse = GteDataMarketsResponses[keyof GteDataMarketsResponses]
+
+export type GteResolveSymbolData = {
+  body?: never
+  path?: never
+  query: {
+    q: string
+  }
+  url: "/api/gte/resolve-symbol"
+}
+
+export type GteResolveSymbolErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteResolveSymbolError = GteResolveSymbolErrors[keyof GteResolveSymbolErrors]
+
+export type GteResolveSymbolResponses = {
+  /**
+   * GteResolveSymbolResponse
+   */
+  200: GteResolveSymbolResponse
+}
+
+export type GteResolveSymbolResponse2 = GteResolveSymbolResponses[keyof GteResolveSymbolResponses]
+
+export type GteDataMarketData = {
+  body?: never
+  path: {
+    symbol: string
+  }
+  query?: never
+  url: "/api/gte/market/{symbol}"
+}
+
+export type GteDataMarketErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataMarketError = GteDataMarketErrors[keyof GteDataMarketErrors]
+
+export type GteDataMarketResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataMarketResponse = GteDataMarketResponses[keyof GteDataMarketResponses]
+
+export type GteDataMarketDataData = {
+  body?: never
+  path: {
+    symbol: string
+  }
+  query?: never
+  url: "/api/gte/market/{symbol}/data"
+}
+
+export type GteDataMarketDataErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataMarketDataError = GteDataMarketDataErrors[keyof GteDataMarketDataErrors]
+
+export type GteDataMarketDataResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataMarketDataResponse = GteDataMarketDataResponses[keyof GteDataMarketDataResponses]
+
+export type GteDataBookData = {
+  body?: never
+  path: {
+    symbol: string
+  }
+  query?: {
+    limit?: string | null
+  }
+  url: "/api/gte/market/{symbol}/book"
+}
+
+export type GteDataBookErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataBookError = GteDataBookErrors[keyof GteDataBookErrors]
+
+export type GteDataBookResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataBookResponse = GteDataBookResponses[keyof GteDataBookResponses]
+
+export type GteDataTradesData = {
+  body?: never
+  path: {
+    symbol: string
+  }
+  query?: {
+    limit?: string | null
+    cursor?: string | null
+  }
+  url: "/api/gte/market/{symbol}/trades"
+}
+
+export type GteDataTradesErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataTradesError = GteDataTradesErrors[keyof GteDataTradesErrors]
+
+export type GteDataTradesResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataTradesResponse = GteDataTradesResponses[keyof GteDataTradesResponses]
+
+export type GteDataCandlesData = {
+  body?: never
+  path: {
+    symbol: string
+  }
+  query?: {
+    interval?: "1m" | "2m" | "3m" | "5m" | "10m" | "15m" | "20m" | "30m" | "1h" | "4h" | "1d" | "1w" | null
+    from?: string | null
+    to?: string | null
+    limit?: string | null
+  }
+  url: "/api/gte/market/{symbol}/candles"
+}
+
+export type GteDataCandlesErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataCandlesError = GteDataCandlesErrors[keyof GteDataCandlesErrors]
+
+export type GteDataCandlesResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataCandlesResponse = GteDataCandlesResponses[keyof GteDataCandlesResponses]
+
+export type GteDataContextData = {
+  body?: never
+  path: {
+    symbol: string
+  }
+  query?: {
+    from?: string | null
+    to?: string | null
+    cursor?: string | null
+    limit?: string | null
+  }
+  url: "/api/gte/market/{symbol}/context"
+}
+
+export type GteDataContextErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataContextError = GteDataContextErrors[keyof GteDataContextErrors]
+
+export type GteDataContextResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataContextResponse = GteDataContextResponses[keyof GteDataContextResponses]
+
+export type GteQuoteData = {
+  body?: never
+  path: {
+    symbol: string
+  }
+  query: {
+    side: "buy" | "sell"
+    baseSize?: string | null
+    quoteSize?: string | null
+  }
+  url: "/api/gte/market/{symbol}/quote"
+}
+
+export type GteQuoteErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteQuoteError = GteQuoteErrors[keyof GteQuoteErrors]
+
+export type GteQuoteResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteQuoteResponse = GteQuoteResponses[keyof GteQuoteResponses]
+
+export type GteDataPositionsData = {
+  body?: never
+  path: {
+    address: string
+  }
+  query?: {
+    /**
+     * Optional market symbol filter; resolved to the canonical GTE symbol when provided.
+     */
+    symbol?: string | null
+    subaccountId?: string | null
+    cursor?: string | null
+    limit?: string | null
+  }
+  url: "/api/gte/address/{address}/positions"
+}
+
+export type GteDataPositionsErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataPositionsError = GteDataPositionsErrors[keyof GteDataPositionsErrors]
+
+export type GteDataPositionsResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataPositionsResponse = GteDataPositionsResponses[keyof GteDataPositionsResponses]
+
+export type GteDataOpenOrdersData = {
+  body?: never
+  path: {
+    address: string
+  }
+  query?: {
+    /**
+     * Optional market symbol filter; resolved to the canonical GTE symbol when provided.
+     */
+    symbol?: string | null
+    subaccountId?: string | null
+    cursor?: string | null
+    limit?: string | null
+  }
+  url: "/api/gte/address/{address}/open-orders"
+}
+
+export type GteDataOpenOrdersErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataOpenOrdersError = GteDataOpenOrdersErrors[keyof GteDataOpenOrdersErrors]
+
+export type GteDataOpenOrdersResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataOpenOrdersResponse = GteDataOpenOrdersResponses[keyof GteDataOpenOrdersResponses]
+
+export type GteDataOrdersData = {
+  body?: never
+  path: {
+    address: string
+  }
+  query?: {
+    /**
+     * Optional market symbol filter; resolved to the canonical GTE symbol when provided.
+     */
+    symbol?: string | null
+    cursor?: string | null
+    limit?: string | null
+  }
+  url: "/api/gte/address/{address}/orders"
+}
+
+export type GteDataOrdersErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataOrdersError = GteDataOrdersErrors[keyof GteDataOrdersErrors]
+
+export type GteDataOrdersResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataOrdersResponse = GteDataOrdersResponses[keyof GteDataOrdersResponses]
+
+export type GteDataTradeHistoryData = {
+  body?: never
+  path: {
+    address: string
+  }
+  query?: {
+    /**
+     * Optional market symbol filter; resolved to the canonical GTE symbol when provided.
+     */
+    symbol?: string | null
+    startTime?: string | null
+    endTime?: string | null
+    cursor?: string | null
+    limit?: string | null
+  }
+  url: "/api/gte/address/{address}/trade-history"
+}
+
+export type GteDataTradeHistoryErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataTradeHistoryError = GteDataTradeHistoryErrors[keyof GteDataTradeHistoryErrors]
+
+export type GteDataTradeHistoryResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataTradeHistoryResponse = GteDataTradeHistoryResponses[keyof GteDataTradeHistoryResponses]
+
+export type GteDataBalancesData = {
+  body?: never
+  path: {
+    address: string
+  }
+  query?: never
+  url: "/api/gte/address/{address}/balances"
+}
+
+export type GteDataBalancesErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataBalancesError = GteDataBalancesErrors[keyof GteDataBalancesErrors]
+
+export type GteDataBalancesResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataBalancesResponse = GteDataBalancesResponses[keyof GteDataBalancesResponses]
+
+export type GteDataBalanceHistoryData = {
+  body?: never
+  path: {
+    address: string
+  }
+  query?: {
+    from?: string | null
+    to?: string | null
+  }
+  url: "/api/gte/address/{address}/balance-history"
+}
+
+export type GteDataBalanceHistoryErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataBalanceHistoryError = GteDataBalanceHistoryErrors[keyof GteDataBalanceHistoryErrors]
+
+export type GteDataBalanceHistoryResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataBalanceHistoryResponse = GteDataBalanceHistoryResponses[keyof GteDataBalanceHistoryResponses]
+
+export type GteDataPnlData = {
+  body?: never
+  path: {
+    address: string
+  }
+  query?: {
+    from?: string | null
+    to?: string | null
+  }
+  url: "/api/gte/address/{address}/pnl"
+}
+
+export type GteDataPnlErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataPnlError = GteDataPnlErrors[keyof GteDataPnlErrors]
+
+export type GteDataPnlResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataPnlResponse = GteDataPnlResponses[keyof GteDataPnlResponses]
+
+export type GteDataFundingData = {
+  body?: never
+  path: {
+    address: string
+  }
+  query?: {
+    /**
+     * Optional market symbol filter; resolved to the canonical GTE symbol when provided.
+     */
+    symbol?: string | null
+    cursor?: string | null
+    limit?: string | null
+  }
+  url: "/api/gte/address/{address}/funding"
+}
+
+export type GteDataFundingErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataFundingError = GteDataFundingErrors[keyof GteDataFundingErrors]
+
+export type GteDataFundingResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataFundingResponse = GteDataFundingResponses[keyof GteDataFundingResponses]
+
+export type GteDataAccountData = {
+  body?: never
+  path: {
+    address: string
+  }
+  query?: {
+    subaccountId?: string | null
+  }
+  url: "/api/gte/address/{address}/account"
+}
+
+export type GteDataAccountErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataAccountError = GteDataAccountErrors[keyof GteDataAccountErrors]
+
+export type GteDataAccountResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataAccountResponse = GteDataAccountResponses[keyof GteDataAccountResponses]
+
+export type GteDataAllowanceData = {
+  body?: never
+  path: {
+    address: string
+  }
+  query: {
+    symbol: string
+    subaccountId?: string | null
+  }
+  url: "/api/gte/address/{address}/allowance"
+}
+
+export type GteDataAllowanceErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataAllowanceError = GteDataAllowanceErrors[keyof GteDataAllowanceErrors]
+
+export type GteDataAllowanceResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataAllowanceResponse = GteDataAllowanceResponses[keyof GteDataAllowanceResponses]
+
+export type GteDataLeverageData = {
+  body?: never
+  path: {
+    address: string
+  }
+  query: {
+    symbol: string
+    subaccountId?: string | null
+  }
+  url: "/api/gte/address/{address}/leverage"
+}
+
+export type GteDataLeverageErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataLeverageError = GteDataLeverageErrors[keyof GteDataLeverageErrors]
+
+export type GteDataLeverageResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataLeverageResponse = GteDataLeverageResponses[keyof GteDataLeverageResponses]
+
+export type GteDataFeesData = {
+  body?: never
+  path: {
+    address: string
+  }
+  query?: never
+  url: "/api/gte/address/{address}/fees"
+}
+
+export type GteDataFeesErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataFeesError = GteDataFeesErrors[keyof GteDataFeesErrors]
+
+export type GteDataFeesResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataFeesResponse = GteDataFeesResponses[keyof GteDataFeesResponses]
+
+export type GteDataTwapHistoryData = {
+  body?: never
+  path: {
+    address: string
+  }
+  query?: {
+    /**
+     * Optional market symbol filter; resolved to the canonical GTE symbol when provided.
+     */
+    symbol?: string | null
+    cursor?: string | null
+    limit?: string | null
+  }
+  url: "/api/gte/address/{address}/twap-history"
+}
+
+export type GteDataTwapHistoryErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataTwapHistoryError = GteDataTwapHistoryErrors[keyof GteDataTwapHistoryErrors]
+
+export type GteDataTwapHistoryResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataTwapHistoryResponse = GteDataTwapHistoryResponses[keyof GteDataTwapHistoryResponses]
+
+export type GteDataNextSubaccountData = {
+  body?: never
+  path: {
+    address: string
+  }
+  query?: never
+  url: "/api/gte/address/{address}/next-subaccount"
+}
+
+export type GteDataNextSubaccountErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type GteDataNextSubaccountError = GteDataNextSubaccountErrors[keyof GteDataNextSubaccountErrors]
+
+export type GteDataNextSubaccountResponses = {
+  /**
+   * GteData.Snapshot
+   */
+  200: GteDataSnapshot
+}
+
+export type GteDataNextSubaccountResponse = GteDataNextSubaccountResponses[keyof GteDataNextSubaccountResponses]

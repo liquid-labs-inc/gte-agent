@@ -32,6 +32,9 @@ function sessionRow(info: SessionSchema.Info): typeof SessionTable.$inferInsert 
     title: info.title,
     agent: info.agent,
     model: info.model,
+    selected_market: info.selectedMarket,
+    tracked_address: info.trackedAddress,
+    pinned_panels: info.pinnedPanels,
     version: "gte-agent",
     cost: info.cost,
     tokens_input: info.tokens.input,
@@ -178,6 +181,19 @@ export const layer = Layer.effectDiscard(
           .pipe(Effect.orDie)
         if (!stored) return yield* Effect.die(new SessionAlreadyProjected())
       }),
+    )
+    yield* events.project(SessionEvent.IntentUpdated, (event) =>
+      db
+        .update(SessionTable)
+        .set({
+          selected_market: event.data.selectedMarket ?? null,
+          tracked_address: event.data.trackedAddress ?? null,
+          pinned_panels: event.data.pinnedPanels ?? null,
+          time_updated: DateTime.toEpochMillis(event.data.timestamp),
+        })
+        .where(eq(SessionTable.id, event.data.sessionID))
+        .run()
+        .pipe(Effect.orDie),
     )
     yield* events.project(SessionEvent.Moved, (event) =>
       Effect.gen(function* () {

@@ -11,6 +11,7 @@ import { Global } from "./global"
 import { Permission } from "./permission"
 import { ToolRegistry } from "./tool/registry"
 import { ApplicationTools } from "./tool/application-tools"
+import { GteTools } from "./tool/gte/tools"
 
 export class RuntimeScopeServiceMap extends LayerMap.Service<RuntimeScopeServiceMap>()(
   "@gte-agent/RuntimeScopeServiceMap",
@@ -28,6 +29,7 @@ export class RuntimeScopeServiceMap extends LayerMap.Service<RuntimeScopeService
         forSession: () => Effect.succeed([]),
       }),
     )
+    const registry = ToolRegistry.layer.pipe(Layer.provide(permission))
     const services = Layer.mergeAll(
       runtimeScope,
       Policy.runtimeScopeLayer,
@@ -35,7 +37,15 @@ export class RuntimeScopeServiceMap extends LayerMap.Service<RuntimeScopeService
       Plugin.runtimeScopeLayer,
       Catalog.runtimeScopeLayer,
       permission,
-      ToolRegistry.layer.pipe(Layer.provide(permission)),
+      registry,
+      // Read-only GTE data tools (gte_*) registered against this scope's
+      // registry. GteData config (GTE_AGENT_GTE_ENV, default hyperliquid-dev)
+      // resolves eagerly and construction is network-free; an invalid env
+      // dies here with the valid-keys ConfigError message at scope creation
+      // instead of on the first tool call. SessionStore is not part of this
+      // scope, so the tracked-address fallback stays inert and address-scoped
+      // tools require an explicit address until the composition provides it.
+      GteTools.runtimeScopeLayer.pipe(Layer.provide(registry), Layer.orDie),
     ).pipe(Layer.provideMerge(runtimeScope))
     return services.pipe(Layer.fresh)
   },
