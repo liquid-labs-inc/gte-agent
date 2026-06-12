@@ -7,6 +7,7 @@ import { SessionSchema } from "@gte-agent/core/session/schema"
 import { WorkflowEvent } from "@gte-agent/core/workflow/event"
 import { WorkflowExecutor } from "@gte-agent/core/workflow/executor"
 import { WorkflowRuntime } from "@gte-agent/core/workflow/runtime"
+import { WorkflowSaved } from "@gte-agent/core/workflow/saved"
 import { WorkflowSchema } from "@gte-agent/core/workflow/schema"
 import { tmpdir } from "./fixture/tmpdir"
 import { it } from "./lib/effect"
@@ -466,6 +467,52 @@ describe("WorkflowRuntime", () => {
         expect(last?.result).toBe("hello:ok")
       }),
     ),
+  )
+
+  it.live("runs the bundled deep-research script to completion despite malformed output and a dropped verifier", () =>
+    Effect.gen(function* () {
+      // The planner returns prose wrapping a JSON array with trailing text (the
+      // non-greedy bound must still parse it), the "broken" angle's finding
+      // returns garbage (contributes no claims, never throws), and the first
+      // verifier is always stopped (must count as UNCLEAR, not fail the phase).
+      const executor: WorkflowExecutor.Interface["execute"] = (request) =>
+        Effect.suspend(() => {
+          if (request.phase === "plan")
+            return Effect.succeed({
+              text: 'Here are the angles: ["funding angle", "broken angle"] — hope that helps.',
+              tokens: { input: 1, output: 1, reasoning: 0 },
+            })
+          if (request.phase === "research") {
+            const text = request.prompt.includes("broken angle")
+              ? "totally malformed not-json {"
+              : '[{ "claim": "ETH funding is positive", "source": "gte_funding @ 2026-06-12T00:00:00Z" }]'
+            return Effect.succeed({ text, tokens: { input: 1, output: 1, reasoning: 0 } })
+          }
+          if (request.phase === "cross-check") {
+            if (request.prompt.includes("verifier #1"))
+              return Effect.fail(new WorkflowExecutor.ExecutionError({ message: "verifier stopped" }))
+            return Effect.succeed({ text: "SUPPORTED matches the snapshot", tokens: { input: 1, output: 1, reasoning: 0 } })
+          }
+          return Effect.succeed({ text: "synthesized answer", tokens: { input: 1, output: 1, reasoning: 0 } })
+        })
+      yield* harness(executor, () =>
+        Effect.gen(function* () {
+          const runtime = yield* WorkflowRuntime.Service
+          const started = yield* runtime.start({
+            sessionID,
+            name: "deep-research",
+            script: WorkflowSaved.bundled().script,
+            args: { question: "what is ETH funding doing across perps" },
+          })
+          const finished = yield* runtime.wait(started.id)
+          // The run survives the malformed planner, the broken finding, and the
+          // stopped verifier — the second verifier's SUPPORTED vote carries the
+          // claim through to the synthesized answer.
+          expect(finished?.status).toBe("completed")
+          expect(finished?.result).toBe("synthesized answer")
+        }),
+      )
+    }),
   )
 
   it.live("lists runs per session, newest first", () =>

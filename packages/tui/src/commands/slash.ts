@@ -36,6 +36,17 @@ export { EFFORT_TIERS, type EffortTier } from "../state/effort"
 export const WORKFLOW_PROMPT_PREFIX =
   "ultrathink — use the workflow tool to fan this task out across bounded subagents when it benefits from parallel research, scaling the fan-out to the task. Task:"
 
+/**
+ * Instruction wrapped onto a `/deep-research <question>` prompt (SCOPE-B). It
+ * directs the model to run the bundled `deep-research` workflow through the
+ * `workflow` tool, passing the user's text as the research question — a
+ * multi-angle fan-out with a cross-check phase that drops claims failing
+ * verification. Leads with the `ultrathink` keyword so the orchestration
+ * instruction is in context when the tool is invoked.
+ */
+export const DEEP_RESEARCH_PROMPT_PREFIX =
+  'ultrathink — run the bundled "deep-research" workflow using the workflow tool, passing this question as the research question (args). It fans research angles out across subagents over the read-only gte_* data, cross-checks every claim, and synthesizes only the survivors. Research question:'
+
 export type ParsedCommand = { readonly name: string; readonly args: readonly string[] }
 
 /** Returns undefined when the text is not a slash command. */
@@ -121,6 +132,7 @@ export const SLASH_COMMANDS: readonly CommandSpec[] = [
   { name: "workflows", usage: "/workflows", kind: "misc" },
   { name: "effort", usage: "/effort <low|medium|high|xhigh|max|ultrathink>", kind: "misc" },
   { name: "workflow", usage: "/workflow <task>", kind: "misc" },
+  { name: "deep-research", usage: "/deep-research <market or asset question>", kind: "misc" },
   { name: "health", usage: "/health", kind: "misc" },
   { name: "bench-metrics", usage: "/bench-metrics", kind: "misc" },
   { name: "track", usage: "/track <address>|clear", kind: "misc" },
@@ -458,6 +470,13 @@ async function run(spec: CommandSpec, args: readonly string[], ctx: CommandConte
       if (task.length === 0) return ctx.error(`Usage: ${spec.usage}`)
       if (await workflowsDisabled(ctx)) return ctx.error("workflows are disabled")
       ctx.prompt(`${WORKFLOW_PROMPT_PREFIX} ${task}`)
+      return
+    }
+    case "deep-research": {
+      const question = args.join(" ").trim()
+      if (question.length === 0) return ctx.error(`Usage: ${spec.usage}`)
+      if (await workflowsDisabled(ctx)) return ctx.error("workflows are disabled")
+      ctx.prompt(`${DEEP_RESEARCH_PROMPT_PREFIX} ${question}`)
       return
     }
     case "health":

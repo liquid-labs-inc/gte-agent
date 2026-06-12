@@ -448,3 +448,29 @@ describe("/workflow", () => {
     expect(harness.errors).toEqual(["workflows are disabled"])
   })
 })
+
+describe("/deep-research", () => {
+  test("injects an instruction to run the bundled deep-research workflow with the question", async () => {
+    const harness = makeCtx()
+    await run("/deep-research what is ETH funding doing across perps", harness)
+    expect(harness.errors).toEqual([])
+    expect(harness.prompts.length).toBe(1)
+    expect(harness.prompts[0]).toContain("workflow tool")
+    expect(harness.prompts[0]).toContain("deep-research")
+    expect(harness.prompts[0]).toContain("what is ETH funding doing across perps")
+  })
+
+  test("without a question reports usage and sends nothing", async () => {
+    const harness = makeCtx()
+    await run("/deep-research", harness)
+    expect(harness.prompts).toEqual([])
+    expect(harness.errors[0]).toContain("Usage:")
+  })
+
+  test("is gated on the kill switch: disabled workflows report and send nothing", async () => {
+    const harness = makeCtx({ workflowsDisabled: true })
+    await run("/deep-research what is ETH funding doing", harness)
+    expect(harness.prompts).toEqual([])
+    expect(harness.errors).toEqual(["workflows are disabled"])
+  })
+})

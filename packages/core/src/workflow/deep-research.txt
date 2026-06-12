@@ -27,12 +27,11 @@ const planned = await phase("plan", () =>
   }),
 )
 
+// Tolerate malformed planner output: fall back to the question itself as the
+// single angle rather than dying on a bad/absent JSON array.
 let angles = [question]
-const plannedMatch = planned.text.match(/\[[\s\S]*\]/)
-if (plannedMatch) {
-  const parsed = JSON.parse(plannedMatch[0])
-  if (Array.isArray(parsed) && parsed.length > 0) angles = parsed
-}
+const plannedArray = parseJsonArray(planned.text)
+if (plannedArray && plannedArray.length > 0) angles = plannedArray
 log(`researching ${angles.length} angles`)
 
 const findings = await phase("research", () =>
@@ -59,12 +58,12 @@ const findings = await phase("research", () =>
   ),
 )
 
+// A finding that returned no parseable array contributes no claims but never
+// fails the phase — one bad agent should not lose the rest of the research.
 const claims = []
 for (const finding of findings) {
-  const findingMatch = finding.text.match(/\[[\s\S]*\]/)
-  if (!findingMatch) continue
-  const parsed = JSON.parse(findingMatch[0])
-  if (!Array.isArray(parsed)) continue
+  const parsed = parseJsonArray(finding.text)
+  if (!parsed) continue
   for (const item of parsed) {
     if (item && typeof item.claim === "string") claims.push({ claim: item.claim, source: item.source || "" })
   }
@@ -78,20 +77,28 @@ const votes = await phase("cross-check", () =>
     (item) =>
       map(
         Array.from({ length: VERIFIERS }, (_, i) => i),
-        (i) =>
-          agent({
-            prompt: [
-              `Independently verify this data claim about GTE markets (verifier #${i + 1}):`,
-              `CLAIM: ${item.claim}`,
-              `STATED SOURCE: ${item.source}`,
-              ``,
-              `Re-fetch the relevant gte_* snapshot(s) yourself and check whether the claim is accurate and`,
-              `currently supported by the data. Treat stale or contradicted figures as not supported.`,
-              `Respond with ONLY one word on the first line: SUPPORTED, REFUTED, or UNCLEAR,`,
-              `then a one-sentence justification on the second line.`,
-            ].join("\n"),
-            type: "general",
-          }),
+        async (i) => {
+          // A verifier that is stopped or fails counts as UNCLEAR, never as a
+          // run-ending throw — one dropped agent must not lose the whole run.
+          try {
+            const vote = await agent({
+              prompt: [
+                `Independently verify this data claim about GTE markets (verifier #${i + 1}):`,
+                `CLAIM: ${item.claim}`,
+                `STATED SOURCE: ${item.source}`,
+                ``,
+                `Re-fetch the relevant gte_* snapshot(s) yourself and check whether the claim is accurate and`,
+                `currently supported by the data. Treat stale or contradicted figures as not supported.`,
+                `Respond with ONLY one word on the first line: SUPPORTED, REFUTED, or UNCLEAR,`,
+                `then a one-sentence justification on the second line.`,
+              ].join("\n"),
+              type: "general",
+            })
+            return vote.text
+          } catch {
+            return "UNCLEAR verifier unavailable"
+          }
+        },
         { concurrency: VERIFIERS },
       ),
     { concurrency: 3 },
@@ -100,7 +107,7 @@ const votes = await phase("cross-check", () =>
 
 const surviving = []
 for (let i = 0; i < claims.length; i++) {
-  const verdicts = votes[i].map((vote) => (vote.text.trim().split(/\s/)[0] || "").toUpperCase())
+  const verdicts = votes[i].map((text) => (text.trim().split(/\s/)[0] || "").toUpperCase())
   const supported = verdicts.filter((verdict) => verdict.startsWith("SUPPORTED")).length
   const refuted = verdicts.filter((verdict) => verdict.startsWith("REFUTED")).length
   if (supported > refuted) surviving.push(claims[i])
@@ -128,3 +135,20 @@ const report = await phase("synthesis", () =>
 )
 
 return report.text
+
+// Extracts the first JSON array from a model reply, tolerating prose around it
+// and malformed JSON. Bounds the match by the last "]" rather than a greedy
+// [\s\S]* (which would swallow trailing prose), and never throws — a bad parse
+// yields undefined so the caller falls back instead of failing the run.
+function parseJsonArray(text) {
+  if (typeof text !== "string") return undefined
+  const open = text.indexOf("[")
+  const close = text.lastIndexOf("]")
+  if (open < 0 || close <= open) return undefined
+  try {
+    const parsed = JSON.parse(text.slice(open, close + 1))
+    return Array.isArray(parsed) ? parsed : undefined
+  } catch {
+    return undefined
+  }
+}
