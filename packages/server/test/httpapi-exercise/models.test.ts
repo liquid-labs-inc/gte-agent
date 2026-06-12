@@ -77,6 +77,17 @@ describe("models.list", () => {
           anthropicModels.some((row) => row.id === "claude-fable-5"),
           `anthropic models should include claude-fable-5: ${JSON.stringify(anthropicModels.map((row) => row.id))}`,
         )
+        // The listing carries each model's reasoning-effort variant ids so the
+        // TUI's /effort can resolve ultrathink to the highest tier (xhigh here).
+        const fable = record(
+          anthropicModels.find((row) => row.id === "claude-fable-5"),
+          "claude-fable-5 row",
+        )
+        const fableVariants = array(fable.variants, "claude-fable-5 variants")
+        check(
+          fableVariants.includes("xhigh") && fableVariants.includes("max"),
+          `claude-fable-5 should expose its effort variants: ${JSON.stringify(fableVariants)}`,
+        )
 
         const openai = providerEntry(body, "openai")
         check(

@@ -206,9 +206,16 @@ describe("workflow snapshot events", () => {
         const envelope = yield* Deferred.await(sawWorkflow)
         yield* Fiber.interrupt(consumer)
         expect(envelope.cursor).toBeUndefined()
-        const payload = envelope.event as { data: { sessionID: string; run: { id: string; status: string } } }
+        const payload = envelope.event as {
+          data: { sessionID: string; run: { id: string; status: string; time: { started: unknown } } }
+        }
         expect(payload.data.sessionID).toBe(SESSION_A)
         expect(payload.data.run.status).toBe("completed")
+        // The snapshot is encoded back to epoch millis on the wire, not a
+        // decoded DateTime that JSON.stringify would render as an ISO string
+        // (which the TUI's elapsed() would read as NaN).
+        expect(typeof payload.data.run.time.started).toBe("number")
+        expect(payload.data.run.time.started).toBe(0)
       }),
     )
   })

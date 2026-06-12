@@ -72,6 +72,7 @@ export const modelsHandlers = HttpApiBuilder.group(GTEAgentApi, "models", (handl
                   released: DateTime.toEpochMillis(entry.model.time.released),
                   capabilities: { tools: entry.model.capabilities.tools },
                   limit: { context: entry.model.limit.context, output: entry.model.limit.output },
+                  variants: entry.model.variants.map((variant) => variant.id),
                   isDefault: entry.isDefault,
                 })),
               }

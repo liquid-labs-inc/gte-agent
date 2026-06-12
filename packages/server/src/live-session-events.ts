@@ -24,7 +24,8 @@ import type { GtePanelManager } from "@gte-agent/core/gte-data/panel-manager"
 import type { Session } from "@gte-agent/core/session"
 import type { SessionEvent } from "@gte-agent/core/session/event"
 import { WorkflowEvent } from "@gte-agent/core/workflow/event"
-import { Effect, Stream } from "effect"
+import { WorkflowSchema } from "@gte-agent/core/workflow/schema"
+import { Effect, Schema, Stream } from "effect"
 
 export type Envelope = {
   /** Durable aggregate cursor; absent for ephemeral (local) events. */
@@ -47,9 +48,19 @@ export function liveSessionEvents<E, R>(
   const durable = input.durable.pipe(
     Stream.map((item): Envelope => ({ cursor: item.cursor, event: item.event })),
   )
+  // The subscription delivers a DECODED snapshot: RunInfo's time fields are
+  // DateTime objects, which raw JSON.stringify would render as ISO strings and
+  // the TUI's elapsed() reads as NaN. Encode the run back through RunInfo so the
+  // wire carries epoch millis, matching the HTTP routes (which encode through
+  // their success schema) and the TUI's millis contract. Panel events carry no
+  // DateTime fields, so they pass through unencoded.
+  const encodeRun = Schema.encodeSync(WorkflowSchema.RunInfo)
+  const workflow = deps.events
+    .subscribe(WorkflowEvent.Updated)
+    .pipe(Stream.map((payload) => ({ ...payload, data: { ...payload.data, run: encodeRun(payload.data.run) } })))
   const local = Stream.merge(
     Stream.merge(deps.events.subscribe(GtePanelEvent.Updated), deps.events.subscribe(GtePanelEvent.Status)),
-    deps.events.subscribe(WorkflowEvent.Updated),
+    workflow,
   ).pipe(
     Stream.filter((payload) => payload.data.sessionID === input.sessionID),
     Stream.map((payload): Envelope => ({ event: payload })),

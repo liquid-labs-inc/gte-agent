@@ -52,6 +52,11 @@ export const ModelsCatalogModel = Schema.Struct({
     context: Schema.Int,
     output: Schema.Int,
   }).annotate({ description: "Token limits (context window and maximum output)." }),
+  variants: Schema.Array(Schema.String)
+    .pipe(Schema.optional)
+    .annotate({
+      description: "Reasoning-effort variant ids the model offers (e.g. low/medium/high/xhigh/max), in catalog order.",
+    }),
   isDefault: Schema.Boolean.annotate({
     description: "True when this model is the persisted global default in ~/.gte-agent/config.json.",
   }),
