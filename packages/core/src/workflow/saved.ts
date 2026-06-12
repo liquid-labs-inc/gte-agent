@@ -20,6 +20,14 @@ import DEEP_RESEARCH from "./deep-research.txt"
 
 export const DIRECTORY = ".gte-agent/workflows"
 
+/**
+ * Names a discovered workflow may not claim: the bundled commands ship with the
+ * binary and must not be silently usurped by a project or global file (the
+ * built-in script is the audited, tested one). A file using a reserved name is
+ * skipped with a warning, so the bundled command always wins.
+ */
+export const RESERVED_NAMES: ReadonlySet<string> = new Set(["deep-research"])
+
 export type Scope = "bundled" | "global" | "project"
 
 export type Saved = {
@@ -37,9 +45,12 @@ export type Frontmatter = {
   readonly description?: string
 }
 
-/** Command names must be a single lowercase slug segment, no path separators. */
+/**
+ * Command names must be a single lowercase slug segment, no path separators —
+ * the TUI lowercases typed commands, so an uppercase name could never match.
+ */
 export function validName(name: string): boolean {
-  return /^[a-z0-9][a-z0-9_-]*$/i.test(name)
+  return /^[a-z0-9][a-z0-9_-]*$/.test(name)
 }
 
 /**
@@ -114,6 +125,12 @@ const load = Effect.fn("WorkflowSaved.load")(function* (fs: FSUtil.Interface, fi
   const name = meta.name ?? path.basename(file).replace(/\.mjs$/, "")
   if (!validName(name)) {
     yield* Effect.logWarning("Skipping saved workflow with an invalid name").pipe(
+      Effect.annotateLogs({ file, scope, name }),
+    )
+    return undefined
+  }
+  if (RESERVED_NAMES.has(name)) {
+    yield* Effect.logWarning("Skipping saved workflow that reuses a reserved built-in command name").pipe(
       Effect.annotateLogs({ file, scope, name }),
     )
     return undefined

@@ -348,9 +348,10 @@ export function createMockApi(input?: {
     // --- Workflow snapshot + control routes (M8) ---
     if (parts[0] === "api" && parts[1] === "session" && parts[3] === "workflow") {
       if (input?.workflowsDisabled === true) {
+        // Mirror the real server: WorkflowDisabledError (singular) at 404.
         return json(
-          { _tag: "WorkflowsDisabledError", message: "Workflows are disabled in this environment" },
-          { status: 403 },
+          { _tag: "WorkflowDisabledError", message: "Workflows are disabled in this environment" },
+          { status: 404 },
         )
       }
       const sessionID = parts[2]
@@ -360,25 +361,26 @@ export function createMockApi(input?: {
       const run = runs.find((candidate) => candidate.id === runID)
       if (parts.length === 5 && target.method === "GET") {
         if (run === undefined)
-          return json({ _tag: "RunNotFoundError", message: `Unknown run: ${runID}` }, { status: 404 })
+          return json({ _tag: "WorkflowRunNotFoundError", message: `Unknown run: ${runID}` }, { status: 404 })
         return json({ data: run })
       }
       if (parts.length === 6 && parts[5] === "control" && target.method === "POST") {
         const body = (await target.json()) as { action: WorkflowControlAction; agentID?: string }
         controls.push({ sessionID, runID, action: body.action, agentID: body.agentID })
         if (run === undefined)
-          return json({ _tag: "RunNotFoundError", message: `Unknown run: ${runID}` }, { status: 404 })
+          return json({ _tag: "WorkflowRunNotFoundError", message: `Unknown run: ${runID}` }, { status: 404 })
         const status = body.action === "pause" ? "paused" : body.action === "resume" ? "running" : "stopped"
         const next: RunSnapshot = { ...run, status }
         workflows.set(
           sessionID,
           runs.map((candidate) => (candidate.id === runID ? next : candidate)),
         )
-        // Mirror the runtime: control transitions surface as an ephemeral snapshot.
+        // Mirror the runtime: control transitions surface as an ephemeral
+        // snapshot over SSE; the HTTP response itself is the applied outcome.
         emitTo(sessionID, {
           event: { id: `evt_wf_${++eventCursor}`, type: "session.workflow.updated", data: { sessionID, run: next } },
         })
-        return json({ data: next })
+        return json({ data: { applied: true } })
       }
       return json({ _tag: "InvalidRequestError", message: `no mock for ${url.pathname}` }, { status: 400 })
     }

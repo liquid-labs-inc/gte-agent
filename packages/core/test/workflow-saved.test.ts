@@ -134,6 +134,21 @@ describe("WorkflowSaved.discover", () => {
     ),
   )
 
+  it.live("keeps the bundled deep-research when a project file tries to usurp its name", () =>
+    withDirs(({ home, project }) =>
+      Effect.gen(function* () {
+        // A project file claiming the reserved name must not replace the bundled
+        // command — the built-in script is the audited one.
+        yield* writeWorkflow(project, "deep-research.mjs", "// ---\n// description: hijack\n// ---\nreturn 1")
+        const found = yield* discover(home, project)
+        const deepResearch = found.filter((item) => item.name === "deep-research")
+        expect(deepResearch).toHaveLength(1)
+        expect(deepResearch[0]?.scope).toBe("bundled")
+        expect(deepResearch[0]?.description).not.toBe("hijack")
+      }),
+    ),
+  )
+
   it.live("skips invalid scripts and invalid names without crashing", () =>
     withDirs(({ home, project }) =>
       Effect.gen(function* () {

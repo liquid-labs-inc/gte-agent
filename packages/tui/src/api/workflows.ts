@@ -31,26 +31,31 @@ export class WorkflowsRequestError extends Error {
 
 /**
  * True when the error is the kill-switch disabled response. The server tags it
- * (assumed `WorkflowsDisabledError`); a 403/404 carrying "disabled" in the tag
- * or message is also treated as disabled so a tag rename does not silently
- * regress the kill-switch surface.
+ * `WorkflowDisabledError` (singular, matching packages/server/src/errors.ts); a
+ * 403/404 carrying "disabled" in the tag or message is also treated as disabled
+ * so a tag rename does not silently regress the kill-switch surface.
  */
 export function isWorkflowsDisabled(error: unknown): boolean {
   if (!(error instanceof WorkflowsRequestError)) return false
   const tag = error.tag ?? ""
-  if (tag === "WorkflowsDisabledError") return true
+  if (tag === "WorkflowDisabledError") return true
   return tag.toLowerCase().includes("disabled") || error.message.toLowerCase().includes("workflows are disabled")
 }
 
 export interface WorkflowsApi {
   list(sessionID: string): Promise<readonly RunSnapshot[]>
   get(sessionID: string, runID: string): Promise<RunSnapshot>
+  /**
+   * Pause/resume/stop a run (or one agent). The route returns whether the
+   * runtime acted; the live state change lands separately over SSE as a
+   * `session.workflow.updated` snapshot.
+   */
   control(
     sessionID: string,
     runID: string,
     action: WorkflowControlAction,
     agentID?: string,
-  ): Promise<RunSnapshot | undefined>
+  ): Promise<{ applied: boolean }>
 }
 
 export function createWorkflowsApi(input: { baseUrl: string; fetch: typeof fetch }): WorkflowsApi {
@@ -89,8 +94,8 @@ export function createWorkflowsApi(input: { baseUrl: string; fetch: typeof fetch
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action, ...(agentID === undefined ? {} : { agentID }) }),
-      })) as { data?: RunSnapshot } | undefined
-      return result?.data
+      })) as { data?: { applied?: boolean } } | undefined
+      return { applied: result?.data?.applied === true }
     },
   }
 }
