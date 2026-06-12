@@ -188,7 +188,7 @@ export function make(config: TypedToolConfig | DynamicToolConfig): AnyTool {
     _definition: new ToolDefinition({
       name: "",
       description: config.description,
-      inputSchema: toJsonSchema(config.parameters),
+      inputSchema: toInputJsonSchema(config.parameters),
       outputSchema: toJsonSchema(config.success),
     }),
   }
@@ -222,6 +222,32 @@ const toJsonSchema = (schema: Schema.Top): JsonSchema.JsonSchema => {
   const document = Schema.toJsonSchemaDocument(schema)
   if (Object.keys(document.definitions).length === 0) return document.schema
   return { ...document.schema, $defs: document.definitions }
+}
+
+/**
+ * Tool input schemas must declare `type: "object"` at the top level — both
+ * the Anthropic Messages API and the OpenAI tools APIs reject anything else.
+ * `Schema.Struct({})` (a tool with no parameters) generates
+ * `{ anyOf: [{ type: "object" }, { type: "array" }] }`, which providers
+ * refuse with an HTTP 400, so the empty-struct shape is normalized to a plain
+ * empty object schema here.
+ */
+const toInputJsonSchema = (schema: Schema.Top): JsonSchema.JsonSchema => {
+  const json = toJsonSchema(schema)
+  if (isEmptyStructSchema(json)) return { type: "object", properties: {} }
+  return json
+}
+
+const isEmptyStructSchema = (json: JsonSchema.JsonSchema): boolean => {
+  if (typeof json !== "object" || json === null || "type" in json || !("anyOf" in json)) return false
+  const anyOf: unknown = Reflect.get(json, "anyOf")
+  if (!Array.isArray(anyOf) || anyOf.length !== 2) return false
+  const types = anyOf.map((member: unknown) =>
+    typeof member === "object" && member !== null && Object.keys(member).length === 1
+      ? (Reflect.get(member, "type") as unknown)
+      : undefined,
+  )
+  return types.includes("object") && types.includes("array")
 }
 
 const project = (
