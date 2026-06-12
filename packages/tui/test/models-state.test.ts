@@ -169,6 +169,26 @@ describe("formatActiveModel", () => {
     expect(formatActiveModel(makeSession({ id: "ses_x", model: null }), null)).toBe("model not set — /models")
     expect(formatActiveModel(undefined, null)).toBe("model not set — /models")
   })
+
+  test("appends the reasoning-effort variant in parentheses when the model carries one", () => {
+    expect(
+      formatActiveModel(
+        makeSession({ id: "ses_x", model: { id: "claude-fable-5", providerID: "anthropic", variant: "xhigh" } }),
+        ref,
+      ),
+    ).toBe("model anthropic/claude-fable-5 (xhigh)")
+    // The inherited default's variant shows too, before the (default) marker.
+    expect(formatActiveModel(makeSession({ id: "ses_x" }), { ...ref, variant: "max" })).toBe(
+      "model anthropic/claude-fable-5 (max) (default)",
+    )
+    // An empty-string variant is treated as no variant.
+    expect(
+      formatActiveModel(
+        makeSession({ id: "ses_x", model: { id: "claude-fable-5", providerID: "anthropic", variant: "" } }),
+        ref,
+      ),
+    ).toBe("model anthropic/claude-fable-5")
+  })
 })
 
 describe("createModelsApi.list null normalization", () => {
@@ -176,7 +196,10 @@ describe("createModelsApi.list null normalization", () => {
     (async () => new Response(JSON.stringify({ data: body }), { status: 200 })) as unknown as typeof fetch
 
   test("null default and session (fresh install) normalize to absent", async () => {
-    const api = createModelsApi({ baseUrl: "http://gte-agent.internal", fetch: listFetch({ providers, default: null, session: null }) })
+    const api = createModelsApi({
+      baseUrl: "http://gte-agent.internal",
+      fetch: listFetch({ providers, default: null, session: null }),
+    })
     const catalog = await api.list()
     expect(catalog.providers).toHaveLength(2)
     expect("default" in catalog).toBe(false)

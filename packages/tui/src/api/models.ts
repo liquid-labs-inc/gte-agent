@@ -27,6 +27,12 @@ export type CatalogModel = {
   readonly capabilities: { readonly tools: boolean }
   readonly limit: { readonly context: number; readonly output: number }
   readonly isDefault: boolean
+  /**
+   * Reasoning-effort variant ids the model offers (e.g. "low"/"high"/"xhigh"/"max").
+   * Curated Anthropic-first; absent or empty for models with no reasoning variants.
+   * `/effort` and the `ultrathink` resolution read this to pick the highest tier.
+   */
+  readonly variants?: readonly string[]
 }
 
 export type CatalogProvider = {

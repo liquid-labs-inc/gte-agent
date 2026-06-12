@@ -9,6 +9,8 @@
  */
 import type { SessionInfo, SessionPublicMessage } from "../../src/api/client"
 import type { SessionEventEnvelope } from "../../src/api/events"
+import type { WorkflowControlAction } from "../../src/api/workflows"
+import type { RunSnapshot } from "../../src/state/workflows"
 
 export function makeSession(input: Partial<SessionInfo> & { id: string }): SessionInfo {
   return {
@@ -22,6 +24,29 @@ export function makeSession(input: Partial<SessionInfo> & { id: string }): Sessi
     runtimeScope: { directory: "/tmp/gta-test" },
     ...input,
   }
+}
+
+const noTokens = { input: 0, output: 0, reasoning: 0 }
+
+/** Build a workflow run snapshot for the mock registry and SSE envelopes. */
+export function makeRun(input: Partial<RunSnapshot> & { id: string }): RunSnapshot {
+  return {
+    sessionID: "ses_alpha",
+    name: input.name ?? input.id,
+    status: "running",
+    scriptPath: `/tmp/workflow-runs/${input.id}.mjs`,
+    tokens: noTokens,
+    time: { started: 1_000 },
+    phases: [],
+    agents: [],
+    logs: [],
+    ...input,
+  }
+}
+
+/** Wrap a run snapshot as a `session.workflow.updated` SSE envelope (ephemeral, no cursor). */
+export function workflowEnvelope(sessionID: string, run: RunSnapshot): SessionEventEnvelope {
+  return { event: { id: `evt_wf_${run.id}`, type: "session.workflow.updated", data: { sessionID, run } } }
 }
 
 function json(data: unknown, init?: ResponseInit) {
@@ -47,7 +72,7 @@ export type MockProvider = {
   authed: boolean
   method?: "api_key" | "oauth"
   source?: "config" | "store" | "env"
-  models: { id: string; name: string }[]
+  models: { id: string; name: string; variants?: string[] }[]
 }
 
 const defaultProviders = (): MockProvider[] => [
@@ -58,8 +83,8 @@ const defaultProviders = (): MockProvider[] => [
     method: "api_key",
     source: "env",
     models: [
-      { id: "claude-fable-5", name: "Claude Fable 5" },
-      { id: "claude-haiku-4-5", name: "Claude Haiku 4.5" },
+      { id: "claude-fable-5", name: "Claude Fable 5", variants: ["low", "medium", "high", "xhigh", "max"] },
+      { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", variants: ["high", "max"] },
     ],
   },
   {
@@ -84,14 +109,18 @@ export function createMockApi(input?: {
   defaultModel?: { id: string; providerID: string }
   /** Localhost callback listener state reported by oauth/start (default: listening on 1455). */
   oauthListening?: boolean
+  /** Seed workflow run snapshots served by /api/session/:id/workflow, keyed by session id. */
+  workflows?: Record<string, RunSnapshot[]>
+  /** Kill switch: workflow routes answer with the typed disabled error. */
+  workflowsDisabled?: boolean
 }) {
   const sessions = input?.sessions ?? []
   const messages = input?.messages ?? {}
   const markets = input?.markets ?? ["ETH-USD", "BTC-USD"]
   const providers = input?.providers ?? defaultProviders()
   let defaultModel = input?.defaultModel
-  const sessionModels = new Map<string, { id: string; providerID: string }>()
-  const selections: { providerID: string; modelID: string; sessionID?: string }[] = []
+  const sessionModels = new Map<string, { id: string; providerID: string; variant?: string }>()
+  const selections: { providerID: string; modelID: string; variant?: string; sessionID?: string }[] = []
   const apiKeys: { provider: string; key: string; type?: string }[] = []
   const oauthStarts: { provider: string; flow: string }[] = []
   const oauthCompletions: { provider: string; flow: string; redirect?: string }[] = []
@@ -106,6 +135,9 @@ export function createMockApi(input?: {
   const snapshots: { sessionID: string; body: Record<string, unknown> }[] = []
   const gteRequests: string[] = []
   const streams = new Map<string, SseHandle[]>()
+  // Run registry keyed by session id; control mutates these and re-emits a snapshot.
+  const workflows = new Map(Object.entries(input?.workflows ?? {}).map(([id, runs]) => [id, [...runs]]))
+  const controls: { sessionID: string; runID: string; action: WorkflowControlAction; agentID?: string }[] = []
   let counter = 0
   let eventCursor = 100
 
@@ -157,6 +189,7 @@ export function createMockApi(input?: {
               limit: { context: 200000, output: 64000 },
               isDefault:
                 defaultModel !== undefined && defaultModel.providerID === provider.id && defaultModel.id === model.id,
+              ...(model.variants === undefined ? {} : { variants: model.variants }),
             })),
           })),
           default: defaultModel,
@@ -166,7 +199,12 @@ export function createMockApi(input?: {
     }
 
     if (url.pathname === "/api/models/select" && target.method === "POST") {
-      const body = (await target.json()) as { providerID: string; modelID: string; sessionID?: string }
+      const body = (await target.json()) as {
+        providerID: string
+        modelID: string
+        variant?: string
+        sessionID?: string
+      }
       const provider = providers.find((candidate) => candidate.id === body.providerID)
       if (provider === undefined) {
         return json(
@@ -183,8 +221,9 @@ export function createMockApi(input?: {
       }
       selections.push(body)
       defaultModel = { id: model.id, providerID: provider.id }
+      const selected = { ...defaultModel, ...(body.variant === undefined ? {} : { variant: body.variant }) }
       if (body.sessionID !== undefined) {
-        sessionModels.set(body.sessionID, defaultModel)
+        sessionModels.set(body.sessionID, selected)
         // Mirror the server: the durable switch event flows over the SSE stream.
         const seq = ++eventCursor
         emitTo(body.sessionID, {
@@ -192,11 +231,11 @@ export function createMockApi(input?: {
           event: {
             id: `evt_model_${seq}`,
             type: "session.next.model.switched",
-            data: { sessionID: body.sessionID, messageID: `msg_model_${seq}`, model: defaultModel },
+            data: { sessionID: body.sessionID, messageID: `msg_model_${seq}`, model: selected },
           },
         })
       }
-      return json({ data: { model: defaultModel, name: model.name, auth: modelsAuth(provider) } })
+      return json({ data: { model: selected, name: model.name, auth: modelsAuth(provider) } })
     }
 
     if (parts[0] === "api" && parts[1] === "auth") {
@@ -302,6 +341,44 @@ export function createMockApi(input?: {
         const address = decodeURIComponent(parts[3])
         const leaf = parts[4]
         return json({ provenance: provenance({ address }), data: [{ leaf, address, amount: "1" }] })
+      }
+      return json({ _tag: "InvalidRequestError", message: `no mock for ${url.pathname}` }, { status: 400 })
+    }
+
+    // --- Workflow snapshot + control routes (M8) ---
+    if (parts[0] === "api" && parts[1] === "session" && parts[3] === "workflow") {
+      if (input?.workflowsDisabled === true) {
+        return json(
+          { _tag: "WorkflowsDisabledError", message: "Workflows are disabled in this environment" },
+          { status: 403 },
+        )
+      }
+      const sessionID = parts[2]
+      const runs = workflows.get(sessionID) ?? []
+      if (parts.length === 4 && target.method === "GET") return json({ data: runs })
+      const runID = parts[4]
+      const run = runs.find((candidate) => candidate.id === runID)
+      if (parts.length === 5 && target.method === "GET") {
+        if (run === undefined)
+          return json({ _tag: "RunNotFoundError", message: `Unknown run: ${runID}` }, { status: 404 })
+        return json({ data: run })
+      }
+      if (parts.length === 6 && parts[5] === "control" && target.method === "POST") {
+        const body = (await target.json()) as { action: WorkflowControlAction; agentID?: string }
+        controls.push({ sessionID, runID, action: body.action, agentID: body.agentID })
+        if (run === undefined)
+          return json({ _tag: "RunNotFoundError", message: `Unknown run: ${runID}` }, { status: 404 })
+        const status = body.action === "pause" ? "paused" : body.action === "resume" ? "running" : "stopped"
+        const next: RunSnapshot = { ...run, status }
+        workflows.set(
+          sessionID,
+          runs.map((candidate) => (candidate.id === runID ? next : candidate)),
+        )
+        // Mirror the runtime: control transitions surface as an ephemeral snapshot.
+        emitTo(sessionID, {
+          event: { id: `evt_wf_${++eventCursor}`, type: "session.workflow.updated", data: { sessionID, run: next } },
+        })
+        return json({ data: next })
       }
       return json({ _tag: "InvalidRequestError", message: `no mock for ${url.pathname}` }, { status: 400 })
     }
@@ -469,6 +546,15 @@ export function createMockApi(input?: {
     },
     hasStream(sessionID: string) {
       return (streams.get(sessionID) ?? []).length > 0
+    },
+    controls,
+    /** Push a live `session.workflow.updated` snapshot (also updates the served registry). */
+    emitWorkflow(sessionID: string, run: RunSnapshot) {
+      const runs = workflows.get(sessionID) ?? []
+      workflows.set(sessionID, [run, ...runs.filter((candidate) => candidate.id !== run.id)])
+      this.emit(sessionID, {
+        event: { id: `evt_wf_${++eventCursor}`, type: "session.workflow.updated", data: { sessionID, run } },
+      })
     },
   }
 }

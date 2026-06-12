@@ -6,6 +6,7 @@ import { createApi } from "../src/api/client"
 import { createEventSubscriber } from "../src/api/events"
 import { createGteApi } from "../src/api/gte"
 import { createModelsApi } from "../src/api/models"
+import { createWorkflowsApi } from "../src/api/workflows"
 import { App } from "../src/ui/app"
 import { createMockApi, makeSession } from "./fixture/api"
 
@@ -25,6 +26,7 @@ function mount(mock: ReturnType<typeof createMockApi>, options?: { onExit?: () =
         api={createApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
         gte={createGteApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
         models={createModelsApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
+        workflows={createWorkflowsApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
         subscribe={createEventSubscriber({ baseUrl: BASE_URL, fetch: mock.fetch })}
         auth={readAuthStatus({})}
         server={{ mode: "in-process", url: BASE_URL }}
@@ -184,6 +186,7 @@ test("navigating away while history loads does not leak the stale session into t
         api={createApi({ baseUrl: BASE_URL, fetch: gatedFetch })}
         gte={createGteApi({ baseUrl: BASE_URL, fetch: gatedFetch })}
         models={createModelsApi({ baseUrl: BASE_URL, fetch: gatedFetch })}
+        workflows={createWorkflowsApi({ baseUrl: BASE_URL, fetch: gatedFetch })}
         subscribe={createEventSubscriber({ baseUrl: BASE_URL, fetch: gatedFetch })}
         auth={readAuthStatus({})}
         server={{ mode: "in-process", url: BASE_URL }}
@@ -238,6 +241,7 @@ test("errors from the API surface in the error banner", async () => {
         api={createApi({ baseUrl: BASE_URL, fetch: failingFetch })}
         gte={createGteApi({ baseUrl: BASE_URL, fetch: failingFetch })}
         models={createModelsApi({ baseUrl: BASE_URL, fetch: failingFetch })}
+        workflows={createWorkflowsApi({ baseUrl: BASE_URL, fetch: failingFetch })}
         subscribe={createEventSubscriber({ baseUrl: BASE_URL, fetch: failingFetch })}
         auth={readAuthStatus({})}
         server={{ mode: "in-process", url: BASE_URL }}

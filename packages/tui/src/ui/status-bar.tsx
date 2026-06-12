@@ -15,18 +15,21 @@ export type ServerStatus = {
  * sessions inherit the global default, and with neither set the line points
  * at /models (matching the runner's strict no-silent-fallback resolution).
  */
-export function formatActiveModel(
-  session: SessionInfo | undefined,
-  defaultModel: ModelRef | null | undefined,
-): string {
+export function formatActiveModel(session: SessionInfo | undefined, defaultModel: ModelRef | null | undefined): string {
   const model = session?.model
-  if (model !== undefined && model !== null) return `model ${model.providerID}/${model.id}`
+  if (model !== undefined && model !== null) {
+    return `model ${model.providerID}/${model.id}${variantSuffix(model.variant)}`
+  }
   // The HTTP API serializes an absent default as null, not omitted.
   if (defaultModel !== undefined && defaultModel !== null) {
-    return `model ${defaultModel.providerID}/${defaultModel.id} (default)`
+    return `model ${defaultModel.providerID}/${defaultModel.id}${variantSuffix(defaultModel.variant)} (default)`
   }
   return "model not set — /models"
 }
+
+/** ` (<variant>)` when the model carries a reasoning-effort variant, else empty. */
+const variantSuffix = (variant: string | null | undefined): string =>
+  variant === undefined || variant === null || variant.length === 0 ? "" : ` (${variant})`
 
 export function StatusBar(props: {
   server: ServerStatus

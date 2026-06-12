@@ -21,6 +21,7 @@ import { createApi } from "../src/api/client"
 import { createEventSubscriber } from "../src/api/events"
 import { createGteApi } from "../src/api/gte"
 import { createModelsApi } from "../src/api/models"
+import { createWorkflowsApi } from "../src/api/workflows"
 import { App } from "../src/ui/app"
 import { createMockApi, makeSession } from "./fixture/api"
 
@@ -46,6 +47,7 @@ async function mount(mock: ReturnType<typeof createMockApi>) {
         api={createApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
         gte={createGteApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
         models={createModelsApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
+        workflows={createWorkflowsApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
         subscribe={createEventSubscriber({ baseUrl: BASE_URL, fetch: mock.fetch })}
         auth={readAuthStatus({})}
         server={{ mode: "in-process", url: BASE_URL }}

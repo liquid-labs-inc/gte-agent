@@ -7,10 +7,19 @@ import type { Api, SessionInfo } from "../api/client"
 import type { EventSubscriber } from "../api/events"
 import type { GteApi } from "../api/gte"
 import type { ModelRef, ModelsApi } from "../api/models"
+import type { WorkflowsApi } from "../api/workflows"
 import { executeSlashCommand, parseSlashCommand } from "../commands/slash"
 import { createCompletionSources } from "../state/autocomplete"
 import type { ModelTarget } from "../state/models"
 import { applyEvent, isStreaming, seedFromMessages, type TranscriptEntry } from "../state/transcript"
+import {
+  activeRuns,
+  applyWorkflowEvent,
+  emptyWorkflows,
+  isWorkflowEvent,
+  seedWorkflows,
+  type WorkflowsState,
+} from "../state/workflows"
 import {
   applyPanelSnapshot,
   applyWorkspaceEvent,
@@ -29,11 +38,13 @@ import { SessionList } from "./session-list"
 import { StatusBar, type ServerStatus } from "./status-bar"
 import { theme } from "./theme"
 import { TranscriptView } from "./transcript-view"
+import { ActiveRunLine, WorkflowsOverlay } from "./workflows-overlay"
 
 export type AppProps = {
   api: Api
   gte: GteApi
   models: ModelsApi
+  workflows: WorkflowsApi
   subscribe: EventSubscriber
   auth: AuthStatus
   server: ServerStatus
@@ -53,11 +64,15 @@ type Store = {
   transcript: TranscriptEntry[]
   loadingTranscript: boolean
   workspace: WorkspaceState
+  /** Live workflow run registry; seeded on open, kept current by SSE snapshots. */
+  workflows: WorkflowsState
   gteEnv?: string
   /** Global default model from the catalog route (sessions without a selection inherit it). */
   defaultModel?: ModelRef
   /** /models overlay state; set opens the modal (target = direct `/models <ref>` selection). */
   modelsOverlay?: { target?: ModelTarget }
+  /** /workflows overlay open flag; the overlay reads the live registry from the store. */
+  workflowsOverlay?: boolean
   error?: string
 }
 
@@ -69,6 +84,7 @@ export function App(props: AppProps) {
     transcript: [],
     loadingTranscript: false,
     workspace: emptyWorkspace,
+    workflows: emptyWorkflows,
   })
 
   let unsubscribe: (() => void) | undefined
@@ -149,9 +165,20 @@ export function App(props: AppProps) {
       transcript: [],
       loadingTranscript: true,
       workspace: seedWorkspace(session as Record<string, unknown>),
+      workflows: emptyWorkflows,
       error: undefined,
     })
     const sessionID = String(session.id)
+    // Seed the run registry from the snapshot route; the kill switch or a
+    // missing route just leaves it empty (snapshots still flow over SSE).
+    void props.workflows
+      .list(sessionID)
+      .then((runs) => {
+        if (epoch === openEpoch) setStore("workflows", seedWorkflows(runs))
+      })
+      .catch(() => {
+        // Workflows disabled or unavailable; the overlay shows the empty state.
+      })
     void props.api
       .messages(sessionID)
       .then((messages) => {
@@ -174,6 +201,12 @@ export function App(props: AppProps) {
             if (epoch !== openEpoch) return
             if (isWorkspaceEvent(envelope.event.type)) {
               setStore("workspace", (workspace) => applyWorkspaceEvent(workspace, envelope))
+              return
+            }
+            // Ephemeral workflow snapshots replace the run wholesale and never
+            // grow the transcript, exactly like the workspace panel events.
+            if (isWorkflowEvent(envelope.event.type)) {
+              setStore("workflows", (workflows) => applyWorkflowEvent(workflows, envelope))
               return
             }
             // Durable model switches update the status line and flow into the
@@ -201,7 +234,9 @@ export function App(props: AppProps) {
       session: undefined,
       transcript: [],
       workspace: emptyWorkspace,
+      workflows: emptyWorkflows,
       modelsOverlay: undefined,
+      workflowsOverlay: undefined,
       error: undefined,
     })
     void refreshSessions()
@@ -233,6 +268,15 @@ export function App(props: AppProps) {
         pinnedPanels: pinnedPanels(store.workspace),
         focusPanel: (panel, key) => setStore("workspace", (workspace) => focusPanel(workspace, panel, key)),
         openModels: (target) => setStore("modelsOverlay", { target }),
+        openWorkflows: () => setStore("workflowsOverlay", true),
+        models: props.models,
+        workflows: props.workflows,
+        activeModel: store.session?.model ?? store.defaultModel,
+        prompt: (line) => props.api.prompt(String(session.id), line).catch(fail),
+        onModelApplied: (model) => {
+          if (store.session !== undefined) setStore("session", { ...store.session, model })
+          setStore("defaultModel", model)
+        },
         info: (line) => pushLocal("info", line),
         error: (line) => setStore("error", line),
       })
@@ -277,6 +321,9 @@ export function App(props: AppProps) {
   })
 
   const streaming = createMemo(() => isStreaming(store.transcript))
+  // Newest active (running/paused) run, surfaced as the one-line indicator
+  // above the prompt; the registry is sorted newest-first.
+  const activeRun = createMemo(() => activeRuns(store.workflows)[0])
 
   return (
     <box flexDirection="column" flexGrow={1}>
@@ -303,34 +350,50 @@ export function App(props: AppProps) {
           >
             <TranscriptView entries={store.transcript} loading={store.loadingTranscript} />
             <Show
-              when={store.modelsOverlay}
+              when={store.workflowsOverlay}
               fallback={
-                <>
-                  <PromptInput
-                    onSubmit={submitPrompt}
-                    completionSources={createCompletionSources(props.gte, props.models)}
-                  />
-                  <box flexShrink={0} paddingLeft={1}>
-                    <text fg={theme.muted}>enter send · /command data · esc sessions · ctrl+n new · ctrl+c quit</text>
-                  </box>
-                </>
+                <Show
+                  when={store.modelsOverlay}
+                  fallback={
+                    <>
+                      <Show when={activeRun()}>{(run) => <ActiveRunLine run={run()} />}</Show>
+                      <PromptInput
+                        onSubmit={submitPrompt}
+                        completionSources={createCompletionSources(props.gte, props.models)}
+                      />
+                      <box flexShrink={0} paddingLeft={1}>
+                        <text fg={theme.muted}>
+                          enter send · /command data · esc sessions · ctrl+n new · ctrl+c quit
+                        </text>
+                      </box>
+                    </>
+                  }
+                >
+                  {(overlay) => (
+                    <ModelsOverlay
+                      models={props.models}
+                      sessionID={String(store.session?.id ?? "")}
+                      current={store.session?.model ?? undefined}
+                      target={overlay().target}
+                      onClose={() => setStore("modelsOverlay", undefined)}
+                      onApplied={(model) => {
+                        // The durable switched event also lands over SSE; updating
+                        // here keeps the status line correct even if it lags.
+                        if (store.session !== undefined) setStore("session", { ...store.session, model })
+                        setStore("defaultModel", model)
+                      }}
+                    />
+                  )}
+                </Show>
               }
             >
-              {(overlay) => (
-                <ModelsOverlay
-                  models={props.models}
-                  sessionID={String(store.session?.id ?? "")}
-                  current={store.session?.model ?? undefined}
-                  target={overlay().target}
-                  onClose={() => setStore("modelsOverlay", undefined)}
-                  onApplied={(model) => {
-                    // The durable switched event also lands over SSE; updating
-                    // here keeps the status line correct even if it lags.
-                    if (store.session !== undefined) setStore("session", { ...store.session, model })
-                    setStore("defaultModel", model)
-                  }}
-                />
-              )}
+              <WorkflowsOverlay
+                workflows={props.workflows}
+                sessionID={String(store.session?.id ?? "")}
+                state={store.workflows}
+                onClose={() => setStore("workflowsOverlay", undefined)}
+                onDisabled={() => setStore("error", "Workflows are disabled in this environment.")}
+              />
             </Show>
           </Show>
         </box>

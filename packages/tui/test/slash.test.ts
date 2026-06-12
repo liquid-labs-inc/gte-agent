@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { createGteApi, type PanelType, type PinnedPanel } from "../src/api/gte"
+import { createModelsApi, type ModelRef } from "../src/api/models"
+import { createWorkflowsApi } from "../src/api/workflows"
 import { executeSlashCommand, parseSlashCommand, SLASH_COMMANDS, type CommandContext } from "../src/commands/slash"
 import { createMockApi } from "./fixture/api"
 
@@ -63,6 +65,9 @@ type Harness = {
   errors: string[]
   focused: Array<{ panel: PanelType; key: string }>
   modelsOpened: Array<{ providerID: string; modelID: string } | undefined>
+  workflowsOpened: number
+  prompts: string[]
+  appliedModels: ModelRef[]
 }
 
 function makeCtx(options?: {
@@ -70,12 +75,19 @@ function makeCtx(options?: {
   trackedAddress?: string
   selectedMarket?: string
   pinnedPanels?: PinnedPanel[]
+  /** Session active model `/effort` re-selects with a variant. */
+  activeModel?: ModelRef
+  /** Drive the kill switch so workflow routes answer disabled. */
+  workflowsDisabled?: boolean
 }): Harness {
-  const mock = createMockApi({ markets: options?.markets })
+  const mock = createMockApi({ markets: options?.markets, workflowsDisabled: options?.workflowsDisabled })
   const infos: string[] = []
   const errors: string[] = []
   const focused: Array<{ panel: PanelType; key: string }> = []
   const modelsOpened: Array<{ providerID: string; modelID: string } | undefined> = []
+  const prompts: string[] = []
+  const appliedModels: ModelRef[] = []
+  let workflowsOpened = 0
   const ctx: CommandContext = {
     gte: createGteApi({ baseUrl: BASE_URL, fetch: mock.fetch }),
     sessionID: "ses_slash",
@@ -83,12 +95,32 @@ function makeCtx(options?: {
     selectedMarket: options?.selectedMarket,
     trackedAddress: options?.trackedAddress,
     pinnedPanels: options?.pinnedPanels ?? [],
+    activeModel: options?.activeModel,
     focusPanel: (panel, key) => focused.push({ panel, key }),
     openModels: (target) => modelsOpened.push(target),
+    openWorkflows: () => {
+      workflowsOpened++
+    },
+    models: createModelsApi({ baseUrl: BASE_URL, fetch: mock.fetch }),
+    workflows: createWorkflowsApi({ baseUrl: BASE_URL, fetch: mock.fetch }),
+    prompt: (text) => prompts.push(text),
+    onModelApplied: (model) => appliedModels.push(model),
     info: (text) => infos.push(text),
     error: (text) => errors.push(text),
   }
-  return { mock, ctx, infos, errors, focused, modelsOpened }
+  return {
+    mock,
+    ctx,
+    infos,
+    errors,
+    focused,
+    modelsOpened,
+    prompts,
+    appliedModels,
+    get workflowsOpened() {
+      return workflowsOpened
+    },
+  }
 }
 
 const run = (text: string, harness: Harness) => executeSlashCommand(parseSlashCommand(text)!, harness.ctx)
@@ -291,5 +323,97 @@ describe("/models", () => {
       expect(harness.errors.length).toBe(1)
       expect(harness.errors[0]).toContain("expected <provider>/<model>")
     }
+  })
+})
+
+const FABLE: ModelRef = { providerID: "anthropic", id: "claude-fable-5" }
+const HAIKU: ModelRef = { providerID: "anthropic", id: "claude-haiku-4-5" }
+const GPT: ModelRef = { providerID: "openai", id: "gpt-5.5" }
+
+describe("/workflows", () => {
+  test("opens the overlay", async () => {
+    const harness = makeCtx()
+    await run("/workflows", harness)
+    expect(harness.errors).toEqual([])
+    expect(harness.workflowsOpened).toBe(1)
+  })
+})
+
+describe("/effort", () => {
+  test("a named tier re-selects the active model with that variant", async () => {
+    const harness = makeCtx({ activeModel: FABLE })
+    await run("/effort high", harness)
+    expect(harness.errors).toEqual([])
+    expect(harness.mock.selections).toEqual([
+      { providerID: "anthropic", modelID: "claude-fable-5", variant: "high", sessionID: "ses_slash" },
+    ])
+    expect(harness.appliedModels[0]).toMatchObject({ providerID: "anthropic", id: "claude-fable-5", variant: "high" })
+    expect(harness.infos[0]).toContain("Effort set to high")
+  })
+
+  test("rejects an unknown tier and never selects", async () => {
+    const harness = makeCtx({ activeModel: FABLE })
+    await run("/effort turbo", harness)
+    expect(harness.mock.selections).toEqual([])
+    expect(harness.errors[0]).toContain('Unknown effort tier "turbo"')
+  })
+
+  test("with no active model asks the user to pick one", async () => {
+    const harness = makeCtx()
+    await run("/effort high", harness)
+    expect(harness.mock.selections).toEqual([])
+    expect(harness.errors[0]).toContain("No active model")
+  })
+
+  test("ultrathink picks xhigh when the model offers it and sets the intent flag", async () => {
+    const harness = makeCtx({ activeModel: FABLE })
+    await run("/effort ultrathink", harness)
+    expect(harness.errors).toEqual([])
+    expect(harness.mock.selections).toEqual([
+      { providerID: "anthropic", modelID: "claude-fable-5", variant: "xhigh", sessionID: "ses_slash" },
+    ])
+    expect(harness.mock.intentPatches.some((entry) => entry.patch.ultrathink === true)).toBe(true)
+    expect(harness.infos[0]).toContain("Ultrathink enabled")
+    expect(harness.infos[0]).toContain("xhigh")
+  })
+
+  test("ultrathink falls back to max when the model has no xhigh", async () => {
+    const harness = makeCtx({ activeModel: HAIKU })
+    await run("/effort ultrathink", harness)
+    expect(harness.mock.selections[0]).toMatchObject({ modelID: "claude-haiku-4-5", variant: "max" })
+  })
+
+  test("ultrathink on a model with no variants sets only the intent flag", async () => {
+    const harness = makeCtx({ activeModel: GPT })
+    await run("/effort ultrathink", harness)
+    expect(harness.mock.selections).toEqual([])
+    expect(harness.mock.intentPatches.some((entry) => entry.patch.ultrathink === true)).toBe(true)
+    expect(harness.infos[0]).toContain("No reasoning variants exist")
+  })
+
+  test("ultrathink reports the kill switch when workflows are disabled", async () => {
+    const harness = makeCtx({ activeModel: FABLE, workflowsDisabled: true })
+    await run("/effort ultrathink", harness)
+    expect(harness.mock.selections).toEqual([])
+    expect(harness.mock.intentPatches).toEqual([])
+    expect(harness.errors).toEqual(["workflows are disabled"])
+  })
+})
+
+describe("/workflow", () => {
+  test("wraps the task with the orchestration prefix and sends it as a prompt", async () => {
+    const harness = makeCtx()
+    await run("/workflow compare ETH and BTC liquidity", harness)
+    expect(harness.errors).toEqual([])
+    expect(harness.prompts.length).toBe(1)
+    expect(harness.prompts[0]).toContain("compare ETH and BTC liquidity")
+    expect(harness.prompts[0]).toContain("workflow tool")
+  })
+
+  test("without a task reports usage and sends nothing", async () => {
+    const harness = makeCtx()
+    await run("/workflow", harness)
+    expect(harness.prompts).toEqual([])
+    expect(harness.errors[0]).toContain("Usage:")
   })
 })
