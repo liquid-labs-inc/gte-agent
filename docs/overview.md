@@ -220,7 +220,7 @@ Its job was not to finish GTE Agent. It was meant to:
 
 Each milestone plan should include an explicit End State section. The End State should describe the expected repository and runnable app state after the milestone so future agents can work toward the same target instead of only following a task list.
 
-Phase 1 is composed of Milestones 1 through 7, all complete (Milestone 6 acceptance is recorded in `docs/m_6-acceptance-record.md`; Milestone 7 acceptance in `docs/m_7-acceptance-record.md`, with its manual interactive checks remaining).
+Phase 1 is composed of Milestones 1 through 7, all complete (Milestone 6 acceptance is recorded in `docs/m_6-acceptance-record.md`; Milestone 7 acceptance in `docs/m_7-acceptance-record.md`, with its manual interactive checks remaining). Milestone 8 begins the post-Phase-1 work: it adds reasoning-effort variants and dynamic workflows on top of the Phase 1 runtime.
 
 Completed Phase 1 milestones:
 
@@ -231,6 +231,10 @@ Completed Phase 1 milestones:
 - Milestone 5: Read-Only GTE Data Tools. See `docs/m_5-read-only-gte-data-tools-plan.md`.
 - Milestone 6: Phase 1 Acceptance. See `docs/m_6-phase-1-acceptance-plan.md`.
 - Milestone 7: Real LLM Responses, `/models`, Provider Auth, And Prompt Autocomplete. See `docs/m_7-llm-models-auth-plan.md`.
+
+Post-Phase-1 milestones:
+
+- Milestone 8: Ultrathink Dynamic Workflows. See `docs/m_8-dynamic-workflows-plan.md` and `docs/m_8-acceptance-record.md`.
 
 Milestone 2 was canonical runtime rename and stabilization. Its goal was to make the newer runtime the only runtime in practice: cleanly rename OpenCode/V2 identity to GTE Agent, remove legacy V1 and workspace/runtime-context assumptions from active packages, point CLI/API/SDK at the canonical runtime, keep SQLite local/dev persistence working from a clean pre-product baseline, remove legacy routes from the active runtime, and preserve a minimal runnable skeleton that can create sessions, send prompts, stream deterministic model responses, and replay local history.
 
@@ -245,3 +249,5 @@ Milestone 5 added read-only GTE data tools and TUI panels backed by the vendored
 Milestone 6 proved the Phase 1 surfaces end to end: `gta` launches the TUI, sessions and prompt streaming work, data panels and slash commands use the same read-only tool layer as the agent, `GTE_AGENT_GTE_ENV` configures data access, auth remains stubbed, no hidden trading mutation path is exposed, and `packages/opencode` was deleted after all removal criteria passed. Results and carried-forward limitations are recorded in `docs/m_6-acceptance-record.md`.
 
 Milestone 7 made the agent real: a curated Anthropic/OpenAI model catalog, the `/models` overlay with API-key paste and OAuth sign-in flows (Anthropic setup-token paste; OpenAI ChatGPT PKCE with a codex-responses adapter), LLM-provider credentials in `~/.gte-agent/auth.json`, per-session model selection with a global default, real streamed turns with the read-only data tools in the loop, a minimal GTE system prompt, and slash-command autocomplete in the prompt input. The demo LLM client moved behind `GTE_AGENT_LLM=demo`. Its acceptance record is `docs/m_7-acceptance-record.md` (2026-06-11); Phase 1 is closed again pending the manual interactive checks recorded there.
+
+Milestone 8 added reasoning-effort variants and dynamic workflows. The curated Anthropic models gained adaptive-thinking effort variants (`low`…`max`, with `display: "summarized"` forced for generations that omit thinking by default), selectable per session and surfaced through `/effort`. On top of that sits the workflow runtime: the model writes a JavaScript orchestration script that an isolated Bun worker executes, fanning research out across child-session agents under the parent's authority and the unchanged read-only tool regime; the script itself is coordination-only and cannot touch the filesystem, network, or shell. Runs are observed three ways — durable `started`/`finished` events in the transcript, a `/workflows` TUI overlay fed by ephemeral snapshots over the existing SSE stream, and `GET/POST /api/session/:id/workflow` routes — with a `workflow` tool, saved-workflow discovery, a bundled `/deep-research`, and a `GTE_AGENT_DISABLE_WORKFLOWS` kill switch. The implementation was built by parallel agents and hardened by an independent adversarial review that, among other findings, caught and closed a worker sandbox escape. Its acceptance record is `docs/m_8-acceptance-record.md` (2026-06-12). Workflow run state is process-local and the read-only data boundary is unchanged.
