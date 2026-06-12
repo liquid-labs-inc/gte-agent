@@ -90,3 +90,18 @@ export class QuestionNotFoundError extends Schema.TaggedErrorClass<QuestionNotFo
   },
   { httpApiStatus: 404 },
 ) {}
+
+export class WorkflowDisabledError extends Schema.TaggedErrorClass<WorkflowDisabledError>()(
+  "WorkflowDisabledError",
+  { message: Schema.String },
+  { httpApiStatus: 404 },
+) {}
+
+export class WorkflowRunNotFoundError extends Schema.TaggedErrorClass<WorkflowRunNotFoundError>()(
+  "WorkflowRunNotFoundError",
+  {
+    runID: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}

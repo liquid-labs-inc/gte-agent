@@ -7,6 +7,7 @@ import { SessionGroup } from "./groups/session"
 import { SessionSnapshotGroup } from "./groups/session-snapshot"
 import { HealthGroup } from "./groups/health"
 import { GteDataGroup } from "./groups/gte-data"
+import { WorkflowGroup } from "./groups/workflow"
 
 export const GTEAgentApi = HttpApi.make("gte-agent")
   .add(HealthGroup)
@@ -14,6 +15,7 @@ export const GTEAgentApi = HttpApi.make("gte-agent")
   .add(SessionSnapshotGroup)
   .add(MessageGroup)
   .add(GteDataGroup)
+  .add(WorkflowGroup)
   .add(AuthProviderGroup)
   .add(ModelsGroup)
   .annotateMerge(

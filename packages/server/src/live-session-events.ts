@@ -3,14 +3,15 @@
  *
  * The durable phase (replay + live durable events with cursors) comes from
  * `Session.events`, which only ever emits committed aggregate events. This
- * module merges in session-scoped EPHEMERAL panel events
- * (`session.panel.updated` / `session.panel.status`) for the live phase only:
+ * module merges in session-scoped EPHEMERAL events for the live phase only:
+ * panel events (`session.panel.updated` / `session.panel.status`) and the
+ * workflow run snapshot (`session.workflow.updated`):
  *
  * - Local events carry NO cursor, so clients cannot resume from them and the
  *   `?after` replay semantics of the durable aggregate are untouched.
- * - The merge is allowlisted to the panel event definitions rather than every
- *   local event type, so existing durable-only consumers see no new types
- *   unless panels are actually active.
+ * - The merge is allowlisted to those ephemeral event definitions rather than
+ *   every local event type, so existing durable-only consumers see no new types
+ *   unless panels or workflows are actually active.
  *
  * It also binds panel-subscription lifecycle to SSE presence: the panel
  * manager attaches when the stream starts (first consumer activates the
@@ -22,6 +23,7 @@ import { GtePanelEvent } from "@gte-agent/core/gte-data/panel-event"
 import type { GtePanelManager } from "@gte-agent/core/gte-data/panel-manager"
 import type { Session } from "@gte-agent/core/session"
 import type { SessionEvent } from "@gte-agent/core/session/event"
+import { WorkflowEvent } from "@gte-agent/core/workflow/event"
 import { Effect, Stream } from "effect"
 
 export type Envelope = {
@@ -46,8 +48,8 @@ export function liveSessionEvents<E, R>(
     Stream.map((item): Envelope => ({ cursor: item.cursor, event: item.event })),
   )
   const local = Stream.merge(
-    deps.events.subscribe(GtePanelEvent.Updated),
-    deps.events.subscribe(GtePanelEvent.Status),
+    Stream.merge(deps.events.subscribe(GtePanelEvent.Updated), deps.events.subscribe(GtePanelEvent.Status)),
+    deps.events.subscribe(WorkflowEvent.Updated),
   ).pipe(
     Stream.filter((payload) => payload.data.sessionID === input.sessionID),
     Stream.map((payload): Envelope => ({ event: payload })),

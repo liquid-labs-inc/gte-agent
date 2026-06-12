@@ -17,6 +17,9 @@ import { Database } from "@gte-agent/core/database/database"
 import { Event } from "@gte-agent/core/event"
 import { GtePanelEvent } from "@gte-agent/core/gte-data/panel-event"
 import { Session } from "@gte-agent/core/session"
+import { WorkflowEvent } from "@gte-agent/core/workflow/event"
+import { WorkflowSchema } from "@gte-agent/core/workflow/schema"
+import { DateTime } from "effect"
 import { liveSessionEvents, type Envelope } from "../src/live-session-events"
 
 const SESSION_A = Session.ID.make("ses_live_a")
@@ -149,6 +152,63 @@ describe("status events", () => {
         const payload = envelope.event as { data: { status: string; reason?: string } }
         expect(payload.data.status).toBe("degraded")
         expect(payload.data.reason).toBe("ws unavailable")
+      }),
+    )
+  })
+})
+
+const runSnapshot = (sessionID: Session.ID, status: WorkflowSchema.RunStatus) =>
+  WorkflowSchema.RunInfo.make({
+    id: WorkflowSchema.RunID.make("wfr_live"),
+    sessionID,
+    name: "live-run",
+    status,
+    scriptPath: "/tmp/wfr_live.mjs",
+    tokens: { input: 0, output: 0, reasoning: 0 },
+    agentTotal: 0,
+    time: { started: DateTime.makeUnsafe(0) },
+    phases: [],
+    agents: [],
+    logs: [],
+  })
+
+describe("workflow snapshot events", () => {
+  test("session.workflow.updated flows through the live phase, session-scoped and cursorless", async () => {
+    await run(
+      Effect.gen(function* () {
+        const events = yield* Event.Service
+        const panels = { attach: () => Effect.void, detach: () => Effect.void }
+        const sawWorkflow = yield* Deferred.make<Envelope>()
+
+        const consumer = yield* liveSessionEvents(
+          { events, panels },
+          { sessionID: SESSION_A, durable: Stream.never },
+        ).pipe(
+          Stream.runForEach((envelope) =>
+            (envelope.event as { type?: string }).type === "session.workflow.updated"
+              ? Deferred.succeed(sawWorkflow, envelope)
+              : Effect.void,
+          ),
+          Effect.forkChild,
+        )
+
+        yield* Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 20)))
+        // Another session's snapshot must be filtered out.
+        yield* events.publish(WorkflowEvent.Updated, {
+          sessionID: SESSION_B,
+          run: runSnapshot(SESSION_B, "running"),
+        })
+        yield* events.publish(WorkflowEvent.Updated, {
+          sessionID: SESSION_A,
+          run: runSnapshot(SESSION_A, "completed"),
+        })
+
+        const envelope = yield* Deferred.await(sawWorkflow)
+        yield* Fiber.interrupt(consumer)
+        expect(envelope.cursor).toBeUndefined()
+        const payload = envelope.event as { data: { sessionID: string; run: { id: string; status: string } } }
+        expect(payload.data.sessionID).toBe(SESSION_A)
+        expect(payload.data.run.status).toBe("completed")
       }),
     )
   })
