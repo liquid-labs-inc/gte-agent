@@ -13,6 +13,7 @@ import { SkillTool } from "./skill"
 import { TodoWriteTool } from "./todowrite"
 import { WebFetchTool } from "./webfetch"
 import { WebSearchTool } from "./websearch"
+import { WorkflowTool } from "./workflow"
 import { WriteTool } from "./write"
 
 /**
@@ -45,5 +46,9 @@ export const runtimeScopeLayer = Layer.mergeAll(
   TodoWriteTool.layer,
   WebFetchTool.layer,
   WebSearchTool.layer.pipe(Layer.provide(WebSearchTool.defaultConfigLayer)),
+  // Dynamic workflow orchestration, gated on the kill switch: the layer
+  // contributes nothing when GTE_AGENT_DISABLE_WORKFLOWS is truthy or config
+  // sets `workflows.enabled: false`.
+  WorkflowTool.layer,
   WriteTool.layer,
 )
