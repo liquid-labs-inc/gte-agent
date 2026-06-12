@@ -15,10 +15,16 @@ export type ServerStatus = {
  * sessions inherit the global default, and with neither set the line points
  * at /models (matching the runner's strict no-silent-fallback resolution).
  */
-export function formatActiveModel(session: SessionInfo | undefined, defaultModel: ModelRef | undefined): string {
+export function formatActiveModel(
+  session: SessionInfo | undefined,
+  defaultModel: ModelRef | null | undefined,
+): string {
   const model = session?.model
   if (model !== undefined && model !== null) return `model ${model.providerID}/${model.id}`
-  if (defaultModel !== undefined) return `model ${defaultModel.providerID}/${defaultModel.id} (default)`
+  // The HTTP API serializes an absent default as null, not omitted.
+  if (defaultModel !== undefined && defaultModel !== null) {
+    return `model ${defaultModel.providerID}/${defaultModel.id} (default)`
+  }
   return "model not set — /models"
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { CatalogProvider } from "../src/api/models"
+import { createModelsApi, type CatalogProvider } from "../src/api/models"
 import { formatActiveModel } from "../src/ui/status-bar"
 import { makeSession } from "./fixture/api"
 import {
@@ -161,5 +161,45 @@ describe("formatActiveModel", () => {
   test("with neither set, the line points at /models", () => {
     expect(formatActiveModel(makeSession({ id: "ses_x" }), undefined)).toBe("model not set — /models")
     expect(formatActiveModel(undefined, undefined)).toBe("model not set — /models")
+  })
+
+  test("a null wire default (no global default configured) never crashes", () => {
+    // The HTTP API serializes an absent default as null; a fresh install hits
+    // this on the very first session open.
+    expect(formatActiveModel(makeSession({ id: "ses_x", model: null }), null)).toBe("model not set — /models")
+    expect(formatActiveModel(undefined, null)).toBe("model not set — /models")
+  })
+})
+
+describe("createModelsApi.list null normalization", () => {
+  const listFetch = (body: unknown) =>
+    (async () => new Response(JSON.stringify({ data: body }), { status: 200 })) as unknown as typeof fetch
+
+  test("null default and session (fresh install) normalize to absent", async () => {
+    const api = createModelsApi({ baseUrl: "http://gte-agent.internal", fetch: listFetch({ providers, default: null, session: null }) })
+    const catalog = await api.list()
+    expect(catalog.providers).toHaveLength(2)
+    expect("default" in catalog).toBe(false)
+    expect("session" in catalog).toBe(false)
+  })
+
+  test("a session with a null model keeps the id and drops the model", async () => {
+    const api = createModelsApi({
+      baseUrl: "http://gte-agent.internal",
+      fetch: listFetch({ providers, default: null, session: { id: "ses_x", model: null } }),
+    })
+    const catalog = await api.list(`ses_x`)
+    expect(catalog.session).toEqual({ id: "ses_x" })
+  })
+
+  test("present default and session model pass through", async () => {
+    const ref = { id: "claude-fable-5", providerID: "anthropic" }
+    const api = createModelsApi({
+      baseUrl: "http://gte-agent.internal",
+      fetch: listFetch({ providers, default: ref, session: { id: "ses_x", model: ref } }),
+    })
+    const catalog = await api.list("ses_x")
+    expect(catalog.default).toEqual(ref)
+    expect(catalog.session).toEqual({ id: "ses_x", model: ref })
   })
 })

@@ -38,6 +38,7 @@ export type CatalogProvider = {
 
 export type ModelsCatalog = {
   readonly providers: readonly CatalogProvider[]
+  /** Absent values arrive as null on the wire (effect httpapi); `list` normalizes them to undefined. */
   readonly default?: ModelRef
   readonly session?: { readonly id: string; readonly model?: ModelRef }
 }
@@ -114,8 +115,23 @@ export function createModelsApi(input: { baseUrl: string; fetch: typeof fetch })
     async list(sessionID) {
       const result = (await request(
         sessionID === undefined ? "/api/models" : `/api/models?sessionID=${enc(sessionID)}`,
-      )) as { data: ModelsCatalog }
-      return result.data
+      )) as {
+        data: {
+          providers: readonly CatalogProvider[]
+          default?: ModelRef | null
+          session?: { id: string; model?: ModelRef | null } | null
+        }
+      }
+      // Optional fields serialize as null on the wire; normalize so consumers
+      // (status line, picker) only deal with undefined.
+      const { providers, default: defaultModel, session } = result.data
+      return {
+        providers,
+        ...(defaultModel == null ? {} : { default: defaultModel }),
+        ...(session == null
+          ? {}
+          : { session: { id: session.id, ...(session.model == null ? {} : { model: session.model }) } }),
+      }
     },
 
     async select(selection) {
