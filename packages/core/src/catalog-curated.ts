@@ -30,11 +30,11 @@ const adaptiveVariant = (effort: string) => ({
   body: { providerOptions: { anthropic: { thinking: { type: "adaptive", effort } } } },
 })
 
-const adaptiveVariants = () => ["low", "medium", "high", "xhigh", "max"].map(adaptiveVariant)
+const adaptiveVariants = (efforts = ["low", "medium", "high", "xhigh", "max"]) => efforts.map(adaptiveVariant)
 
 // Legacy budgeted thinking for models without adaptive efforts. Budgets match
 // the upstream opencode tiers: min(16_000, output / 2 - 1) for high and
-// min(31_999, output - 1) for max — both 64K-output models land on the caps.
+// min(31_999, output - 1) for max — the 64K-output model lands on the caps.
 const budgetVariant = (id: string, budgetTokens: number) => ({
   id: Model.VariantID.make(id),
   headers: {},
@@ -123,7 +123,10 @@ const anthropic = () => {
         released: "2026-02-17",
         cost: [{ input: 3, output: 15, cache: { read: 0.3, write: 3.75 } }],
         limit: { context: 1_000_000, output: 64_000 },
-        variants: budgetVariants(),
+        // Sonnet 4.6 is adaptive upstream but does not omit thinking by
+        // default, so it takes the adaptive ladder without `xhigh` and the
+        // protocol never forces a display override for it.
+        variants: adaptiveVariants(["low", "medium", "high", "max"]),
       }),
       model({
         providerID,

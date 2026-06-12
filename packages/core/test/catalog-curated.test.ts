@@ -165,10 +165,10 @@ describe("Catalog curated entries", () => {
       expect(yield* variants("claude-fable-5")).toEqual(adaptiveLadder)
       expect(yield* variants("claude-opus-4-8")).toEqual(adaptiveLadder)
 
-      // Sonnet 4.6 and Haiku 4.5 stay on legacy budgeted thinking.
-      const budgetedTiers = [budgeted("high", 16_000), budgeted("max", 31_999)]
-      expect(yield* variants("claude-sonnet-4-6")).toEqual(budgetedTiers)
-      expect(yield* variants("claude-haiku-4-5")).toEqual(budgetedTiers)
+      // Sonnet 4.6 is adaptive upstream without `xhigh` and without the
+      // display override; Haiku 4.5 stays on legacy budgeted thinking.
+      expect(yield* variants("claude-sonnet-4-6")).toEqual(["low", "medium", "high", "max"].map(adaptive))
+      expect(yield* variants("claude-haiku-4-5")).toEqual([budgeted("high", 16_000), budgeted("max", 31_999)])
     }),
   )
 
