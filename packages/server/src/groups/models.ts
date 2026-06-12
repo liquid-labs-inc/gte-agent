@@ -25,6 +25,18 @@ export class ModelNotFoundError extends Schema.TaggedErrorClass<ModelNotFoundErr
   { httpApiStatus: 404 },
 ) {}
 
+/** Selecting a variant the model does not offer; persisting it would brick later turns. */
+export class VariantNotFoundError extends Schema.TaggedErrorClass<VariantNotFoundError>()(
+  "VariantNotFoundError",
+  {
+    providerID: Schema.String,
+    modelID: Schema.String,
+    variant: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
 export const ModelsAuthStatus = Schema.Struct({
   authenticated: Schema.Boolean.annotate({
     description: "True when a usable credential exists for the model's provider.",
@@ -125,7 +137,7 @@ export const ModelsGroup = HttpApiGroup.make("models")
           }),
         }),
       }).annotate({ identifier: "ModelsSelectResponse" }),
-      error: [ProviderNotFoundError, ModelNotFoundError, SessionNotFoundError, ForbiddenError, UnknownError],
+      error: [ProviderNotFoundError, ModelNotFoundError, VariantNotFoundError, SessionNotFoundError, ForbiddenError, UnknownError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "models.select",

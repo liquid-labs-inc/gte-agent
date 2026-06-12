@@ -256,6 +256,24 @@ describe("models.select", () => {
       }),
 
     http
+      .post("/api/models/select", "rejects a variant the model does not offer with a 404")
+      .seeded(async () => {
+        reset()
+        return undefined
+      })
+      .at(() => ({
+        path: "/api/models/select",
+        // Haiku offers high/max only; xhigh would dangle and brick later turns.
+        body: { providerID: "anthropic", modelID: "claude-haiku-4-5", variant: "xhigh" },
+      }))
+      .json(404, (body) => {
+        const error = record(body, "error body")
+        check(error._tag === "VariantNotFoundError", `expected VariantNotFoundError, got ${JSON.stringify(body)}`)
+        check(error.variant === "xhigh", `error should carry the variant: ${JSON.stringify(body)}`)
+        check(!existsSync(CONFIG_FILE), "a rejected variant selection must not write the global default")
+      }),
+
+    http
       .post("/api/models/select", "rejects a provider that is not in the curated catalog")
       .seeded(async () => {
         reset()

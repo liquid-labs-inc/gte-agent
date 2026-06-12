@@ -17,24 +17,24 @@ import type { GteApi, GteProvenance, PanelType, PinnedPanel, SnapshotSummary } f
 import { CANDLE_INTERVALS, GteRequestError } from "../api/gte"
 import type { ModelRef, ModelsApi } from "../api/models"
 import { isWorkflowsDisabled, type WorkflowsApi } from "../api/workflows"
+import { resolveEffort } from "../state/effort"
 import { parseModelTarget, type ModelTarget } from "../state/models"
 import { summarizeData } from "../state/summarize"
 
 export const MAX_PINNED_PANELS = 8
 export const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/
 
-/** Named reasoning-effort tiers `/effort` accepts (besides the `ultrathink` resolver). */
-export const EFFORT_TIERS = ["low", "medium", "high", "xhigh", "max"] as const
-export type EffortTier = (typeof EFFORT_TIERS)[number]
+export { EFFORT_TIERS, type EffortTier } from "../state/effort"
 
 /**
- * Minimal orchestration instruction prefixed onto a `/workflow <task>` prompt.
- * Core-side keyword handling is a separate workstream; the TUI's only job is to
- * wrap the user's task with this line so the model knows to consider fanning the
- * work out via the workflow tool.
+ * Orchestration prefix wrapped onto a `/workflow <task>` prompt. It leads with
+ * the literal word `ultrathink` so the server-side keyword detector
+ * (system-prompt.ts) fires and adds the workflow-orchestration instruction, then
+ * tells the model to scale the work out across bounded subagents via the
+ * workflow tool.
  */
 export const WORKFLOW_PROMPT_PREFIX =
-  "Use the workflow tool to fan this task out across bounded subagents when it benefits from parallel research, scaling the fan-out to the task. Task:"
+  "ultrathink — use the workflow tool to fan this task out across bounded subagents when it benefits from parallel research, scaling the fan-out to the task. Task:"
 
 export type ParsedCommand = { readonly name: string; readonly args: readonly string[] }
 
@@ -159,6 +159,13 @@ export type CommandContext = {
   readonly activeModel?: ModelRef
   /** Send a prompt through the normal prompt path (used by `/workflow`). */
   readonly prompt: (text: string) => void
+  /**
+   * Toggle the session-local ultrathink flag (SCOPE-A). While on, the TUI
+   * prepends the literal word `ultrathink` to subsequent user prompts so the
+   * server keyword detector adds the workflow-orchestration instruction. No
+   * durable session state is involved.
+   */
+  readonly setUltrathink: (on: boolean) => void
   /** Mirror an applied model back into the app store so the status line stays correct. */
   readonly onModelApplied: (model: ModelRef) => void
   /** Local (non-persisted) command feedback line in the transcript. */
@@ -449,6 +456,7 @@ async function run(spec: CommandSpec, args: readonly string[], ctx: CommandConte
     case "workflow": {
       const task = args.join(" ").trim()
       if (task.length === 0) return ctx.error(`Usage: ${spec.usage}`)
+      if (await workflowsDisabled(ctx)) return ctx.error("workflows are disabled")
       ctx.prompt(`${WORKFLOW_PROMPT_PREFIX} ${task}`)
       return
     }
@@ -504,23 +512,26 @@ async function run(spec: CommandSpec, args: readonly string[], ctx: CommandConte
 /**
  * `/effort <tier>` re-selects the active model with a reasoning-effort variant.
  *
- * Named tiers (low/medium/high/xhigh/max) select that exact variant. `ultrathink`
- * resolves to the highest variant the active model offers (xhigh, else max, else
- * high) and turns on the session ultrathink intent flag; a model with no
- * reasoning variants gets the flag only with an info line. The kill switch is
- * probed through the workflows client so `ultrathink` reports the feature
- * disabled rather than silently selecting nothing.
+ * Named tiers (low/medium/high/xhigh/max) are validated against the model's
+ * catalog variants up front — a tier the model does not offer is reported with
+ * the tiers it does, never persisted (a dangling variant bricks later turns).
+ * `ultrathink` resolves to the highest variant the active model offers (xhigh,
+ * else max, else high) and turns on the session-local ultrathink flag (SCOPE-A:
+ * a TUI store boolean that prepends the keyword to later prompts); a model with
+ * no reasoning variants gets the flag only, with an info line. ultrathink is
+ * gated on the workflow kill switch through the workflows client so it reports
+ * the feature disabled rather than silently flagging nothing.
  */
 async function runEffort(ctx: CommandContext, tier: string | undefined, usage: string): Promise<void> {
   const requested = tier?.toLowerCase()
   if (requested === undefined) return ctx.error(`Usage: ${usage}`)
-  if (requested !== "ultrathink" && !EFFORT_TIERS.includes(requested as EffortTier)) {
-    return ctx.error(`Unknown effort tier "${tier}". Choose one of: ${EFFORT_TIERS.join(", ")}, ultrathink.`)
-  }
   const active = ctx.activeModel
   if (active === undefined || active === null) {
     return ctx.error("No active model — pick one with /models before setting an effort tier.")
   }
+
+  const variants = await activeModelVariants(ctx, active)
+  const resolution = resolveEffort(requested, { ref: `${active.providerID}/${active.id}`, variants })
 
   const select = async (variant: string) => {
     const result = await ctx.models.select({
@@ -533,27 +544,29 @@ async function runEffort(ctx: CommandContext, tier: string | undefined, usage: s
     return result
   }
 
-  if (requested !== "ultrathink") {
-    const result = await select(requested)
-    ctx.info(`Effort set to ${requested} for ${result.model.providerID}/${result.model.id}.`)
+  if (resolution.kind === "unavailable") return ctx.error(resolution.message)
+
+  if (resolution.kind === "select") {
+    const result = await select(resolution.variant)
+    ctx.info(`Effort set to ${resolution.variant} for ${result.model.providerID}/${result.model.id}.`)
     return
   }
 
-  // ultrathink: gated on the workflow kill switch, then highest-variant + intent flag.
-  const disabled = await workflowsDisabled(ctx)
-  if (disabled) return ctx.error("workflows are disabled")
-
-  const variants = await activeModelVariants(ctx, active)
-  const highest = ["xhigh", "max", "high"].find((candidate) => variants.includes(candidate))
-  await ctx.gte.updateIntent(ctx.sessionID, { ultrathink: true })
-  if (highest === undefined) {
+  // ultrathink: gate on the kill switch, then turn on the session-local flag and
+  // pick the highest available variant (if any). The flag — not a durable intent
+  // row — is what makes the TUI prepend the keyword to later prompts.
+  if (await workflowsDisabled(ctx)) return ctx.error("workflows are disabled")
+  ctx.setUltrathink(true)
+  if (resolution.variant === undefined) {
     ctx.info(
-      `No reasoning variants exist for ${active.providerID}/${active.id}; ultrathink intent enabled without a variant change.`,
+      `No reasoning variants exist for ${active.providerID}/${active.id}; ultrathink enabled without a variant change. Subsequent prompts run in ultrathink mode.`,
     )
     return
   }
-  const result = await select(highest)
-  ctx.info(`Ultrathink enabled — ${result.model.providerID}/${result.model.id} set to ${highest}.`)
+  const result = await select(resolution.variant)
+  ctx.info(
+    `Ultrathink enabled — ${result.model.providerID}/${result.model.id} set to ${resolution.variant}. Subsequent prompts run in ultrathink mode.`,
+  )
 }
 
 /** Reasoning variants the active model exposes in the curated catalog (empty when none). */

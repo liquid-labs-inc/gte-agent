@@ -68,6 +68,8 @@ type Harness = {
   workflowsOpened: number
   prompts: string[]
   appliedModels: ModelRef[]
+  /** Session-local ultrathink toggles recorded through ctx.setUltrathink (SCOPE-A). */
+  ultrathinkFlags: boolean[]
 }
 
 function makeCtx(options?: {
@@ -87,6 +89,7 @@ function makeCtx(options?: {
   const modelsOpened: Array<{ providerID: string; modelID: string } | undefined> = []
   const prompts: string[] = []
   const appliedModels: ModelRef[] = []
+  const ultrathinkFlags: boolean[] = []
   let workflowsOpened = 0
   const ctx: CommandContext = {
     gte: createGteApi({ baseUrl: BASE_URL, fetch: mock.fetch }),
@@ -104,6 +107,7 @@ function makeCtx(options?: {
     models: createModelsApi({ baseUrl: BASE_URL, fetch: mock.fetch }),
     workflows: createWorkflowsApi({ baseUrl: BASE_URL, fetch: mock.fetch }),
     prompt: (text) => prompts.push(text),
+    setUltrathink: (on) => ultrathinkFlags.push(on),
     onModelApplied: (model) => appliedModels.push(model),
     info: (text) => infos.push(text),
     error: (text) => errors.push(text),
@@ -117,6 +121,7 @@ function makeCtx(options?: {
     modelsOpened,
     prompts,
     appliedModels,
+    ultrathinkFlags,
     get workflowsOpened() {
       return workflowsOpened
     },
@@ -365,49 +370,68 @@ describe("/effort", () => {
     expect(harness.errors[0]).toContain("No active model")
   })
 
-  test("ultrathink picks xhigh when the model offers it and sets the intent flag", async () => {
+  test("a named tier the model does not offer is reported up front and never persists", async () => {
+    // Haiku offers high/max only; xhigh must be refused before any select call,
+    // so a dangling variant never reaches the session.
+    const harness = makeCtx({ activeModel: HAIKU })
+    await run("/effort xhigh", harness)
+    expect(harness.mock.selections).toEqual([])
+    expect(harness.appliedModels).toEqual([])
+    expect(harness.infos).toEqual([])
+    expect(harness.errors[0]).toContain('Effort "xhigh" is not available')
+    expect(harness.errors[0]).toContain("high, max")
+  })
+
+  test("ultrathink picks xhigh when the model offers it and turns on the session flag", async () => {
     const harness = makeCtx({ activeModel: FABLE })
     await run("/effort ultrathink", harness)
     expect(harness.errors).toEqual([])
     expect(harness.mock.selections).toEqual([
       { providerID: "anthropic", modelID: "claude-fable-5", variant: "xhigh", sessionID: "ses_slash" },
     ])
-    expect(harness.mock.intentPatches.some((entry) => entry.patch.ultrathink === true)).toBe(true)
+    // SCOPE-A: the session-local flag, not a durable intent row.
+    expect(harness.ultrathinkFlags).toEqual([true])
+    expect(harness.mock.intentPatches.some((entry) => entry.patch.ultrathink === true)).toBe(false)
     expect(harness.infos[0]).toContain("Ultrathink enabled")
     expect(harness.infos[0]).toContain("xhigh")
+    expect(harness.infos[0]).toContain("ultrathink mode")
   })
 
   test("ultrathink falls back to max when the model has no xhigh", async () => {
     const harness = makeCtx({ activeModel: HAIKU })
     await run("/effort ultrathink", harness)
     expect(harness.mock.selections[0]).toMatchObject({ modelID: "claude-haiku-4-5", variant: "max" })
+    expect(harness.ultrathinkFlags).toEqual([true])
   })
 
-  test("ultrathink on a model with no variants sets only the intent flag", async () => {
+  test("ultrathink on a model with no variants sets only the session flag", async () => {
     const harness = makeCtx({ activeModel: GPT })
     await run("/effort ultrathink", harness)
     expect(harness.mock.selections).toEqual([])
-    expect(harness.mock.intentPatches.some((entry) => entry.patch.ultrathink === true)).toBe(true)
+    expect(harness.ultrathinkFlags).toEqual([true])
+    expect(harness.mock.intentPatches.some((entry) => entry.patch.ultrathink === true)).toBe(false)
     expect(harness.infos[0]).toContain("No reasoning variants exist")
   })
 
-  test("ultrathink reports the kill switch when workflows are disabled", async () => {
+  test("ultrathink reports the kill switch when workflows are disabled and never flags", async () => {
     const harness = makeCtx({ activeModel: FABLE, workflowsDisabled: true })
     await run("/effort ultrathink", harness)
     expect(harness.mock.selections).toEqual([])
-    expect(harness.mock.intentPatches).toEqual([])
+    expect(harness.ultrathinkFlags).toEqual([])
     expect(harness.errors).toEqual(["workflows are disabled"])
   })
 })
 
 describe("/workflow", () => {
-  test("wraps the task with the orchestration prefix and sends it as a prompt", async () => {
+  test("wraps the task with the orchestration prefix, leads with the ultrathink keyword, and sends it", async () => {
     const harness = makeCtx()
     await run("/workflow compare ETH and BTC liquidity", harness)
     expect(harness.errors).toEqual([])
     expect(harness.prompts.length).toBe(1)
     expect(harness.prompts[0]).toContain("compare ETH and BTC liquidity")
     expect(harness.prompts[0]).toContain("workflow tool")
+    // The literal keyword must lead so the server-side detector fires.
+    expect(harness.prompts[0]).toContain("ultrathink")
   })
 
   test("without a task reports usage and sends nothing", async () => {
@@ -415,5 +439,12 @@ describe("/workflow", () => {
     await run("/workflow", harness)
     expect(harness.prompts).toEqual([])
     expect(harness.errors[0]).toContain("Usage:")
+  })
+
+  test("is gated on the kill switch: disabled workflows report and send nothing", async () => {
+    const harness = makeCtx({ workflowsDisabled: true })
+    await run("/workflow compare ETH and BTC liquidity", harness)
+    expect(harness.prompts).toEqual([])
+    expect(harness.errors).toEqual(["workflows are disabled"])
   })
 })

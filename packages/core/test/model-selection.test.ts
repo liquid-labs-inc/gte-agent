@@ -127,6 +127,40 @@ describe("ModelSelection", () => {
     ),
   )
 
+  it.effect("rejects a variant the selected model does not offer and never persists it", () =>
+    withSelection((home) =>
+      Effect.gen(function* () {
+        const selection = yield* ModelSelection.Service
+        // Haiku offers high/max only — xhigh would dangle and brick later turns.
+        const rejected = yield* selection
+          .select({ ...ref("anthropic", "claude-haiku-4-5"), variant: Model.VariantID.make("xhigh") })
+          .pipe(Effect.flip)
+        expect(rejected).toMatchObject({
+          _tag: "ModelSelection.UnknownVariantError",
+          providerID: "anthropic",
+          modelID: "claude-haiku-4-5",
+          variant: "xhigh",
+        })
+        // A rejected selection writes nothing — the global default stays unset.
+        expect(yield* selection.defaultRef()).toBeUndefined()
+        expect(yield* Effect.promise(() => Bun.file(path.join(home, ".gte-agent", "config.json")).exists())).toBe(false)
+      }),
+    ),
+  )
+
+  it.effect("accepts a variant the selected model offers", () =>
+    withSelection((_home) =>
+      Effect.gen(function* () {
+        const selection = yield* ModelSelection.Service
+        const model = yield* selection.select({
+          ...ref("anthropic", "claude-fable-5"),
+          variant: Model.VariantID.make("xhigh"),
+        })
+        expect(model.id).toBe(Model.ID.make("claude-fable-5"))
+      }),
+    ),
+  )
+
   it.effect("writes the global default to ~/.gte-agent/config.json and reads it back", () =>
     withSelection((home) =>
       Effect.gen(function* () {

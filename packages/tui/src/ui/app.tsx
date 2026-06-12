@@ -73,6 +73,13 @@ type Store = {
   modelsOverlay?: { target?: ModelTarget }
   /** /workflows overlay open flag; the overlay reads the live registry from the store. */
   workflowsOverlay?: boolean
+  /**
+   * Session-local ultrathink flag (SCOPE-A). While on, non-slash prompts are
+   * prepended with the literal word `ultrathink` so the server keyword detector
+   * adds the workflow-orchestration instruction. Not durable — a TUI-only
+   * boolean cleared on session change.
+   */
+  ultrathink?: boolean
   error?: string
 }
 
@@ -166,6 +173,7 @@ export function App(props: AppProps) {
       loadingTranscript: true,
       workspace: seedWorkspace(session as Record<string, unknown>),
       workflows: emptyWorkflows,
+      ultrathink: false,
       error: undefined,
     })
     const sessionID = String(session.id)
@@ -237,6 +245,7 @@ export function App(props: AppProps) {
       workflows: emptyWorkflows,
       modelsOverlay: undefined,
       workflowsOverlay: undefined,
+      ultrathink: false,
       error: undefined,
     })
     void refreshSessions()
@@ -273,6 +282,7 @@ export function App(props: AppProps) {
         workflows: props.workflows,
         activeModel: store.session?.model ?? store.defaultModel,
         prompt: (line) => props.api.prompt(String(session.id), line).catch(fail),
+        setUltrathink: (on) => setStore("ultrathink", on),
         onModelApplied: (model) => {
           if (store.session !== undefined) setStore("session", { ...store.session, model })
           setStore("defaultModel", model)
@@ -282,7 +292,9 @@ export function App(props: AppProps) {
       })
       return
     }
-    props.api.prompt(String(session.id), text).catch(fail)
+    // SCOPE-A: while ultrathink is on, prepend the literal keyword so the server
+    // detector adds the workflow-orchestration instruction. Session-local only.
+    props.api.prompt(String(session.id), store.ultrathink ? `ultrathink ${text}` : text).catch(fail)
   }
 
   useKeyboard((event: KeyEvent) => {

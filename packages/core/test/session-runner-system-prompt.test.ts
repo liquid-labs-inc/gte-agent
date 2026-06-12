@@ -10,6 +10,9 @@ import { Project } from "@gte-agent/core/project"
 import { ProjectTable } from "@gte-agent/core/project/sql"
 import { AbsolutePath } from "@gte-agent/core/schema"
 import { Session } from "@gte-agent/core/session"
+import { SessionInput } from "@gte-agent/core/session/input"
+import { SessionMessage } from "@gte-agent/core/session/message"
+import { Prompt } from "@gte-agent/core/session/prompt"
 import { SessionProjector } from "@gte-agent/core/session/projector"
 import { SessionRunner } from "@gte-agent/core/session/runner"
 import * as SessionRunnerLLM from "@gte-agent/core/session/runner/llm"
@@ -135,6 +138,25 @@ describe("SessionRunnerSystemPrompt", () => {
     }),
   )
 
+  it.effect("does not add the orchestration instruction when the kill-switch flag disables workflows", () =>
+    Effect.gen(function* () {
+      const saved = process.env.GTE_AGENT_DISABLE_WORKFLOWS
+      process.env.GTE_AGENT_DISABLE_WORKFLOWS = "1"
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          if (saved === undefined) delete process.env.GTE_AGENT_DISABLE_WORKFLOWS
+          else process.env.GTE_AGENT_DISABLE_WORKFLOWS = saved
+        }),
+      )
+      // The layer reads the kill switch at build, so build it here under the flag.
+      const baseline = yield* Effect.gen(function* () {
+        const prompt = yield* SessionRunnerSystemPrompt.Service
+        return yield* prompt.baseline(session(), "ultrathink: compare funding across every perp")
+      }).pipe(Effect.provide(SessionRunnerSystemPrompt.layer))
+      expect(baseline).not.toContain("Ultrathink mode is active")
+    }).pipe(Effect.scoped),
+  )
+
   // --- runner integration: the GTE prompt leads the provider request -------
 
   const database = Database.layerFromPath(":memory:")
@@ -199,6 +221,47 @@ describe("SessionRunnerSystemPrompt", () => {
       expect(requests).toHaveLength(1)
       expect(requests[0]?.system[0]?.text).toContain("You are GTE Agent, a read-only trading-data assistant")
       expect(requests[0]?.system[0]?.text).toContain("GTE environment: unknown")
+    }),
+  )
+
+  // A real user message carrying the ultrathink keyword, driven through llm.ts,
+  // lands the workflow-orchestration instruction in the actual provider request.
+  runnerIt.effect("lands the orchestration instruction in the request when a user message mentions ultrathink", () =>
+    Effect.gen(function* () {
+      const { db } = yield* Database.Service
+      const events = yield* Event.Service
+      const sessionID = Session.ID.make("ses_system_prompt_ultra")
+      yield* db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
+        .onConflictDoNothing()
+        .run()
+        .pipe(Effect.orDie)
+      yield* db
+        .insert(SessionTable)
+        .values({
+          id: sessionID,
+          project_id: Project.ID.global,
+          slug: sessionID,
+          directory: "/project",
+          title: "test",
+          version: "test",
+        })
+        .onConflictDoNothing()
+        .run()
+        .pipe(Effect.orDie)
+      yield* SessionInput.admit(db, events, {
+        id: SessionMessage.ID.create(),
+        sessionID,
+        prompt: new Prompt({ text: "ultrathink: compare funding across every perp" }),
+        delivery: "steer",
+      })
+      requests.length = 0
+      yield* (yield* SessionRunner.Service).run({ sessionID })
+      expect(requests).toHaveLength(1)
+      const system = requests[0]?.system.map((part) => part.text).join("\n") ?? ""
+      expect(system).toContain("Ultrathink mode is active for this request")
+      expect(system).toContain("launch it with the `workflow` tool")
     }),
   )
 })

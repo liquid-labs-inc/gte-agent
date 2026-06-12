@@ -49,7 +49,21 @@ export type SelectInput = {
   readonly variant?: Model.VariantID
 }
 
-export type SelectError = Catalog.ProviderNotFoundError | Catalog.ModelNotFoundError | FSUtil.Error
+/** A variant that is not in the selected model's catalog variants — persisting it would brick every later turn. */
+export class UnknownVariantError extends Schema.TaggedErrorClass<UnknownVariantError>()(
+  "ModelSelection.UnknownVariantError",
+  {
+    providerID: Provider.ID,
+    modelID: Model.ID,
+    variant: Model.VariantID,
+  },
+) {}
+
+export type SelectError =
+  | Catalog.ProviderNotFoundError
+  | Catalog.ModelNotFoundError
+  | UnknownVariantError
+  | FSUtil.Error
 
 export interface Interface {
   /** Catalog models (newest first) with the provider's auth status and the global-default marker. */
@@ -154,6 +168,20 @@ export const layer = Layer.effect(
       }),
       select: Effect.fn("ModelSelection.select")(function* (input) {
         const model = yield* catalog.model.get(input.providerID, input.modelID)
+        // A variant must exist on the resolved model before it is persisted: a
+        // dangling variant resolves to UnknownVariantError on the next turn and
+        // bricks the session. "default" (or unset) means no variant payload.
+        if (
+          input.variant !== undefined &&
+          input.variant !== "default" &&
+          !model.variants.some((variant) => variant.id === input.variant)
+        ) {
+          return yield* new UnknownVariantError({
+            providerID: input.providerID,
+            modelID: input.modelID,
+            variant: input.variant,
+          })
+        }
         if (input.sessionID !== undefined) {
           yield* events.publish(SessionEvent.ModelSwitched, {
             sessionID: input.sessionID,

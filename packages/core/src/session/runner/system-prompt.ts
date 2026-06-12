@@ -1,6 +1,8 @@
 export * as SessionRunnerSystemPrompt from "./system-prompt"
 
 import { Context, Effect, Layer, Option } from "effect"
+import { Config } from "../../config"
+import { Flag } from "../../flag/flag"
 import { GteData } from "../../gte-data/gte-data"
 import type { SessionSchema } from "../schema"
 
@@ -17,8 +19,11 @@ export interface Input {
   readonly selectedMarket?: string
   /**
    * Opts this turn into the workflow-orchestration instruction (ultrathink
-   * mode). Set when the latest user prompt mentions `ultrathink`, when the
-   * `/effort ultrathink` session-intent flag is on, or when `/workflow` is used.
+   * mode). Set when the latest user prompt mentions the literal word
+   * `ultrathink` — the one keyword that drives this server-side. The TUI's
+   * `/effort ultrathink` and `/workflow` reach it the same way, by prepending
+   * the keyword to the prompt (SCOPE-A), so there is no separate session flag.
+   * The workflow kill switch gates this off even when the keyword is present.
    */
   readonly workflowOrchestration?: boolean
 }
@@ -92,6 +97,11 @@ export const layer = Layer.effect(
     const data = Option.getOrUndefined(yield* Effect.serviceOption(GteData.Service))
     const config = Option.getOrUndefined(yield* Effect.serviceOption(GteData.ConfigService))
     const gteEnv = data?.env ?? config?.env
+    // Resolve the workflow kill switch once. The keyword instruction must not be
+    // injected when workflows are disabled — the tool is not contributed, so the
+    // instruction would point the model at a tool it cannot call. Tolerant of a
+    // missing Config (tests and embedders without one): default to enabled.
+    const workflowsEnabled = yield* resolveWorkflowsEnabled
     return Service.of({
       baseline: (session, latestUserText) =>
         Effect.succeed(
@@ -99,7 +109,7 @@ export const layer = Layer.effect(
             ...(gteEnv === undefined ? {} : { gteEnv }),
             ...(session.trackedAddress === undefined ? {} : { trackedAddress: session.trackedAddress }),
             ...(session.selectedMarket === undefined ? {} : { selectedMarket: session.selectedMarket }),
-            ...(latestUserText !== undefined && mentionsUltrathink(latestUserText)
+            ...(workflowsEnabled && latestUserText !== undefined && mentionsUltrathink(latestUserText)
               ? { workflowOrchestration: true }
               : {}),
           }),
@@ -107,3 +117,21 @@ export const layer = Layer.effect(
     })
   }),
 )
+
+/**
+ * The workflow kill switch, read tolerantly: a truthy
+ * `GTE_AGENT_DISABLE_WORKFLOWS` flag or `workflows.enabled: false` in config
+ * disables it. Mirrors `WorkflowRuntime.enabled` but uses an optional Config so
+ * the system-prompt layer composes without one (defaulting to enabled).
+ */
+const resolveWorkflowsEnabled = Effect.gen(function* () {
+  if (Flag.GTE_AGENT_DISABLE_WORKFLOWS) return false
+  const configService = Option.getOrUndefined(yield* Effect.serviceOption(Config.Service))
+  if (configService === undefined) return true
+  const entries = yield* configService.entries()
+  const merged: Config.Info = Object.assign(
+    {},
+    ...entries.flatMap((entry) => (entry.type === "document" ? [entry.info] : [])),
+  )
+  return merged.workflows?.enabled !== false
+})

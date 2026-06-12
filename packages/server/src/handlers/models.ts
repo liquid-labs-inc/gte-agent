@@ -6,7 +6,7 @@ import { Catalog } from "@gte-agent/core/catalog"
 import { DateTime, Effect } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { GTEAgentApi } from "../api"
-import { ModelNotFoundError } from "../groups/models"
+import { ModelNotFoundError, VariantNotFoundError } from "../groups/models"
 import { ForbiddenError, ProviderNotFoundError, SessionNotFoundError, UnknownError } from "../errors"
 
 export const modelsHandlers = HttpApiBuilder.group(GTEAgentApi, "models", (handlers) =>
@@ -115,6 +115,16 @@ export const modelsHandlers = HttpApiBuilder.group(GTEAgentApi, "models", (handl
                     providerID: error.providerID,
                     modelID: error.modelID,
                     message: `Unknown model: ${error.providerID}/${error.modelID}`,
+                  }),
+                ),
+              ),
+              Effect.catchTag("ModelSelection.UnknownVariantError", (error) =>
+                Effect.fail(
+                  new VariantNotFoundError({
+                    providerID: error.providerID,
+                    modelID: error.modelID,
+                    variant: error.variant,
+                    message: `Model ${error.providerID}/${error.modelID} has no variant "${error.variant}". Use /models to re-select.`,
                   }),
                 ),
               ),

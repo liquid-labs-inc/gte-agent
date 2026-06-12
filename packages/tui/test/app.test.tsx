@@ -157,6 +157,34 @@ test("submitting a prompt posts to the canonical prompt route", async () => {
   expect(mock.prompts[0]).toEqual({ sessionID: "ses_alpha", text: "hello from the tui" })
 })
 
+test("/effort ultrathink prepends the keyword to subsequent prompts (SCOPE-A session-local flag)", async () => {
+  const mock = createMockApi({
+    sessions: [makeSession({ id: "ses_alpha", title: "alpha session" })],
+    // The active model must offer variants for ultrathink to resolve a tier.
+    defaultModel: { id: "claude-fable-5", providerID: "anthropic" },
+  })
+  active = await mount(mock)
+
+  await active.waitForFrame((current) => current.includes("alpha session"))
+  active.mockInput.pressKey("ARROW_DOWN")
+  active.mockInput.pressEnter()
+  await active.waitForFrame((current) => current.includes("prompt"))
+
+  // Turn on ultrathink — a slash command, so it is never prepended itself.
+  await active.mockInput.typeText("/effort ultrathink")
+  active.mockInput.pressEnter()
+  await active.waitFor(() => mock.selections.length > 0)
+  // The flag never selected through the durable intent route.
+  expect(mock.intentPatches.some((entry) => entry.patch.ultrathink === true)).toBe(false)
+
+  // The next normal prompt is prepended with the literal keyword so the server
+  // detector adds the workflow-orchestration instruction.
+  await active.mockInput.typeText("compare ETH and BTC liquidity")
+  active.mockInput.pressEnter()
+  await active.waitFor(() => mock.prompts.length > 0)
+  expect(mock.prompts[0].text).toBe("ultrathink compare ETH and BTC liquidity")
+})
+
 test("navigating away while history loads does not leak the stale session into the new one", async () => {
   const mock = createMockApi({
     sessions: [
