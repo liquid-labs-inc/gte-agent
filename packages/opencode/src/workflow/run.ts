@@ -250,25 +250,30 @@ export class WorkflowRun {
         ),
       }
     })
-    return {
-      id: this.id,
-      name: this.name,
-      parentSessionID: this.parentSessionID,
-      scriptPath: this.scriptPath,
-      status: this.status,
-      startedAt: this.startedAt,
-      finishedAt: this.finishedAt,
-      result: this.resultText,
-      error: this.errorText,
-      logs: [...this.logs],
-      phases: phaseList,
-      agents,
-      tokens: agents.reduce(
-        (acc, agent) => ({ input: acc.input + agent.tokens.input, output: acc.output + agent.tokens.output }),
-        { input: 0, output: 0 },
-      ),
-      agentTotal: this.launched,
-    }
+    // JSON round-trip drops `undefined`-valued keys: the HTTP API response schema
+    // (strict JSON) rejects payloads carrying explicit `result: undefined` /
+    // `finishedAt: undefined`, which broke the /workflows list route for live runs.
+    return JSON.parse(
+      JSON.stringify({
+        id: this.id,
+        name: this.name,
+        parentSessionID: this.parentSessionID,
+        scriptPath: this.scriptPath,
+        status: this.status,
+        startedAt: this.startedAt,
+        finishedAt: this.finishedAt,
+        result: this.resultText,
+        error: this.errorText,
+        logs: [...this.logs],
+        phases: phaseList,
+        agents,
+        tokens: agents.reduce(
+          (acc, agent) => ({ input: acc.input + agent.tokens.input, output: acc.output + agent.tokens.output }),
+          { input: 0, output: 0 },
+        ),
+        agentTotal: this.launched,
+      }),
+    ) as RunSnapshot
   }
 
   get currentStatus(): RunStatus {
@@ -335,7 +340,7 @@ export class WorkflowRun {
         this.finish({ status: "completed", result: renderResult(message.result) })
         return
       case "error":
-        this.finish({ status: "error", error: message.message })
+        this.finish({ status: "error", error: message.message || "Workflow script failed" })
         return
     }
   }
@@ -442,7 +447,7 @@ export class WorkflowRun {
           this.inflight.delete(state.id)
           return
         }
-        this.settleAgent(entry, key, undefined, error instanceof Error ? error.message : String(error))
+        this.settleAgent(entry, key, undefined, describeError(error))
         return
       }
     }
@@ -511,6 +516,23 @@ export class WorkflowRun {
     })
     this.resolveDone(result)
   }
+}
+
+/**
+ * Effect failures (FiberFailure, Cause wrappers) often carry an empty `.message`
+ * and stringify uselessly; without this, agent/script failures surfaced as
+ * `error: ""` in run snapshots and "empty" errors in the parent session.
+ */
+export function describeError(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === "string" && error) return error
+  const text = String(error)
+  if (text && text !== "[object Object]" && text !== "Error") return text
+  try {
+    const json = JSON.stringify(error)
+    if (json && json !== "{}") return json
+  } catch {}
+  return "Agent failed"
 }
 
 function abortMessage(signal: AbortSignal): string {

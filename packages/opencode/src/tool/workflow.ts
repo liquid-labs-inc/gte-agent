@@ -12,6 +12,7 @@ import { Database } from "@opencode-ai/core/database/database"
 import { MessageV2 } from "../session/message-v2"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { ProviderV2 } from "@opencode-ai/core/provider"
+import * as Provider from "@/provider/provider"
 import { Scope } from "effect"
 import { Workflow } from "@/workflow"
 import { WorkflowRuntime } from "@/workflow/runtime"
@@ -65,6 +66,7 @@ export const WorkflowTool = Tool.define(
   id,
   Effect.gen(function* () {
     const agents = yield* Agent.Service
+    const providers = yield* Provider.Service
     const background = yield* BackgroundJob.Service
     const config = yield* Config.Service
     const sessions = yield* Session.Service
@@ -141,8 +143,23 @@ export const WorkflowTool = Tool.define(
               modelID: ModelV2.ID.make(request.model.slice(request.model.indexOf("/") + 1)),
             }
           : undefined
-        const model = override ?? info.model ?? parentModel
-        const variant = request.variant ?? (override || info.model ? undefined : parentVariant)
+        const requested = override ?? info.model ?? parentModel
+        // Scripts (and agent defs) may request models whose provider is not
+        // configured in this environment. Failing the whole run over a routing
+        // preference is wrong — fall back to the parent session's model, which
+        // is known-good, and keep the run model-agnostic.
+        const model = yield* providers.getModel(requested.providerID, requested.modelID).pipe(
+          Effect.as(requested),
+          Effect.catchCause(() =>
+            requested.providerID === parentModel.providerID && requested.modelID === parentModel.modelID
+              ? Effect.fail(
+                  new Error(`Model ${requested.providerID}/${requested.modelID} is not available in this environment`),
+                )
+              : Effect.succeed(parentModel),
+          ),
+        )
+        const usedFallback = model === parentModel && requested !== parentModel
+        const variant = request.variant ?? (usedFallback || (!override && !info.model) ? parentVariant : undefined)
 
         const execute = Effect.gen(function* () {
           const parts = yield* ops.resolvePromptParts(request.prompt)

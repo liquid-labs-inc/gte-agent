@@ -139,7 +139,11 @@ self.onmessage = (event: MessageEvent<HostToWorker>) => {
       .catch((error: unknown) => {
         post({
           type: "error",
-          message: error instanceof Error ? error.message : String(error),
+          message:
+            (error instanceof Error && error.message) ||
+            (typeof error === "string" && error) ||
+            String(error) ||
+            "Workflow script failed",
           stack: error instanceof Error ? error.stack : undefined,
         })
       })
