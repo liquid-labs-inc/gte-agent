@@ -167,6 +167,53 @@ describe("WorkflowRuntime", () => {
     ),
   )
 
+  it.live("blocks the computed .constructor escape that the static guard misses", () =>
+    harness(echo, () =>
+      Effect.gen(function* () {
+        const runtime = yield* WorkflowRuntime.Service
+        // A function's `.constructor` IS the Function constructor, which rebuilds
+        // eval/import. The literal-only validator misses computed access — string
+        // concat, array join, variable indirection, template concat — so all of
+        // these reach the worker. After the prototype poison `constructor`
+        // resolves to undefined, so the call throws before any code is built and
+        // node:os is never imported. (Without the poison every one of these
+        // completes, executing arbitrary Function-constructor code.)
+        const escapes = {
+          concat: 'const f = function () {}\nreturn f["cons" + "tructor"]("return import(\\"node:os\\")")()',
+          arrayJoin: 'const f = function () {}\nreturn f[["cons", "tructor"].join("")]("return import(\\"node:os\\")")()',
+          variable: 'const f = function () {}\nconst k = "constructor"\nreturn f[k]("return typeof process")()',
+          template: 'const part = "tructor"\nconst f = async () => {}\nreturn f[`cons${part}`]("return typeof process")()',
+        }
+        for (const [name, script] of Object.entries(escapes)) {
+          const started = yield* runtime.start({ sessionID, name: `escape-${name}`, script })
+          const finished = yield* runtime.wait(started.id)
+          // The escape must not reach the module/global: either the run fails
+          // (poison made `constructor` non-callable), or the result is a benign
+          // scalar — never a module object or a leaked global.
+          if (finished?.status === "completed") {
+            expect(finished.result).not.toContain("Module")
+            expect(finished.result).not.toContain("[object")
+          } else {
+            expect(finished?.status).toBe("failed")
+            expect(finished?.error).toContain("not a function")
+          }
+        }
+      }),
+    ),
+  )
+
+  it.live("still constructs a legitimate script body after the constructor poison", () =>
+    harness(echo, () =>
+      Effect.gen(function* () {
+        const runtime = yield* WorkflowRuntime.Service
+        const started = yield* runtime.start({ sessionID, name: "legit", script: "return 42" })
+        const finished = yield* runtime.wait(started.id)
+        expect(finished?.status).toBe("completed")
+        expect(finished?.result).toBe("42")
+      }),
+    ),
+  )
+
   it.live("bounds concurrent agent executions to the configured cap", () =>
     Effect.gen(function* () {
       const observed = { active: 0, max: 0 }

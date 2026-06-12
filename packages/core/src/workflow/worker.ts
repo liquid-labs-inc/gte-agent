@@ -14,6 +14,13 @@ declare var self: Worker
 // Captured before sanitize() strips the messaging globals from script scope.
 const post = postMessage.bind(globalThis) as (message: WorkflowProtocol.WorkerToHost) => void
 
+// Captured at module load, BEFORE sanitize() poisons the function-constructor
+// prototypes: run() needs a working AsyncFunction to build the script body, but
+// after poisoning `(async function(){}).constructor` resolves to undefined.
+const AsyncFunction = async function () {}.constructor as new (
+  ...parameters: string[]
+) => (...values: unknown[]) => Promise<unknown>
+
 const phaseStorage = new AsyncLocalStorage<string>()
 const pending = new Map<
   number,
@@ -52,6 +59,24 @@ function sanitize() {
       Object.defineProperty(globals, key, { value: undefined, configurable: false, writable: false })
     } catch {
       // non-configurable getter; parameter shadowing still hides it from the script body
+    }
+  }
+  // The static script guard rejects literal `.constructor`, but computed access
+  // (map["cons" + "tructor"], map[k], array-join, template-concat) slips past
+  // it and reaches the function constructor, which rebuilds eval/import. Poison
+  // `constructor` on every function-constructor prototype so the property no
+  // longer resolves to a callable regardless of how the name is spelled. run()
+  // captured a working AsyncFunction at module load, before this runs.
+  for (const proto of [
+    Function.prototype,
+    async function () {}.constructor.prototype,
+    function* () {}.constructor.prototype,
+    async function* () {}.constructor.prototype,
+  ]) {
+    try {
+      Object.defineProperty(proto, "constructor", { value: undefined, configurable: false, writable: false })
+    } catch {
+      // already non-configurable; the property cannot be reached as a callable either way
     }
   }
 }
@@ -118,9 +143,8 @@ function log(message: unknown) {
 async function run(script: string, args: unknown) {
   // The script is the body of an async function: top-level `await` and
   // `return` both work, and the only bindings in scope are the workflow API.
-  const AsyncFunction = async function () {}.constructor as new (
-    ...parameters: string[]
-  ) => (...values: unknown[]) => Promise<unknown>
+  // AsyncFunction is the module-load capture; sanitize() has since poisoned the
+  // live `.constructor` so the script body cannot re-derive it.
   const fn = new AsyncFunction("phase", "agent", "map", "log", "args", ...BANNED_GLOBALS, `"use strict";\n${script}`)
   return await fn(phase, agent, map, log, args, ...BANNED_GLOBALS.map(() => undefined))
 }
