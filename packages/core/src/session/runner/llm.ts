@@ -204,7 +204,11 @@ export const layer = Layer.effect(
       const system =
         initialized ?? (yield* SessionContextEpoch.prepare(db, events, systemContext, session.id, session.runtimeScope))
       const context = yield* store.runnerContext(session.id, system.baselineSeq)
-      const gteBaseline = systemPrompt === undefined ? undefined : yield* systemPrompt.baseline(session)
+      // The latest user prompt drives ultrathink keyword detection in the GTE
+      // system prompt; the orchestration instruction is added per turn.
+      const latestUserText = context.findLast((message) => message.type === "user")?.text
+      const gteBaseline =
+        systemPrompt === undefined ? undefined : yield* systemPrompt.baseline(session, latestUserText)
       const request = LLM.request({
         model: resolution.model,
         system: [
