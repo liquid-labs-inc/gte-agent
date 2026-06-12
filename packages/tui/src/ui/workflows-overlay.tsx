@@ -182,7 +182,7 @@ export function WorkflowsOverlay(props: {
           {(target) => <RunView run={target()} phase={runPhase()} stacked={stacked()} />}
         </Match>
         <Match when={current().kind === "agent" && run() !== undefined && agent()}>
-          {(target) => <AgentDetail run={run() as RunSnapshot} agent={target()} />}
+          {(target) => <AgentDetail agent={target()} />}
         </Match>
         <Match when={true}>
           <text fg={theme.muted}>run no longer in the registry — esc to go back</text>
@@ -281,7 +281,7 @@ function AgentRow(props: { agent: AgentInfo }) {
   )
 }
 
-function AgentDetail(props: { run: RunSnapshot; agent: AgentInfo }) {
+function AgentDetail(props: { agent: AgentInfo }) {
   return (
     <box flexDirection="column">
       <text fg={theme.text}>
@@ -301,13 +301,9 @@ function AgentDetail(props: { run: RunSnapshot; agent: AgentInfo }) {
           error: {props.agent.error}
         </text>
       </Show>
-      <Show
-        when={props.agent.status === "completed" && props.run.result !== undefined && props.agent.error === undefined}
-      >
-        <text fg={theme.ok} wrapMode="word">
-          result: {props.run.result}
-        </text>
-      </Show>
+      {/* The snapshot carries no per-agent output text — only the run-level
+          result, which belongs in the run view, not under one agent. The agent's
+          own reply lives in its child session transcript (sessionID above). */}
       <text fg={theme.muted}>esc back · x stop agent</text>
     </box>
   )
@@ -377,11 +373,13 @@ function clock(millis: number): string {
 
 /** Compact one-line indicator for the most recent active run, above the prompt. */
 export function ActiveRunLine(props: { run: RunSnapshot }) {
-  const progress = agentProgress(props.run)
+  // createMemo so the line tracks live snapshot updates; the component body runs
+  // once in Solid, so reading agentProgress(props.run) directly would freeze it.
+  const progress = createMemo(() => agentProgress(props.run))
   return (
     <box flexShrink={0} paddingLeft={1}>
       <text fg={theme.muted}>
-        {statusGlyph(props.run.status)} workflow {props.run.name} · {progress.done}/{progress.total} agents ·{" "}
+        {statusGlyph(props.run.status)} workflow {props.run.name} · {progress().done}/{progress().total} agents ·{" "}
         {totalTokens(props.run.tokens)} tok
       </text>
     </box>

@@ -185,6 +185,27 @@ test("/effort ultrathink prepends the keyword to subsequent prompts (SCOPE-A ses
   expect(mock.prompts[0].text).toBe("ultrathink compare ETH and BTC liquidity")
 })
 
+test("/workflows under the kill switch reports disabled instead of an empty overlay", async () => {
+  const mock = createMockApi({
+    sessions: [makeSession({ id: "ses_alpha", title: "alpha session" })],
+    workflowsDisabled: true,
+  })
+  active = await mount(mock)
+
+  await active.waitForFrame((current) => current.includes("alpha session"))
+  active.mockInput.pressKey("ARROW_DOWN")
+  active.mockInput.pressEnter()
+  await active.waitForFrame((current) => current.includes("prompt"))
+
+  await active.mockInput.typeText("/workflows")
+  active.mockInput.pressEnter()
+
+  // The disabled probe routes to the error banner; the overlay never opens.
+  const frame = await active.waitForFrame((current) => current.includes("disabled"))
+  expect(frame).toContain("disabled")
+  expect(frame).not.toContain("no workflow runs yet")
+})
+
 test("navigating away while history loads does not leak the stale session into the new one", async () => {
   const mock = createMockApi({
     sessions: [

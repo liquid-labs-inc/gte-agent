@@ -7,7 +7,7 @@ import type { Api, SessionInfo } from "../api/client"
 import type { EventSubscriber } from "../api/events"
 import type { GteApi } from "../api/gte"
 import type { ModelRef, ModelsApi } from "../api/models"
-import type { WorkflowsApi } from "../api/workflows"
+import { isWorkflowsDisabled, type WorkflowsApi } from "../api/workflows"
 import { executeSlashCommand, parseSlashCommand } from "../commands/slash"
 import { createCompletionSources } from "../state/autocomplete"
 import type { ModelTarget } from "../state/models"
@@ -261,6 +261,33 @@ export function App(props: AppProps) {
       .catch(fail)
   }
 
+  /**
+   * Open the /workflows overlay, but probe the list route first: when the kill
+   * switch is on the route answers disabled, so report that explicitly instead
+   * of opening an overlay that would just show the (misleading) empty state.
+   */
+  function openWorkflows() {
+    const session = store.session
+    if (!session) return
+    props.workflows
+      .list(String(session.id))
+      .then((runs) => {
+        if (store.session?.id !== session.id) return
+        setStore("workflows", seedWorkflows(runs))
+        setStore("workflowsOverlay", true)
+      })
+      .catch((error: unknown) => {
+        if (store.session?.id !== session.id) return
+        if (isWorkflowsDisabled(error)) {
+          setStore("error", "Workflows are disabled in this environment.")
+          return
+        }
+        // A transient route failure should not block observation; open anyway
+        // (SSE snapshots still feed the registry while the overlay is up).
+        setStore("workflowsOverlay", true)
+      })
+  }
+
   function submitPrompt(text: string) {
     const session = store.session
     if (!session) return
@@ -277,7 +304,7 @@ export function App(props: AppProps) {
         pinnedPanels: pinnedPanels(store.workspace),
         focusPanel: (panel, key) => setStore("workspace", (workspace) => focusPanel(workspace, panel, key)),
         openModels: (target) => setStore("modelsOverlay", { target }),
-        openWorkflows: () => setStore("workflowsOverlay", true),
+        openWorkflows,
         models: props.models,
         workflows: props.workflows,
         activeModel: store.session?.model ?? store.defaultModel,
