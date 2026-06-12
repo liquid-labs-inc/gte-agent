@@ -8,10 +8,15 @@
  * Response bodies are pumped back to the main thread chunk by chunk so SSE
  * responses stream instead of buffering behind a single text body.
  */
-import { webHandler } from "@gte-agent/server/routes"
+import { initFileLog, webHandler } from "@gte-agent/server/routes"
 import type { BridgeListenMessage, BridgeRequestMessage, FromWorkerMessage, ToWorkerMessage } from "./protocol"
 
 declare var self: Worker
+
+// Route runtime logs (session-drain failures, runner errors) to the shared
+// log file: the main thread owns the terminal with the rendered TUI, so
+// anything the worker writes to stdio corrupts the screen.
+await initFileLog()
 
 const { handler, dispose } = webHandler()
 
