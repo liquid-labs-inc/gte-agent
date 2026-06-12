@@ -11,11 +11,18 @@ import type { SessionID } from "@/session/schema"
 import { ToolJsonSchema } from "@/tool/json-schema"
 import { ToolRegistry } from "@/tool/registry"
 import { Worktree } from "@/worktree"
+import { WorkflowRuntime } from "@/workflow/runtime"
 import { Effect, Option } from "effect"
 import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse"
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
-import { ConsoleSwitchPayload, SessionListQuery, ToolListQuery, WorktreeApiError } from "../groups/experimental"
+import {
+  ConsoleSwitchPayload,
+  SessionListQuery,
+  ToolListQuery,
+  WorkflowControlPayload,
+  WorktreeApiError,
+} from "../groups/experimental"
 
 function mapWorktreeError<A, R>(self: Effect.Effect<A, Worktree.Error, R>) {
   return self.pipe(
@@ -35,6 +42,7 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
     const sessions = yield* Session.Service
     const background = yield* BackgroundJob.Service
     const flags = yield* RuntimeFlags.Service
+    const workflows = yield* WorkflowRuntime.Service
 
     const getConsole = Effect.fn("ExperimentalHttpApi.console")(function* () {
       const [state, groups] = yield* Effect.all(
@@ -170,6 +178,34 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       return yield* mcp.resources()
     })
 
+    const workflowList = Effect.fn("ExperimentalHttpApi.workflowList")(function* () {
+      return yield* workflows.list()
+    })
+
+    const workflowControl = Effect.fn("ExperimentalHttpApi.workflowControl")(function* (ctx: {
+      params: { runID: string }
+      payload: typeof WorkflowControlPayload.Type
+    }) {
+      const { runID } = ctx.params
+      const { action } = ctx.payload
+      if (action === "pause") return { ok: yield* workflows.pause(runID) }
+      if (action === "resume") return { ok: yield* workflows.resume(runID) }
+      if (action === "cancel") return { ok: yield* workflows.cancel(runID) }
+      if (action === "stop-agent") {
+        if (!ctx.payload.agentID) return yield* Effect.fail(new HttpApiError.BadRequest({}))
+        return { ok: yield* workflows.stopAgent(runID, ctx.payload.agentID) }
+      }
+      if (action === "restart-agent") {
+        if (!ctx.payload.agentID) return yield* Effect.fail(new HttpApiError.BadRequest({}))
+        return { ok: yield* workflows.restartAgent(runID, ctx.payload.agentID) }
+      }
+      if (!ctx.payload.name) return yield* Effect.fail(new HttpApiError.BadRequest({}))
+      const path = yield* workflows
+        .saveAs(runID, { name: ctx.payload.name, global: ctx.payload.global })
+        .pipe(Effect.catch(() => Effect.fail(new HttpApiError.BadRequest({}))))
+      return { ok: true, path }
+    })
+
     return handlers
       .handle("console", getConsole)
       .handle("consoleOrgs", listConsoleOrgs)
@@ -183,5 +219,7 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       .handle("session", session)
       .handle("sessionBackground", sessionBackground)
       .handle("resource", resource)
+      .handle("workflowList", workflowList)
+      .handle("workflowControl", workflowControl)
   }),
 )

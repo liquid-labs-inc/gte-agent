@@ -716,6 +716,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         category: "Agent",
         hidden: local.model.variant.list().length === 0,
         slashName: "variants",
+        slashAliases: ["effort"],
         run: () => {
           if (local.model.variant.list().length === 0) {
             return toast.show({

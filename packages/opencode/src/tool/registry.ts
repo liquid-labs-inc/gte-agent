@@ -23,6 +23,9 @@ import { Plugin } from "../plugin"
 import { Provider } from "@/provider/provider"
 
 import { WebSearchTool } from "./websearch"
+import { WorkflowTool } from "./workflow"
+import { Workflow } from "@/workflow"
+import { WorkflowRuntime } from "@/workflow/runtime"
 import * as Log from "@opencode-ai/core/util/log"
 import { LspTool } from "./lsp"
 import * as Truncate from "./truncate"
@@ -106,6 +109,7 @@ export const layer: Layer.Layer<
   | Truncate.Service
   | RuntimeFlags.Service
   | Database.Service
+  | WorkflowRuntime.Service
 > = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -132,6 +136,7 @@ export const layer: Layer.Layer<
     const greptool = yield* GrepTool
     const patchtool = yield* ApplyPatchTool
     const skilltool = yield* SkillTool
+    const workflowtool = yield* WorkflowTool
     const agent = yield* Agent.Service
 
     const state = yield* InstanceState.make<State>(
@@ -219,7 +224,7 @@ export const layer: Layer.Layer<
           }
         }
 
-        yield* config.get()
+        const cfg = yield* config.get()
         const questionEnabled = ["app", "cli", "desktop"].includes(flags.client) || flags.enableQuestionTool
 
         const tool = yield* Effect.all({
@@ -239,6 +244,7 @@ export const layer: Layer.Layer<
           question: Tool.init(question),
           lsp: Tool.init(lsptool),
           plan: Tool.init(plan),
+          workflow: Tool.init(workflowtool),
         })
 
         return {
@@ -258,6 +264,7 @@ export const layer: Layer.Layer<
             tool.search,
             tool.skill,
             tool.patch,
+            ...(Workflow.enabled(cfg) ? [tool.workflow] : []),
             ...(flags.experimentalLspTool ? [tool.lsp] : []),
             ...(flags.experimentalPlanMode && flags.client === "cli" ? [tool.plan] : []),
           ],
@@ -388,6 +395,7 @@ export const defaultLayer = Layer.suspend(() =>
       Layer.provide(CrossSpawnSpawner.defaultLayer),
       Layer.provide(Ripgrep.defaultLayer),
       Layer.provide(Truncate.defaultLayer),
+      Layer.provide(WorkflowRuntime.defaultLayer),
     )
     .pipe(Layer.provide(Database.defaultLayer), Layer.provide(RuntimeFlags.defaultLayer)),
 )

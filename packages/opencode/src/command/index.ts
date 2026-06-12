@@ -9,6 +9,8 @@ import { Skill } from "../skill"
 import { EventV2 } from "@opencode-ai/core/event"
 import PROMPT_INITIALIZE from "./template/initialize.txt"
 import PROMPT_REVIEW from "./template/review.txt"
+import { Workflow } from "@/workflow"
+import { WorkflowRegistry } from "@/workflow/registry"
 
 type State = {
   commands: Record<string, Info>
@@ -31,7 +33,7 @@ export const Info = Schema.Struct({
   description: Schema.optional(Schema.String),
   agent: Schema.optional(Schema.String),
   model: Schema.optional(Schema.String),
-  source: Schema.optional(Schema.Literals(["command", "mcp", "skill"])),
+  source: Schema.optional(Schema.Literals(["command", "mcp", "skill", "workflow"])),
   // Some command templates are lazy promises from MCP prompt resolution.
   template: Schema.Unknown,
   subtask: Schema.optional(Schema.Boolean),
@@ -53,7 +55,34 @@ export function hints(template: string) {
 export const Default = {
   INIT: "init",
   REVIEW: "review",
+  WORKFLOW: "workflow",
 } as const
+
+const WORKFLOW_TEMPLATE = [
+  "<workflow-request>",
+  "The user asked for this task to run as an ultrathink workflow.",
+  "Write a workflow orchestration script (phase/agent/map/log/args API) for the task below and launch it with the `workflow` tool.",
+  "The script coordinates; spawned agents do all the actual work. Fan independent items out with map(). Return the synthesized result from the script.",
+  "After launching, briefly tell the user what is running; you will be notified when the workflow completes.",
+  "</workflow-request>",
+  "",
+  "Task: $ARGUMENTS",
+].join("\n")
+
+function workflowTemplate(item: WorkflowRegistry.SavedWorkflow) {
+  return [
+    `Launch the saved workflow \"${item.name}\" by calling the \`workflow\` tool now.`,
+    `- name: \"${item.name}\"`,
+    "- args: derive from the invocation input below — pass a parsed JSON value when it is valid JSON, the raw string otherwise, and omit args entirely when empty.",
+    "- script: the exact script below, verbatim and unmodified.",
+    "",
+    "Invocation input: $ARGUMENTS",
+    "",
+    "<workflow_script>",
+    item.script,
+    "</workflow_script>",
+  ].join("\n")
+}
 
 export interface Interface {
   readonly get: (name: string) => Effect.Effect<Info | undefined>
@@ -92,6 +121,32 @@ export const layer = Layer.effect(
         },
         subtask: true,
         hints: hints(PROMPT_REVIEW),
+      }
+
+      if (Workflow.enabled(cfg)) {
+        commands[Default.WORKFLOW] = {
+          name: Default.WORKFLOW,
+          description: "run a task as an ultrathink workflow",
+          source: "workflow",
+          get template() {
+            return WORKFLOW_TEMPLATE
+          },
+          hints: hints(WORKFLOW_TEMPLATE),
+        }
+        const dirs = yield* config.directories()
+        for (const item of WorkflowRegistry.discover(dirs)) {
+          if (commands[item.name]) continue
+          const template = workflowTemplate(item)
+          commands[item.name] = {
+            name: item.name,
+            description: item.description ?? `saved workflow (${item.scope})`,
+            source: "workflow",
+            get template() {
+              return template
+            },
+            hints: hints(template),
+          }
+        }
       }
 
       for (const [name, command] of Object.entries(cfg.command ?? {})) {

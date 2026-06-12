@@ -53,6 +53,9 @@ export const Flag = {
   get OPENCODE_DISABLE_PROJECT_CONFIG() {
     return truthy("OPENCODE_DISABLE_PROJECT_CONFIG")
   },
+  get GTE_AGENT_DISABLE_WORKFLOWS() {
+    return truthy("GTE_AGENT_DISABLE_WORKFLOWS")
+  },
   get OPENCODE_EXPERIMENTAL_REFERENCES() {
     return enabledByExperimental("OPENCODE_EXPERIMENTAL_REFERENCES")
   },

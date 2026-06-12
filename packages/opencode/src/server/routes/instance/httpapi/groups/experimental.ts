@@ -73,6 +73,19 @@ export class WorktreeApiError extends Schema.ErrorClass<WorktreeApiError>("Workt
   },
   { httpApiStatus: 400 },
 ) {}
+export const WorkflowControlPayload = Schema.Struct({
+  action: Schema.Literals(["pause", "resume", "cancel", "stop-agent", "restart-agent", "save"]),
+  agentID: Schema.optional(Schema.String),
+  name: Schema.optional(Schema.String),
+  global: Schema.optional(Schema.Boolean),
+})
+
+const WorkflowRunList = Schema.Unknown.annotate({ identifier: "WorkflowRunList" })
+const WorkflowControlResult = Schema.Struct({
+  ok: Schema.Boolean,
+  path: Schema.optional(Schema.String),
+}).annotate({ identifier: "WorkflowControlResult" })
+
 export const SessionListQuery = Schema.Struct({
   ...WorkspaceRoutingQueryFields,
   roots: Schema.optional(QueryBoolean),
@@ -94,6 +107,8 @@ export const ExperimentalPaths = {
   session: "/experimental/session",
   sessionBackground: "/experimental/session/:sessionID/background",
   resource: "/experimental/resource",
+  workflow: "/experimental/workflow",
+  workflowControl: "/experimental/workflow/:runID/control",
 } as const
 
 export const ExperimentalApi = HttpApi.make("experimental")
@@ -238,6 +253,30 @@ export const ExperimentalApi = HttpApi.make("experimental")
             identifier: "experimental.resource.list",
             summary: "Get MCP resources",
             description: "Get all available MCP resources from connected servers. Optionally filter by name.",
+          }),
+        ),
+        HttpApiEndpoint.get("workflowList", ExperimentalPaths.workflow, {
+          query: WorkspaceRoutingQuery,
+          success: described(WorkflowRunList, "Workflow runs"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.workflow.list",
+            summary: "List workflow runs",
+            description: "List running and completed ultrathink workflow runs for the current instance.",
+          }),
+        ),
+        HttpApiEndpoint.post("workflowControl", ExperimentalPaths.workflowControl, {
+          params: { runID: Schema.String },
+          query: WorkspaceRoutingQuery,
+          payload: WorkflowControlPayload,
+          success: described(WorkflowControlResult, "Control result"),
+          error: HttpApiError.BadRequest,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.workflow.control",
+            summary: "Control a workflow run",
+            description:
+              "Pause, resume, or cancel a workflow run; stop or restart one of its agents; or save its script as a reusable workflow command.",
           }),
         ),
       )

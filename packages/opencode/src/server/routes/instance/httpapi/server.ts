@@ -52,6 +52,7 @@ import { Database } from "@opencode-ai/core/database/database"
 import { Skill } from "@/skill"
 import { Snapshot } from "@/snapshot"
 import { ToolRegistry } from "@/tool/registry"
+import { WorkflowRuntime } from "@/workflow/runtime"
 import { lazy } from "@/util/lazy"
 import { Vcs } from "@/project/vcs"
 import { Worktree } from "@/worktree"
@@ -251,6 +252,7 @@ export function createRoutes(
       Skill.defaultLayer,
       Todo.defaultLayer,
       ToolRegistry.defaultLayer,
+      WorkflowRuntime.defaultLayer,
       Vcs.defaultLayer,
       Workspace.defaultLayer,
       Worktree.appLayer,

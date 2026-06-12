@@ -1,0 +1,127 @@
+// ---
+// name: deep-research
+// description: Multi-angle research with source cross-checking and claim voting
+// ---
+// Bundled deep-research workflow:
+// 1. plan: derive distinct research angles for the question
+// 2. research: fan out one agent per angle (websearch + webfetch)
+// 3. cross-check: every claim is independently verified by multiple agents
+// 4. synthesis: cited report; claims that failed cross-checking are dropped
+const question = typeof args === "string" ? args : (args && args.question) || ""
+if (!question.trim()) return "deep-research needs a question. Usage: /deep-research <question>"
+
+const ANGLES = 4
+const VERIFIERS = 2
+
+const planned = await phase("plan", () =>
+  agent({
+    prompt: [
+      `Research question: ${question}`,
+      ``,
+      `Propose exactly ${ANGLES} distinct research angles that together give broad coverage of this question`,
+      `(e.g. primary sources, opposing viewpoints, quantitative data, recent developments).`,
+      `Respond with ONLY a JSON array of ${ANGLES} short angle descriptions, no other text.`,
+    ].join("\n"),
+    type: "general",
+  }),
+)
+
+let angles
+try {
+  const match = planned.text.match(/\[[\s\S]*\]/)
+  angles = JSON.parse(match ? match[0] : planned.text)
+} catch {
+  angles = [question]
+}
+if (!Array.isArray(angles) || angles.length === 0) angles = [question]
+log(`researching ${angles.length} angles`)
+
+const findings = await phase("research", () =>
+  map(
+    angles,
+    (angle) =>
+      agent({
+        prompt: [
+          `You are researching: ${question}`,
+          `Your angle: ${angle}`,
+          ``,
+          `Use the websearch tool to find sources, and webfetch to read the most relevant ones.`,
+          `Extract the key factual claims relevant to the question.`,
+          `For every claim include the source URL.`,
+          `Respond with a JSON array of objects: [{ "claim": "...", "source": "https://..." }].`,
+          `Only include claims a source actually supports. Respond with ONLY the JSON array.`,
+        ].join("\n"),
+        type: "general",
+      }),
+    { concurrency: 4 },
+  ),
+)
+
+const claims = []
+for (const finding of findings) {
+  try {
+    const match = finding.text.match(/\[[\s\S]*\]/)
+    const parsed = JSON.parse(match ? match[0] : finding.text)
+    for (const item of parsed) {
+      if (item && typeof item.claim === "string") claims.push({ claim: item.claim, source: item.source || "" })
+    }
+  } catch {
+    // skip angles that returned unparseable findings
+  }
+}
+log(`cross-checking ${claims.length} claims`)
+if (claims.length === 0) return "deep-research found no verifiable claims for: " + question
+
+const votes = await phase("cross-check", () =>
+  map(
+    claims,
+    (item) =>
+      map(
+        Array.from({ length: VERIFIERS }, (_, i) => i),
+        (i) =>
+          agent({
+            prompt: [
+              `Independently verify this claim (verifier #${i + 1}):`,
+              `CLAIM: ${item.claim}`,
+              `STATED SOURCE: ${item.source}`,
+              ``,
+              `Use websearch/webfetch to check whether the claim is accurate and supported.`,
+              `Respond with ONLY one word on the first line: SUPPORTED, REFUTED, or UNCLEAR,`,
+              `then a one-sentence justification on the second line.`,
+            ].join("\n"),
+            type: "general",
+          }),
+        { concurrency: VERIFIERS },
+      ),
+    { concurrency: 3 },
+  ),
+)
+
+const surviving = []
+for (let i = 0; i < claims.length; i++) {
+  const verdicts = votes[i].map((v) => (v.text.trim().split(/\s/)[0] || "").toUpperCase())
+  const supported = verdicts.filter((v) => v.startsWith("SUPPORTED")).length
+  const refuted = verdicts.filter((v) => v.startsWith("REFUTED")).length
+  if (supported > refuted) surviving.push(claims[i])
+  else log(`dropped claim (votes ${supported}-${refuted}): ${claims[i].claim.slice(0, 80)}`)
+}
+log(`${surviving.length}/${claims.length} claims survived cross-checking`)
+
+const report = await phase("synthesis", () =>
+  agent({
+    prompt: [
+      `Write a research report answering: ${question}`,
+      ``,
+      `Use ONLY the following cross-checked claims. Cite the source URL for every claim used.`,
+      ``,
+      JSON.stringify(surviving, null, 2),
+      ``,
+      `Structure: a direct answer first, then supporting sections, then a "Sources" list.`,
+      `Note explicitly where evidence was thin or contested.`,
+    ].join("\n"),
+    type: "general",
+    variant: "high",
+  }),
+)
+
+return report.text

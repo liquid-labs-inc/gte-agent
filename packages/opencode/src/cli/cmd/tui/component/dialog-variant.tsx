@@ -17,7 +17,7 @@ export function DialogVariant() {
           local.model.variant.set(undefined)
         },
       },
-      ...local.model.variant.list().map((variant) => ({
+      ...local.model.variant.options().map((variant) => ({
         value: variant,
         title: variant,
         onSelect: () => {
