@@ -10,6 +10,7 @@ import { SessionSchema } from "./schema"
 import { RuntimeScope } from "../runtime-scope"
 import { RelativePath } from "../schema"
 import { SessionMessageID } from "./message-id"
+import { WorkflowSchema } from "../workflow/schema"
 
 export { FileAttachment }
 
@@ -477,6 +478,42 @@ export namespace Compaction {
   export type Ended = typeof Ended.Type
 }
 
+/**
+ * Durable workflow-run lifecycle. Only the auditable boundaries are durable:
+ * a run started (with its persisted script path as the recovery artifact) and
+ * a run reached a terminal status (with its cost). High-frequency progress is
+ * the ephemeral `session.workflow.updated` snapshot, never the event log.
+ */
+export namespace Workflow {
+  export const Started = Event.define({
+    type: "session.workflow.started",
+    ...options,
+    schema: {
+      ...Base,
+      runID: WorkflowSchema.RunID,
+      name: Schema.String,
+      scriptPath: Schema.String,
+    },
+  })
+  export type Started = typeof Started.Type
+
+  export const Finished = Event.define({
+    type: "session.workflow.finished",
+    ...options,
+    schema: {
+      ...Base,
+      runID: WorkflowSchema.RunID,
+      name: Schema.String,
+      scriptPath: Schema.String,
+      status: WorkflowSchema.TerminalStatus,
+      tokens: WorkflowSchema.Tokens,
+      /** Wall-clock run duration in milliseconds. */
+      duration: NonNegativeInt,
+    },
+  })
+  export type Finished = typeof Finished.Type
+}
+
 /** Primitive cell value allowed in a snapshot row (no nesting; keeps payloads compact). */
 export const SnapshotCell = Schema.Union([Schema.String, Schema.Number, Schema.Boolean, Schema.Null]).annotate({
   identifier: "Session.SnapshotCell",
@@ -569,6 +606,8 @@ const DurableDefinitions = [
   Compaction.Delta,
   Compaction.Ended,
   SnapshotRecorded,
+  Workflow.Started,
+  Workflow.Finished,
 ] as const
 const EphemeralDefinitions = [Text.Delta, Tool.Input.Delta, Reasoning.Delta] as const
 

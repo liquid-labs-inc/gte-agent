@@ -79,6 +79,15 @@ export class Info extends Schema.Class<Info>("Config.Info")({
   commands: Schema.Record(Schema.String, ConfigCommand.Info).pipe(Schema.optional).annotate({
     description: "Named slash command definitions",
   }),
+  workflows: Schema.Struct({
+    enabled: Schema.Boolean.pipe(Schema.optional).annotate({
+      description: "Enable the dynamic workflow tool and its surfaces (default true)",
+    }),
+  })
+    .pipe(Schema.optional)
+    .annotate({
+      description: "Dynamic workflow orchestration settings",
+    }),
   instructions: Schema.String.pipe(Schema.Array, Schema.optional).annotate({
     description: "Additional paths or URLs supplying ambient instructions",
   }),

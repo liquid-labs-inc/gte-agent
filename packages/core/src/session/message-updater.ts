@@ -124,6 +124,10 @@ export function update(adapter: Adapter, event: SessionEvent.Event) {
       "session.intent.updated": () => Effect.void,
       // Snapshots live in the durable event stream, not the message store.
       "session.snapshot.recorded": () => Effect.void,
+      // Workflow lifecycle is durable audit, not a transcript message; the
+      // workflow tool's settlement is the model- and user-visible record.
+      "session.workflow.started": () => Effect.void,
+      "session.workflow.finished": () => Effect.void,
       "session.next.agent.switched": (event) => {
         return adapter.appendMessage(
           new SessionMessage.AgentSwitched({
