@@ -1,21 +1,8 @@
 import type {
-  AgentPart,
-  OpencodeClient,
-  Event,
-  FilePart,
-  LspStatus,
-  McpStatus,
-  Todo,
-  Message,
-  Part,
-  Provider,
-  PermissionRequest,
-  QuestionRequest,
-  Session,
-  SessionStatus,
-  TextPart,
-  Config as SdkConfig,
-} from "@opencode-ai/sdk/v2"
+  GteAgentClient,
+  SessionInfo,
+  SessionPublicMessage,
+} from "@gte-agent/sdk"
 import type { CliRenderer, KeyEvent, RGBA, Renderable, SlotMode } from "@opentui/core"
 import type { Binding, Keymap } from "@opentui/keymap"
 import {
@@ -27,6 +14,25 @@ import {
 } from "@opentui/keymap/extras"
 import type { JSX, SolidPlugin } from "@opentui/solid"
 import type { Config as PluginConfig, PluginOptions } from "./index.js"
+
+type SDKRecord = Record<string, unknown>
+type AgentPart = SDKRecord
+type Event = SDKRecord & { type: string }
+type FilePart = SDKRecord
+type LspStatus = { id: string; root: string; status: string }
+type McpStatus = { status: string }
+type Todo = { content: string; status: string }
+type Message = SessionPublicMessage
+type Part = SDKRecord
+type Provider = SDKRecord
+type PermissionRequest = SDKRecord
+type QuestionRequest = SDKRecord
+type Session = SessionInfo
+type SessionStatus = string
+type TextPart = SDKRecord
+type SdkConfig = SDKRecord & {
+  model?: SDKRecord
+}
 
 export type { CliRenderer, KeyEvent, Renderable, SlotMode } from "@opentui/core"
 export { stringifyKeySequence, stringifyKeyStroke } from "@opentui/keymap"
@@ -84,7 +90,7 @@ export type TuiModeApi = {
 }
 
 /**
- * Legacy `api.command` shape kept so v1 plugins can initialize. Remove in v2.
+ * Legacy `api.command` shape kept so v1 plugins can initialize. Remove when the legacy bridge is retired.
  *
  * @deprecated Use `api.keymap.registerLayer({ commands, bindings })` instead.
  */
@@ -105,7 +111,7 @@ export type TuiCommand = {
 }
 
 /**
- * Legacy `api.command` API kept so v1 plugins can initialize. Remove in v2.
+ * Legacy `api.command` API kept so v1 plugins can initialize. Remove when the legacy bridge is retired.
  *
  * @deprecated Use `api.keymap.registerLayer`, `api.keymap.dispatchCommand`, and
  * `api.keymap.dispatchCommand("command.palette.show")` instead.
@@ -475,7 +481,6 @@ export type TuiHostSlotMap = {
   sidebar_title: {
     session_id: string
     title: string
-    share_url?: string
   }
   sidebar_content: {
     session_id: string
@@ -573,16 +578,11 @@ export type TuiPluginInstallResult =
       missing?: boolean
     }
 
-export type TuiWorkspace = {
-  current: () => string | undefined
-  set: (workspaceID?: string) => void
-}
-
 export type TuiPluginApi = {
   app: TuiApp
   attention: TuiAttention
   /**
-   * Legacy `api.command` API kept so v1 plugins can initialize. Remove in v2.
+   * Legacy `api.command` API kept so v1 plugins can initialize. Remove when the legacy bridge is retired.
    *
    * @deprecated Use `api.keymap.registerLayer`, `api.keymap.dispatchCommand`, and
    * `api.keymap.dispatchCommand("command.palette.show")` instead.
@@ -611,7 +611,7 @@ export type TuiPluginApi = {
   kv: TuiKV
   state: TuiState
   theme: TuiTheme
-  client: OpencodeClient
+  client: GteAgentClient
   event: TuiEventBus
   renderer: CliRenderer
   slots: TuiSlots

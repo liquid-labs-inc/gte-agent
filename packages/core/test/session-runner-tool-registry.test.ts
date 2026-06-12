@@ -1,20 +1,20 @@
 import { describe, expect } from "bun:test"
-import { Tool, ToolFailure } from "@opencode-ai/llm"
-import { PermissionV2 } from "@opencode-ai/core/permission"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
+import { Tool, ToolFailure } from "@gte-agent/llm"
+import { Permission } from "@gte-agent/core/permission"
+import { Session } from "@gte-agent/core/session"
+import { ToolRegistry } from "@gte-agent/core/tool/registry"
 import { Effect, Exit, Layer, Schema, Scope } from "effect"
 import { testEffect } from "./lib/effect"
 
-const assertions: PermissionV2.AssertInput[] = []
+const assertions: Permission.AssertInput[] = []
 let denyAction: string | undefined
 const permission = Layer.succeed(
-  PermissionV2.Service,
-  PermissionV2.Service.of({
+  Permission.Service,
+  Permission.Service.of({
     assert: (input) =>
       Effect.sync(() => assertions.push(input)).pipe(
         Effect.andThen(
-          input.action === denyAction ? Effect.fail(new PermissionV2.DeniedError({ rules: [] })) : Effect.void,
+          input.action === denyAction ? Effect.fail(new Permission.DeniedError({ rules: [] })) : Effect.void,
         ),
       ),
     ask: () => Effect.die("unused"),
@@ -55,7 +55,7 @@ describe("ToolRegistry", () => {
 
       expect(
         yield* registry.execute({
-          sessionID: SessionV2.ID.make("ses_registry_test"),
+          sessionID: Session.ID.make("ses_registry_test"),
           call: { type: "tool-call", id: "call-missing", name: "missing", input: {} },
         }),
       ).toEqual({ type: "error", value: "Unknown tool: missing" })
@@ -86,7 +86,7 @@ describe("ToolRegistry", () => {
 
       expect(
         yield* registry.execute({
-          sessionID: SessionV2.ID.make("ses_registry_test"),
+          sessionID: Session.ID.make("ses_registry_test"),
           call: { type: "tool-call", id: "call-denied", name: "denied", input: {} },
         }),
       ).toEqual({ type: "error", value: "Denied" })
@@ -100,7 +100,7 @@ describe("ToolRegistry", () => {
       denyAction = undefined
       const registry = yield* ToolRegistry.Service
       const transform = yield* registry.transform()
-      const sessionID = SessionV2.ID.make("ses_registry_context")
+      const sessionID = Session.ID.make("ses_registry_context")
 
       yield* transform((editor) =>
         editor.set("context", {
@@ -168,7 +168,7 @@ describe("ToolRegistry", () => {
 
       expect(
         yield* registry.execute({
-          sessionID: SessionV2.ID.make("ses_registry_context"),
+          sessionID: Session.ID.make("ses_registry_context"),
           call: { type: "tool-call", id: "call-ordered", name: "ordered", input: {} },
         }),
       ).toEqual({ type: "error", value: "Denied" })
@@ -199,7 +199,7 @@ describe("ToolRegistry", () => {
 
       expect(
         yield* registry.settle({
-          sessionID: SessionV2.ID.make("ses_registry_test"),
+          sessionID: Session.ID.make("ses_registry_test"),
           call: { type: "tool-call", id: "call-projected", name: "projected", input: { prefix: "count" } },
         }),
       ).toEqual({

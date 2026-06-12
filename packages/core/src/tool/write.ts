@@ -1,16 +1,16 @@
 /**
- * Model-facing V2 file-write leaf. Relative paths resolve within the active
- * Location. Absolute paths inside that Location are accepted, while explicit
+ * Model-facing file-write leaf. Relative paths resolve within the active
+ * RuntimeScope. Absolute paths inside that RuntimeScope are accepted, while explicit
  * absolute external paths retain mutation capability through a separate
  * external_directory approval before edit approval. Named project references
  * are read-oriented and deliberately are not accepted by mutation tools.
  */
 export * as WriteTool from "./write"
 
-import { Tool, ToolFailure, toolText } from "@opencode-ai/llm"
+import { Tool, ToolFailure, toolText } from "@gte-agent/llm"
 import { Cause, Effect, Layer, Schema } from "effect"
 import { FileMutation } from "../file-mutation"
-import { LocationMutation } from "../location-mutation"
+import { RuntimeScopeMutation } from "../runtime-scope-mutation"
 import { ToolRegistry } from "./registry"
 
 export const name = "write"
@@ -19,7 +19,7 @@ export const name = "write"
 export const Parameters = Schema.Struct({
   path: Schema.String.annotate({
     description:
-      "File path to write. Relative paths resolve within the active Location. Absolute paths inside that Location are accepted; external absolute paths require external_directory approval. Named project references are read-oriented and are not accepted.",
+      "File path to write. Relative paths resolve within the active RuntimeScope. Absolute paths inside that RuntimeScope are accepted; external absolute paths require external_directory approval. Named project references are read-oriented and are not accepted.",
   }),
   content: Schema.String.annotate({ description: "Content to write to the file" }),
 })
@@ -37,22 +37,22 @@ export const toModelOutput = (output: Success) =>
 
 const definition = Tool.make({
   description:
-    "Write content to one file. Relative paths resolve within the active Location. Absolute paths inside the Location are accepted. Explicit external absolute paths require external_directory approval before edit approval. Named project references are read-oriented and are not accepted.",
+    "Write content to one file. Relative paths resolve within the active RuntimeScope. Absolute paths inside the RuntimeScope are accepted. Explicit external absolute paths require external_directory approval before edit approval. Named project references are read-oriented and are not accepted.",
   parameters: Parameters,
   success: Success,
   toModelOutput: ({ output }) => [toolText({ type: "text", text: toModelOutput(output) })],
 })
 
-/** Deferred V2 write UX integrations remain visible at the model-facing seam. */
-// TODO: Add formatter integration after V2 formatter runtime exists.
-// TODO: Publish watcher/file-edit events after V2 watcher integration exists.
+/** Deferred write UX integrations remain visible at the model-facing seam. */
+// TODO: Add formatter integration after formatter runtime exists.
+// TODO: Publish watcher/file-edit events after watcher integration exists.
 // TODO: Add snapshots / undo after design exists.
-// TODO: Add LSP notification and diagnostics after V2 LSP runtime exists.
+// TODO: Add LSP notification and diagnostics after LSP runtime exists.
 
 export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const registry = yield* ToolRegistry.Service
-    const mutation = yield* LocationMutation.Service
+    const mutation = yield* RuntimeScopeMutation.Service
     const files = yield* FileMutation.Service
 
     yield* registry.contribute((editor) =>
@@ -62,7 +62,7 @@ export const layer = Layer.effectDiscard(
           Effect.gen(function* () {
             const plan = yield* mutation.resolve({ path: parameters.path, kind: "file" })
             const external = plan.target.externalDirectory
-            if (external) yield* assertPermission(LocationMutation.externalDirectoryPermission(external))
+            if (external) yield* assertPermission(RuntimeScopeMutation.externalDirectoryPermission(external))
             yield* assertPermission({ action: "edit", resources: [plan.target.resource], save: ["*"] })
             return yield* files.writeTextPreservingBom({ plan, content: parameters.content })
           }).pipe(

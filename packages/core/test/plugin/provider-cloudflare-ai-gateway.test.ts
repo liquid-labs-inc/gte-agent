@@ -1,7 +1,7 @@
 import { describe, expect, mock } from "bun:test"
 import { Effect } from "effect"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { CloudflareAIGatewayPlugin } from "@opencode-ai/core/plugin/provider/cloudflare-ai-gateway"
+import { Plugin } from "@gte-agent/core/plugin"
+import { CloudflareAIGatewayPlugin } from "@gte-agent/core/plugin/provider/cloudflare-ai-gateway"
 import { it, model, withEnv } from "./provider-helper"
 
 const aiGatewayCalls: Record<string, unknown>[] = []
@@ -77,7 +77,7 @@ describe("CloudflareAIGatewayPlugin", () => {
       },
       () =>
         Effect.gen(function* () {
-          const plugin = yield* PluginV2.Service
+          const plugin = yield* Plugin.Service
           yield* plugin.add(CloudflareAIGatewayPlugin)
           const result = yield* plugin.trigger(
             "aisdk.sdk",
@@ -93,11 +93,11 @@ describe("CloudflareAIGatewayPlugin", () => {
     ),
   )
 
-  it.effect("passes legacy metadata, cache, log, and User-Agent values under the AI Gateway options key", () =>
+  it.effect("passes GTE Agent metadata, cache, log, and User-Agent values under the AI Gateway options key", () =>
     withEnv(cloudflareEnv(), () =>
       Effect.gen(function* () {
         resetCalls()
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         yield* plugin.add(CloudflareAIGatewayPlugin)
 
         yield* plugin.trigger(
@@ -107,7 +107,7 @@ describe("CloudflareAIGatewayPlugin", () => {
             package: "ai-gateway-provider",
             options: {
               name: "cloudflare-ai-gateway",
-              metadata: { invoked_by: "test", project: "opencode" },
+              metadata: { invoked_by: "test", project: "gte-agent" },
               cacheTtl: 300,
               cacheKey: "cache-key",
               skipCache: true,
@@ -123,13 +123,13 @@ describe("CloudflareAIGatewayPlugin", () => {
           gateway: "env-gateway",
           apiKey: "env-token",
           options: {
-            metadata: { invoked_by: "test", project: "opencode" },
+            metadata: { invoked_by: "test", project: "gte-agent" },
             cacheTtl: 300,
             cacheKey: "cache-key",
             skipCache: true,
             collectLog: false,
             headers: {
-              "User-Agent": expect.stringContaining("opencode/"),
+              "User-Agent": expect.stringContaining("gte-agent/"),
             },
           },
         })
@@ -137,11 +137,11 @@ describe("CloudflareAIGatewayPlugin", () => {
     ),
   )
 
-  it.effect("parses legacy cf-aig-metadata header when metadata option is absent", () =>
+  it.effect("parses GTE Agent cf-aig-metadata header when metadata option is absent", () =>
     withEnv(cloudflareEnv(), () =>
       Effect.gen(function* () {
         resetCalls()
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         yield* plugin.add(CloudflareAIGatewayPlugin)
 
         yield* plugin.trigger(
@@ -152,7 +152,7 @@ describe("CloudflareAIGatewayPlugin", () => {
             options: {
               name: "cloudflare-ai-gateway",
               headers: {
-                "cf-aig-metadata": JSON.stringify({ invoked_by: "header", project: "opencode" }),
+                "cf-aig-metadata": JSON.stringify({ invoked_by: "header", project: "gte-agent" }),
               },
             },
           },
@@ -160,7 +160,7 @@ describe("CloudflareAIGatewayPlugin", () => {
         )
 
         expect(aiGatewayCalls[0]?.options).toMatchObject({
-          metadata: { invoked_by: "header", project: "opencode" },
+          metadata: { invoked_by: "header", project: "gte-agent" },
         })
       }),
     ),
@@ -170,7 +170,7 @@ describe("CloudflareAIGatewayPlugin", () => {
     withEnv(cloudflareEnv(), () =>
       Effect.gen(function* () {
         resetCalls()
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         yield* plugin.add(CloudflareAIGatewayPlugin)
 
         yield* plugin.trigger(
@@ -207,7 +207,7 @@ describe("CloudflareAIGatewayPlugin", () => {
       () =>
         Effect.gen(function* () {
           resetCalls()
-          const plugin = yield* PluginV2.Service
+          const plugin = yield* Plugin.Service
           yield* plugin.add(CloudflareAIGatewayPlugin)
 
           yield* plugin.trigger(
@@ -238,7 +238,7 @@ describe("CloudflareAIGatewayPlugin", () => {
     withEnv(cloudflareEnv({ CLOUDFLARE_API_TOKEN: undefined, CF_AIG_TOKEN: "cf-aig-token" }), () =>
       Effect.gen(function* () {
         resetCalls()
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         yield* plugin.add(CloudflareAIGatewayPlugin)
 
         yield* plugin.trigger(
@@ -260,7 +260,7 @@ describe("CloudflareAIGatewayPlugin", () => {
     withEnv(cloudflareEnv({ CLOUDFLARE_ACCOUNT_ID: undefined, CLOUDFLARE_GATEWAY_ID: undefined }), () =>
       Effect.gen(function* () {
         resetCalls()
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         yield* plugin.add(CloudflareAIGatewayPlugin)
 
         const result = yield* plugin.trigger(
@@ -283,7 +283,7 @@ describe("CloudflareAIGatewayPlugin", () => {
     withEnv(cloudflareEnv({ CLOUDFLARE_API_TOKEN: undefined, CF_AIG_TOKEN: undefined }), () =>
       Effect.gen(function* () {
         resetCalls()
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         yield* plugin.add(CloudflareAIGatewayPlugin)
 
         const result = yield* plugin.trigger(
@@ -312,7 +312,7 @@ describe("CloudflareAIGatewayPlugin", () => {
       () =>
         Effect.gen(function* () {
           resetCalls()
-          const plugin = yield* PluginV2.Service
+          const plugin = yield* Plugin.Service
           yield* plugin.add(CloudflareAIGatewayPlugin)
 
           const result = yield* plugin.trigger(
@@ -335,7 +335,7 @@ describe("CloudflareAIGatewayPlugin", () => {
     withEnv(cloudflareEnv(), () =>
       Effect.gen(function* () {
         resetCalls()
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         yield* plugin.add(CloudflareAIGatewayPlugin)
 
         const result = yield* plugin.trigger(
@@ -363,7 +363,7 @@ describe("CloudflareAIGatewayPlugin", () => {
     withEnv(cloudflareEnv(), () =>
       Effect.gen(function* () {
         resetCalls()
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         yield* plugin.add(CloudflareAIGatewayPlugin)
 
         const result = yield* plugin.trigger(

@@ -1,10 +1,10 @@
 export * as SessionMessage from "./message"
 
 import { Schema } from "effect"
-import { ProviderMetadata } from "@opencode-ai/llm"
-import { ModelV2 } from "../model"
+import { ProviderMetadata } from "@gte-agent/llm"
+import { Model } from "../model"
 import { ToolOutput } from "../tool-output"
-import { V2Schema } from "../v2-schema"
+import { TimeSchema } from "../time-schema"
 import { SessionEvent } from "./event"
 import { Prompt } from "./prompt"
 import { SessionMessageID } from "./message-id"
@@ -16,7 +16,7 @@ const Base = {
   id: ID,
   metadata: Schema.Record(Schema.String, Schema.Unknown).pipe(Schema.optional),
   time: Schema.Struct({
-    created: V2Schema.DateTimeUtcFromMillis,
+    created: TimeSchema.DateTimeUtcFromMillis,
   }),
 }
 
@@ -29,7 +29,7 @@ export class AgentSwitched extends Schema.Class<AgentSwitched>("Session.Message.
 export class ModelSwitched extends Schema.Class<ModelSwitched>("Session.Message.ModelSwitched")({
   ...Base,
   type: Schema.Literal("model-switched"),
-  model: ModelV2.Ref,
+  model: Model.Ref,
 }) {}
 
 export class User extends Schema.Class<User>("Session.Message.User")({
@@ -40,7 +40,7 @@ export class User extends Schema.Class<User>("Session.Message.User")({
   references: Prompt.fields.references,
   type: Schema.Literal("user"),
   time: Schema.Struct({
-    created: V2Schema.DateTimeUtcFromMillis,
+    created: TimeSchema.DateTimeUtcFromMillis,
   }),
 }) {}
 
@@ -64,8 +64,8 @@ export class Shell extends Schema.Class<Shell>("Session.Message.Shell")({
   command: SessionEvent.Shell.Started.data.fields.command,
   output: Schema.String,
   time: Schema.Struct({
-    created: V2Schema.DateTimeUtcFromMillis,
-    completed: V2Schema.DateTimeUtcFromMillis.pipe(Schema.optional),
+    created: TimeSchema.DateTimeUtcFromMillis,
+    completed: TimeSchema.DateTimeUtcFromMillis.pipe(Schema.optional),
   }),
 }) {}
 
@@ -115,10 +115,10 @@ export class AssistantTool extends Schema.Class<AssistantTool>("Session.Message.
   }).pipe(Schema.optional),
   state: ToolState,
   time: Schema.Struct({
-    created: V2Schema.DateTimeUtcFromMillis,
-    ran: V2Schema.DateTimeUtcFromMillis.pipe(Schema.optional),
-    completed: V2Schema.DateTimeUtcFromMillis.pipe(Schema.optional),
-    pruned: V2Schema.DateTimeUtcFromMillis.pipe(Schema.optional),
+    created: TimeSchema.DateTimeUtcFromMillis,
+    ran: TimeSchema.DateTimeUtcFromMillis.pipe(Schema.optional),
+    completed: TimeSchema.DateTimeUtcFromMillis.pipe(Schema.optional),
+    pruned: TimeSchema.DateTimeUtcFromMillis.pipe(Schema.optional),
   }),
 }) {}
 
@@ -163,8 +163,8 @@ export class Assistant extends Schema.Class<Assistant>("Session.Message.Assistan
   }).pipe(Schema.optional),
   error: SessionEvent.Step.Failed.data.fields.error.pipe(Schema.optional),
   time: Schema.Struct({
-    created: V2Schema.DateTimeUtcFromMillis,
-    completed: V2Schema.DateTimeUtcFromMillis.pipe(Schema.optional),
+    created: TimeSchema.DateTimeUtcFromMillis,
+    completed: TimeSchema.DateTimeUtcFromMillis.pipe(Schema.optional),
   }),
 }) {}
 
@@ -190,5 +190,21 @@ export const Message = Schema.Union([
   .annotate({ identifier: "Session.Message" })
 
 export type Message = Schema.Schema.Type<typeof Message>
+
+export const PublicMessage = Schema.Union([
+  AgentSwitched,
+  ModelSwitched,
+  User,
+  Synthetic,
+  System,
+  Assistant,
+  Compaction,
+])
+  .pipe(Schema.toTaggedUnion("type"))
+  .annotate({ identifier: "Session.PublicMessage" })
+
+export type PublicMessage = Schema.Schema.Type<typeof PublicMessage>
+
+export const isPublicMessage = (message: Message): message is PublicMessage => message.type !== "shell"
 
 export type Type = Message["type"]

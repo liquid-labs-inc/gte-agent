@@ -2,13 +2,13 @@ export * as ConfigAgentPlugin from "./agent"
 
 import path from "path"
 import { Effect, Option, Schema } from "effect"
-import { AgentV2 } from "../../agent"
+import { Agent } from "../../agent"
 import { Config } from "../../config"
 import { ConfigAgent } from "../agent"
 import { ConfigMarkdown } from "../markdown"
 import { FSUtil } from "../../fs-util"
-import { ModelV2 } from "../../model"
-import { PluginV2 } from "../../plugin"
+import { Model } from "../../model"
+import { define, ID } from "../../plugin"
 import { ConfigAgentV1 } from "../../v1/config/agent"
 import { ConfigMigrateV1 } from "../../v1/config/migrate"
 
@@ -33,10 +33,10 @@ const agentKeys = new Set([
   "permissions",
 ])
 
-export const Plugin = PluginV2.define({
-  id: PluginV2.ID.make("config-agent"),
+export const Plugin = define({
+  id: ID.make("config-agent"),
   effect: Effect.gen(function* () {
-    const agent = yield* AgentV2.Service
+    const agent = yield* Agent.Service
     const config = yield* Config.Service
     const fs = yield* FSUtil.Service
     const documents = yield* Effect.forEach(yield* config.entries(), (entry) => {
@@ -64,7 +64,7 @@ export const Plugin = PluginV2.define({
 
       for (const document of documents) {
         for (const [id, item] of Object.entries(document.info.agents ?? {})) {
-          const agentID = AgentV2.ID.make(id)
+          const agentID = Agent.ID.make(id)
           if (item.disabled) {
             editor.remove(agentID)
             continue
@@ -74,11 +74,11 @@ export const Plugin = PluginV2.define({
           editor.update(agentID, (agent) => {
             if (!exists) agent.permissions.push(...global)
             if (item.model !== undefined) {
-              const model = ModelV2.parse(item.model)
+              const model = Model.parse(item.model)
               agent.model = { id: model.modelID, providerID: model.providerID, variant: agent.model?.variant }
             }
             if (item.variant !== undefined && agent.model !== undefined) {
-              agent.model.variant = ModelV2.VariantID.make(item.variant)
+              agent.model.variant = Model.VariantID.make(item.variant)
             }
             if (item.request !== undefined) {
               Object.assign(agent.request.headers, item.request.headers ?? {})

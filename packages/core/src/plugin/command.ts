@@ -1,17 +1,17 @@
 export * as CommandPlugin from "./command"
 
 import { Effect } from "effect"
-import { CommandV2 } from "../command"
-import { Location } from "../location"
-import { PluginV2 } from "../plugin"
+import { Command } from "../command"
+import { RuntimeScope } from "../runtime-scope"
+import { define, ID } from "../plugin"
 import PROMPT_INITIALIZE from "./command/initialize.txt"
 import PROMPT_REVIEW from "./command/review.txt"
 
-export const Plugin = PluginV2.define({
-  id: PluginV2.ID.make("command"),
+export const Plugin = define({
+  id: ID.make("command"),
   effect: Effect.gen(function* () {
-    const command = yield* CommandV2.Service
-    const location = yield* Location.Service
+    const command = yield* Command.Service
+    const location = yield* RuntimeScope.Service
     const transform = yield* command.transform()
 
     yield* transform((editor) => {

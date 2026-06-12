@@ -5,10 +5,10 @@ import {
   type ToolOutput as LLMToolOutputType,
   type ToolResultValue,
   type Usage,
-} from "@opencode-ai/llm"
+} from "@gte-agent/llm"
 import { DateTime, Effect } from "effect"
-import { EventV2 } from "../../event"
-import { ModelV2 } from "../../model"
+import { Event } from "../../event"
+import { Model } from "../../model"
 import { SessionEvent } from "../event"
 import { SessionMessage } from "../message"
 import { SessionSchema } from "../schema"
@@ -16,7 +16,7 @@ import { SessionSchema } from "../schema"
 type Input = {
   readonly sessionID: SessionSchema.ID
   readonly agent: string
-  readonly model: ModelV2.Ref
+  readonly model: Model.Ref
 }
 
 const safe = (value: number | undefined) => Math.max(0, Number.isFinite(value) ? (value ?? 0) : 0)
@@ -57,7 +57,7 @@ const settledOutput = (value: LLMToolOutputType | undefined, result: ToolResultV
 }
 
 /** Persist one provider turn without executing tools or starting a continuation turn. */
-export const createLLMEventPublisher = (events: EventV2.Interface, input: Input) => {
+export const createLLMEventPublisher = (events: Event.Interface, input: Input) => {
   const tools = new Map<
     string,
     {

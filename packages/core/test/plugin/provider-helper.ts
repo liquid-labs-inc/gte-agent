@@ -1,21 +1,22 @@
-import { Npm } from "@opencode-ai/core/npm"
+import { Npm } from "@gte-agent/core/npm"
 import type { LanguageModelV3 } from "@ai-sdk/provider"
 import { expect } from "bun:test"
 import { Effect, Layer, Option } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { EventV2 } from "@opencode-ai/core/event"
-import { Location } from "@opencode-ai/core/location"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { ProviderV2 } from "@opencode-ai/core/provider"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { location } from "../fixture/location"
+import { Catalog } from "@gte-agent/core/catalog"
+import { Database } from "@gte-agent/core/database/database"
+import { Event } from "@gte-agent/core/event"
+import { RuntimeScope } from "@gte-agent/core/runtime-scope"
+import { Model } from "@gte-agent/core/model"
+import { Plugin } from "@gte-agent/core/plugin"
+import { Provider } from "@gte-agent/core/provider"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { runtimeScope } from "../fixture/runtime-scope"
 import { testEffect } from "../lib/effect"
 
 export const fixtureProvider = new URL("./fixtures/provider-factory.ts", import.meta.url).href
-const locationLayer = Layer.succeed(
-  Location.Service,
-  Location.Service.of(location({ directory: AbsolutePath.make("test") })),
+const runtimeScopeLayer = Layer.succeed(
+  RuntimeScope.Service,
+  RuntimeScope.Service.of(runtimeScope({ directory: AbsolutePath.make("test") })),
 )
 
 export const npmLayer = Layer.succeed(
@@ -40,33 +41,33 @@ export const catalogLayer = Layer.succeed(
       get: () => Effect.die("unexpected model.get"),
       all: () => Effect.succeed([]),
       available: () => Effect.succeed([]),
-      default: () => Effect.succeed(Option.none<ModelV2.Info>()),
-      small: () => Effect.succeed(Option.none<ModelV2.Info>()),
+      default: () => Effect.succeed(Option.none<Model.Info>()),
+      small: () => Effect.succeed(Option.none<Model.Info>()),
     },
   }),
 )
 
 export const it = testEffect(
-  Catalog.locationLayer.pipe(
-    Layer.provideMerge(EventV2.defaultLayer),
-    Layer.provideMerge(locationLayer),
+  Catalog.runtimeScopeLayer.pipe(
+    Layer.provideMerge(Event.layer.pipe(Layer.provide(Database.layerFromPath(":memory:")))),
+    Layer.provideMerge(runtimeScopeLayer),
     Layer.provideMerge(npmLayer),
   ),
 )
 
-type ProviderInput = Partial<Omit<ProviderV2.Info, "api" | "request">> & {
-  api?: ProviderV2.Api
-  request?: ProviderV2.Request
+type ProviderInput = Partial<Omit<Provider.Info, "api" | "request">> & {
+  api?: Provider.Api
+  request?: Provider.Request
 }
 
-type ModelInput = Partial<Omit<ModelV2.Info, "api" | "request">> & {
-  api?: (ProviderV2.Api & { id?: ModelV2.ID }) | { id: ModelV2.ID }
-  request?: ModelV2.Info["request"]
+type ModelInput = Partial<Omit<Model.Info, "api" | "request">> & {
+  api?: (Provider.Api & { id?: Model.ID }) | { id: Model.ID }
+  request?: Model.Info["request"]
 }
 
 export function provider(providerID: string, options?: ProviderInput) {
-  return new ProviderV2.Info({
-    ...ProviderV2.Info.empty(ProviderV2.ID.make(providerID)),
+  return new Provider.Info({
+    ...Provider.Info.empty(Provider.ID.make(providerID)),
     api: options?.api ?? {
       type: "aisdk",
       package: "test-provider",
@@ -81,14 +82,14 @@ export function provider(providerID: string, options?: ProviderInput) {
 }
 
 export function model(providerID: string, modelID: string, options?: ModelInput) {
-  return new ModelV2.Info({
-    ...ModelV2.Info.empty(ProviderV2.ID.make(providerID), ModelV2.ID.make(modelID)),
+  return new Model.Info({
+    ...Model.Info.empty(Provider.ID.make(providerID), Model.ID.make(modelID)),
     ...options,
     api:
       options?.api && "type" in options.api
-        ? { id: ModelV2.ID.make(modelID), ...options.api }
+        ? { id: Model.ID.make(modelID), ...options.api }
         : {
-            id: ModelV2.ID.make(modelID),
+            id: Model.ID.make(modelID),
             ...options?.api,
             type: "aisdk",
             package: "test-provider",
@@ -136,5 +137,5 @@ export function fakeSelectorSdk(calls: string[]) {
 }
 
 export function expectPluginRegistered(ids: string[], id: string) {
-  expect(ids).toContain(PluginV2.ID.make(id))
+  expect(ids).toContain(Plugin.ID.make(id))
 }

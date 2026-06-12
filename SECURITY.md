@@ -1,47 +1,25 @@
-# Security
+# Security Policy
 
-## IMPORTANT
+This repository is in the GTE Agent retrofit phase. Only the retained runtime skeleton is in scope.
 
-We do not accept AI generated security reports. We receive a large number of
-these and we absolutely do not have the resources to review them all. If you
-submit one that will be an automatic ban from the project.
+## Scope
 
-## Threat Model
+In scope:
 
-### Overview
+- Retained runtime packages.
+- Server authentication and authorization boundaries.
+- Durable session, permission, and typed tool boundaries.
 
-OpenCode is an AI-powered coding assistant that runs locally on your machine. It provides an agent system with access to powerful tools including shell execution, file operations, and web access.
+Out of scope:
 
-### No Sandbox
+- Removed OpenCode product surfaces.
+- Historical documents under `docs/historical-opencode`.
+- Local development configuration that requires direct filesystem access to the repo.
 
-OpenCode does **not** sandbox the agent. The permission system exists as a UX feature to help users stay aware of what actions the agent is taking - it prompts for confirmation before executing commands, writing files, etc. However, it is not designed to provide security isolation.
+Server mode is opt-in. When enabled, set `OPENCODE_SERVER_PASSWORD` to require HTTP Basic Auth. Without this, the local server intentionally runs unauthenticated and warns at startup.
 
-If you need true isolation, run OpenCode inside a Docker container or VM.
+GTE Agent is not yet a trading execution runtime. Future real-liquidity functionality needs separate security, approval, audit, and disclosure guidance before it is enabled.
 
-### Server Mode
+## Reporting
 
-Server mode is opt-in only. When enabled, set `OPENCODE_SERVER_PASSWORD` to require HTTP Basic Auth. Without this, the server runs unauthenticated (with a warning). It is the end user's responsibility to secure the server - any functionality it provides is not a vulnerability.
-
-### Out of Scope
-
-| Category                        | Rationale                                                               |
-| ------------------------------- | ----------------------------------------------------------------------- |
-| **Server access when opted-in** | If you enable server mode, API access is expected behavior              |
-| **Sandbox escapes**             | The permission system is not a sandbox (see above)                      |
-| **LLM provider data handling**  | Data sent to your configured LLM provider is governed by their policies |
-| **MCP server behavior**         | External MCP servers you configure are outside our trust boundary       |
-| **Malicious config files**      | Users control their own config; modifying it is not an attack vector    |
-
----
-
-# Reporting Security Issues
-
-We appreciate your efforts to responsibly disclose your findings, and will make every effort to acknowledge your contributions.
-
-To report a security issue, please use the GitHub Security Advisory ["Report a Vulnerability"](https://github.com/anomalyco/opencode/security/advisories/new) tab.
-
-The team will send a response indicating the next steps in handling your report. After the initial reply to your report, the security team will keep you informed of the progress towards a fix and full announcement, and may ask for additional information or guidance.
-
-## Escalation
-
-If you do not receive an acknowledgement of your report within 6 business days, you may send an email to security@anoma.ly
+Report vulnerabilities through this repository's GitHub Security Advisory flow. Include the affected package or command, reproduction steps, expected impact, actual impact, and relevant logs.

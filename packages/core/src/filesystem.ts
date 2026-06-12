@@ -5,10 +5,10 @@ import { pathToFileURL } from "url"
 import fuzzysort from "fuzzysort"
 import ignore from "ignore"
 import { Context, Effect, Layer, Option, Schema, Stream } from "effect"
-import { EventV2 } from "./event"
+import { Event } from "./event"
 import { FSUtil } from "./fs-util"
 import { Global } from "./global"
-import { Location } from "./location"
+import { RuntimeScope } from "./runtime-scope"
 import { ProjectReference } from "./project-reference"
 import { NonNegativeInt, PositiveInt, RelativePath } from "./schema"
 import { Protected } from "./filesystem/protected"
@@ -85,7 +85,7 @@ export class ListTarget extends Schema.Class<ListTarget>("FileSystem.ListTarget"
   resource: Schema.String,
 }) {}
 
-/** Canonical read authority for Location-scoped search and metadata leaves. */
+/** Canonical read authority for RuntimeScope-scoped search and metadata leaves. */
 export class RootTarget extends Schema.Class<RootTarget>("FileSystem.RootTarget")({
   absolute: Schema.String,
   real: Schema.String,
@@ -143,8 +143,8 @@ export class GrepMatch extends Schema.Class<GrepMatch>("FileSystem.GrepMatch")({
   ),
 }) {}
 
-export const Event = {
-  Edited: EventV2.define({
+export const FileSystemEvent = {
+  Edited: Event.define({
     type: "file.edited",
     schema: {
       file: Schema.String,
@@ -174,13 +174,13 @@ export interface Interface {
   readonly isIgnored: (path: RelativePath, type: "file" | "directory") => boolean
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/FileSystem") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/FileSystem") {}
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
-    const location = yield* Location.Service
+    const location = yield* RuntimeScope.Service
     const references = yield* ProjectReference.Service
     const ripgrep = yield* Ripgrep.Service
     const root = yield* fs.realPath(location.directory).pipe(Effect.orDie)
@@ -567,7 +567,7 @@ export const layer = Layer.effect(
   }),
 )
 
-export const locationLayer = layer.pipe(
+export const runtimeScopeLayer = layer.pipe(
   Layer.provide(Ripgrep.defaultLayer),
-  Layer.provideMerge(ProjectReference.locationLayer),
+  Layer.provideMerge(ProjectReference.runtimeScopeLayer),
 )

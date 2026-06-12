@@ -1,17 +1,17 @@
 /**
- * Model-facing V2 exact-edit leaf. Relative paths resolve within the active
- * Location. Absolute paths inside that Location are accepted, while explicit
+ * Model-facing exact-edit leaf. Relative paths resolve within the active
+ * RuntimeScope. Absolute paths inside that RuntimeScope are accepted, while explicit
  * absolute external paths retain mutation capability through a separate
  * external_directory approval before edit approval. Named project references
  * are read-oriented and deliberately are not accepted by mutation tools.
  */
 export * as EditTool from "./edit"
 
-import { Tool, ToolFailure, toolText } from "@opencode-ai/llm"
+import { Tool, ToolFailure, toolText } from "@gte-agent/llm"
 import { Cause, Effect, Layer, Schema } from "effect"
 import { FileMutation } from "../file-mutation"
 import { FSUtil } from "../fs-util"
-import { LocationMutation } from "../location-mutation"
+import { RuntimeScopeMutation } from "../runtime-scope-mutation"
 import { ToolRegistry } from "./registry"
 
 export const name = "edit"
@@ -19,7 +19,7 @@ export const name = "edit"
 export const Parameters = Schema.Struct({
   path: Schema.String.annotate({
     description:
-      "File path to edit. Relative paths resolve within the active Location. Absolute paths inside that Location are accepted; external absolute paths require external_directory approval. Named project references are read-oriented and are not accepted.",
+      "File path to edit. Relative paths resolve within the active RuntimeScope. Absolute paths inside that RuntimeScope are accepted; external absolute paths require external_directory approval. Named project references are read-oriented and are not accepted.",
   }),
   oldString: Schema.String.annotate({ description: "Exact text to replace" }),
   newString: Schema.String.annotate({ description: "Replacement text, which must differ from oldString" }),
@@ -80,7 +80,7 @@ export const toModelOutput = (output: Success, oldString: string, newString: str
 
 const definition = Tool.make({
   description:
-    "Replace exact text in one file. Relative paths resolve within the active Location. Absolute paths inside the Location are accepted. Explicit external absolute paths require external_directory approval before edit approval. Named project references are read-oriented and are not accepted.",
+    "Replace exact text in one file. Relative paths resolve within the active RuntimeScope. Absolute paths inside the RuntimeScope are accepted. Explicit external absolute paths require external_directory approval before edit approval. Named project references are read-oriented and are not accepted.",
   parameters: Parameters,
   success: Success,
   toModelOutput: ({ parameters, output }) => [
@@ -88,17 +88,17 @@ const definition = Tool.make({
   ],
 })
 
-/** Deferred V2 edit behavior and UX integrations remain visible at the model-facing seam. */
+/** Deferred edit behavior and UX integrations remain visible at the model-facing seam. */
 // TODO: Port V1 fuzzy correction strategies only after exact-edit behavior is established: line-trimmed matching, block-anchor fallback, indentation correction, and similarity-threshold review.
-// TODO: Add formatter integration after V2 formatter runtime exists.
-// TODO: Publish watcher/file-edit events after V2 watcher integration exists.
+// TODO: Add formatter integration after formatter runtime exists.
+// TODO: Publish watcher/file-edit events after watcher integration exists.
 // TODO: Add snapshots / undo after design exists.
-// TODO: Add LSP notification and diagnostics after V2 LSP runtime exists.
+// TODO: Add LSP notification and diagnostics after LSP runtime exists.
 
 export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const registry = yield* ToolRegistry.Service
-    const mutation = yield* LocationMutation.Service
+    const mutation = yield* RuntimeScopeMutation.Service
     const files = yield* FileMutation.Service
     const fs = yield* FSUtil.Service
 
@@ -133,7 +133,7 @@ export const layer = Layer.effectDiscard(
             const plan = yield* unableToEdit(mutation.resolve({ path: parameters.path, kind: "file" }))
             const external = plan.target.externalDirectory
             if (external) {
-              yield* unableToEdit(assertPermission(LocationMutation.externalDirectoryPermission(external)))
+              yield* unableToEdit(assertPermission(RuntimeScopeMutation.externalDirectoryPermission(external)))
             }
 
             yield* unableToEdit(assertPermission({ action: "edit", resources: [plan.target.resource], save: ["*"] }))

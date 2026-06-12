@@ -1,39 +1,26 @@
 import { HttpApi, OpenApi } from "effect/unstable/httpapi"
 import { SchemaErrorMiddleware } from "./middleware/schema-error"
-import { MessageGroup } from "./groups/v2/message"
-import { ModelGroup } from "./groups/v2/model"
-import { ProviderGroup } from "./groups/v2/provider"
-import { SessionGroup } from "./groups/v2/session"
-import { PermissionGroup, PermissionSavedGroup, SessionPermissionGroup } from "./groups/v2/permission"
-import { FileSystemGroup } from "./groups/v2/fs"
-import { CommandGroup } from "./groups/v2/command"
-import { SkillGroup } from "./groups/v2/skill"
-import { EventGroup } from "./groups/v2/event"
-import { AgentGroup } from "./groups/v2/agent"
-import { HealthGroup } from "./groups/v2/health"
-import { QuestionGroup, SessionQuestionGroup } from "./groups/v2/question"
+import { AuthProviderGroup } from "./groups/auth-provider"
+import { ModelsGroup } from "./groups/models"
+import { MessageGroup } from "./groups/message"
+import { SessionGroup } from "./groups/session"
+import { SessionSnapshotGroup } from "./groups/session-snapshot"
+import { HealthGroup } from "./groups/health"
+import { GteDataGroup } from "./groups/gte-data"
 
-export const V2Api = HttpApi.make("v2")
+export const GTEAgentApi = HttpApi.make("gte-agent")
   .add(HealthGroup)
-  .add(AgentGroup)
   .add(SessionGroup)
+  .add(SessionSnapshotGroup)
   .add(MessageGroup)
-  .add(ModelGroup)
-  .add(ProviderGroup)
-  .add(PermissionGroup)
-  .add(SessionPermissionGroup)
-  .add(PermissionSavedGroup)
-  .add(FileSystemGroup)
-  .add(CommandGroup)
-  .add(SkillGroup)
-  .add(EventGroup)
-  .add(QuestionGroup)
-  .add(SessionQuestionGroup)
+  .add(GteDataGroup)
+  .add(AuthProviderGroup)
+  .add(ModelsGroup)
   .annotateMerge(
     OpenApi.annotations({
-      title: "opencode experimental HttpApi",
+      title: "GTE Agent API",
       version: "0.0.1",
-      description: "Experimental HttpApi surface for selected instance routes.",
+      description: "Canonical local GTE Agent runtime API.",
     }),
   )
   .middleware(SchemaErrorMiddleware)

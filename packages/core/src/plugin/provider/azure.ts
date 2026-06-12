@@ -1,6 +1,6 @@
 import { Effect } from "effect"
-import { PluginV2 } from "../../plugin"
-import { ProviderV2 } from "../../provider"
+import { Plugin } from "../../plugin"
+import { Provider } from "../../provider"
 
 function selectLanguage(sdk: any, modelID: string, useChat: boolean) {
   if (useChat && sdk.chat) return sdk.chat(modelID)
@@ -10,8 +10,8 @@ function selectLanguage(sdk: any, modelID: string, useChat: boolean) {
   return sdk.languageModel(modelID)
 }
 
-export const AzurePlugin = PluginV2.define({
-  id: PluginV2.ID.make("azure"),
+export const AzurePlugin = Plugin.define({
+  id: Plugin.ID.make("azure"),
   effect: Effect.gen(function* () {
     return {
       "catalog.transform": Effect.fn(function* (evt) {
@@ -29,7 +29,7 @@ export const AzurePlugin = PluginV2.define({
       }),
       "aisdk.sdk": Effect.fn(function* (evt) {
         if (evt.package !== "@ai-sdk/azure") return
-        if (evt.model.providerID === ProviderV2.ID.azure) {
+        if (evt.model.providerID === Provider.ID.azure) {
           if (
             !evt.options.resourceName &&
             !evt.options.baseURL &&
@@ -44,15 +44,15 @@ export const AzurePlugin = PluginV2.define({
         evt.sdk = mod.createAzure(evt.options)
       }),
       "aisdk.language": Effect.fn(function* (evt) {
-        if (evt.model.providerID !== ProviderV2.ID.azure) return
+        if (evt.model.providerID !== Provider.ID.azure) return
         evt.language = selectLanguage(evt.sdk, evt.model.api.id, Boolean(evt.options.useCompletionUrls))
       }),
     }
   }),
 })
 
-export const AzureCognitiveServicesPlugin = PluginV2.define({
-  id: PluginV2.ID.make("azure-cognitive-services"),
+export const AzureCognitiveServicesPlugin = Plugin.define({
+  id: Plugin.ID.make("azure-cognitive-services"),
   effect: Effect.gen(function* () {
     return {
       "catalog.transform": Effect.fn(function* (evt) {
@@ -68,7 +68,7 @@ export const AzureCognitiveServicesPlugin = PluginV2.define({
         }
       }),
       "aisdk.language": Effect.fn(function* (evt) {
-        if (evt.model.providerID !== ProviderV2.ID.make("azure-cognitive-services")) return
+        if (evt.model.providerID !== Provider.ID.make("azure-cognitive-services")) return
         evt.language = selectLanguage(evt.sdk, evt.model.api.id, Boolean(evt.options.useCompletionUrls))
       }),
     }

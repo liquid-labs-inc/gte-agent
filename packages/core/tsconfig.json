@@ -2,6 +2,9 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "@tsconfig/bun/tsconfig.json",
   "compilerOptions": {
+    // The vendored gte-ts package is authored against lib DOM (HeadersInit,
+    // BodyInit); the server package already includes DOM for the same reason.
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "noUncheckedIndexedAccess": false
   }
 }

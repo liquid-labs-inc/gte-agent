@@ -2,21 +2,21 @@ import fs from "fs/promises"
 import path from "path"
 import { describe, expect } from "bun:test"
 import { Deferred, Effect, Fiber, Layer } from "effect"
-import { FileMutation } from "@opencode-ai/core/file-mutation"
-import { FSUtil } from "@opencode-ai/core/fs-util"
-import { Location } from "@opencode-ai/core/location"
-import { LocationMutation } from "@opencode-ai/core/location-mutation"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { location } from "./fixture/location"
+import { FileMutation } from "@gte-agent/core/file-mutation"
+import { FSUtil } from "@gte-agent/core/fs-util"
+import { RuntimeScope } from "@gte-agent/core/runtime-scope"
+import { RuntimeScopeMutation } from "@gte-agent/core/runtime-scope-mutation"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { runtimeScope } from "./fixture/runtime-scope"
 import { tmpdir } from "./fixture/tmpdir"
 import { it } from "./lib/effect"
 
 function provide(directory: string, filesystem = FSUtil.defaultLayer) {
   const activeLocation = Layer.succeed(
-    Location.Service,
-    Location.Service.of(location({ directory: AbsolutePath.make(directory) })),
+    RuntimeScope.Service,
+    RuntimeScope.Service.of(runtimeScope({ directory: AbsolutePath.make(directory) })),
   )
-  const planning = LocationMutation.layer.pipe(Layer.provide(filesystem), Layer.provide(activeLocation))
+  const planning = RuntimeScopeMutation.layer.pipe(Layer.provide(filesystem), Layer.provide(activeLocation))
   const commits = FileMutation.layer.pipe(Layer.provide(filesystem), Layer.provide(planning))
   return Effect.provide(Layer.mergeAll(planning, commits))
 }
@@ -34,7 +34,7 @@ describe("FileMutation", () => {
       Effect.gen(function* () {
         const targetPath = path.join(directory, "hello.txt")
         yield* Effect.promise(() => fs.writeFile(targetPath, "before"))
-        const plan = yield* (yield* LocationMutation.Service).resolve({ path: "hello.txt" })
+        const plan = yield* (yield* RuntimeScopeMutation.Service).resolve({ path: "hello.txt" })
 
         expect(yield* (yield* FileMutation.Service).write({ plan, content: "after" })).toEqual({
           operation: "write",
@@ -50,7 +50,7 @@ describe("FileMutation", () => {
   it.live("writes a prospective internal file and creates parent directories", () =>
     withTmp((directory) =>
       Effect.gen(function* () {
-        const plan = yield* (yield* LocationMutation.Service).resolve({ path: path.join("src", "nested", "hello.txt") })
+        const plan = yield* (yield* RuntimeScopeMutation.Service).resolve({ path: path.join("src", "nested", "hello.txt") })
         const result = yield* (yield* FileMutation.Service).write({ plan, content: "hello" })
 
         expect(result).toEqual({
@@ -69,8 +69,8 @@ describe("FileMutation", () => {
       Effect.gen(function* () {
         const preservedPath = path.join(directory, "preserved.txt")
         yield* Effect.promise(() => fs.writeFile(preservedPath, "\uFEFFbefore"))
-        const preserved = yield* (yield* LocationMutation.Service).resolve({ path: "preserved.txt" })
-        const created = yield* (yield* LocationMutation.Service).resolve({ path: "created.txt" })
+        const preserved = yield* (yield* RuntimeScopeMutation.Service).resolve({ path: "preserved.txt" })
+        const created = yield* (yield* RuntimeScopeMutation.Service).resolve({ path: "created.txt" })
         const files = yield* FileMutation.Service
 
         yield* files.writeTextPreservingBom({ plan: preserved, content: "\uFEFFafter" })
@@ -86,13 +86,13 @@ describe("FileMutation", () => {
     withTmp((directory) =>
       Effect.gen(function* () {
         const targetPath = path.join(directory, "appeared.txt")
-        const plan = yield* (yield* LocationMutation.Service).resolve({ path: "appeared.txt" })
+        const plan = yield* (yield* RuntimeScopeMutation.Service).resolve({ path: "appeared.txt" })
         yield* Effect.promise(() => fs.writeFile(targetPath, "winner"))
 
         expect(
           yield* (yield* FileMutation.Service).create({ plan, content: "replacement" }).pipe(Effect.flip),
         ).toMatchObject({
-          _tag: "LocationMutation.RevalidationError",
+          _tag: "RuntimeScopeMutation.RevalidationError",
         })
         expect(yield* Effect.promise(() => fs.readFile(targetPath, "utf8"))).toBe("winner")
       }).pipe(provide(directory)),
@@ -104,7 +104,7 @@ describe("FileMutation", () => {
       Effect.gen(function* () {
         const targetPath = path.join(directory, "remove.txt")
         yield* Effect.promise(() => fs.writeFile(targetPath, "remove"))
-        const plan = yield* (yield* LocationMutation.Service).resolve({ path: "remove.txt" })
+        const plan = yield* (yield* RuntimeScopeMutation.Service).resolve({ path: "remove.txt" })
         const result = yield* (yield* FileMutation.Service).remove({ plan })
 
         expect(result).toEqual({
@@ -130,7 +130,7 @@ describe("FileMutation", () => {
       withTmp((outside) =>
         Effect.gen(function* () {
           const targetPath = path.join(outside, "external.txt")
-          const plan = yield* (yield* LocationMutation.Service).resolve({ path: targetPath })
+          const plan = yield* (yield* RuntimeScopeMutation.Service).resolve({ path: targetPath })
           const result = yield* (yield* FileMutation.Service).write({ plan, content: "external" })
 
           expect(result).toEqual({
@@ -151,7 +151,7 @@ describe("FileMutation", () => {
         Effect.gen(function* () {
           const targetPath = path.join(outside, "external.txt")
           yield* Effect.promise(() => fs.writeFile(targetPath, "external"))
-          const plan = yield* (yield* LocationMutation.Service).resolve({ path: targetPath })
+          const plan = yield* (yield* RuntimeScopeMutation.Service).resolve({ path: targetPath })
           const result = yield* (yield* FileMutation.Service).remove({ plan })
 
           expect(result).toEqual({
@@ -180,7 +180,7 @@ describe("FileMutation", () => {
           if (process.platform === "win32") return
           const parent = path.join(directory, "parent")
           yield* Effect.promise(() => fs.mkdir(parent))
-          const plan = yield* (yield* LocationMutation.Service).resolve({ path: path.join("parent", "new.txt") })
+          const plan = yield* (yield* RuntimeScopeMutation.Service).resolve({ path: path.join("parent", "new.txt") })
           yield* Effect.promise(async () => {
             await fs.rmdir(parent)
             await fs.symlink(outside, parent)
@@ -189,7 +189,7 @@ describe("FileMutation", () => {
           expect(
             yield* (yield* FileMutation.Service).write({ plan, content: "escape" }).pipe(Effect.flip),
           ).toMatchObject({
-            _tag: "LocationMutation.RevalidationError",
+            _tag: "RuntimeScopeMutation.RevalidationError",
           })
           expect(
             yield* Effect.promise(() =>
@@ -227,7 +227,7 @@ describe("FileMutation", () => {
         )
 
         yield* Effect.gen(function* () {
-          const mutation = yield* LocationMutation.Service
+          const mutation = yield* RuntimeScopeMutation.Service
           const files = yield* FileMutation.Service
           const firstPlan = yield* mutation.resolve({ path: "shared.txt" })
           const secondPlan = yield* mutation.resolve({ path: "shared.txt" })
@@ -267,7 +267,7 @@ describe("FileMutation", () => {
         )
 
         yield* Effect.gen(function* () {
-          const mutation = yield* LocationMutation.Service
+          const mutation = yield* RuntimeScopeMutation.Service
           const files = yield* FileMutation.Service
           const plan = yield* mutation.resolve({ path: "shared.txt" })
           const expected = new TextEncoder().encode("initial")
@@ -292,7 +292,7 @@ describe("FileMutation", () => {
       Effect.gen(function* () {
         const targetPath = path.join(directory, "stale.txt")
         yield* Effect.promise(() => fs.writeFile(targetPath, "current"))
-        const plan = yield* (yield* LocationMutation.Service).resolve({ path: "stale.txt" })
+        const plan = yield* (yield* RuntimeScopeMutation.Service).resolve({ path: "stale.txt" })
 
         expect(
           yield* (yield* FileMutation.Service)
@@ -322,7 +322,7 @@ describe("FileMutation", () => {
         )
 
         yield* Effect.gen(function* () {
-          const mutation = yield* LocationMutation.Service
+          const mutation = yield* RuntimeScopeMutation.Service
           const files = yield* FileMutation.Service
           const firstPlan = yield* mutation.resolve({ path: "first.txt" })
           const secondPlan = yield* mutation.resolve({ path: "second.txt" })

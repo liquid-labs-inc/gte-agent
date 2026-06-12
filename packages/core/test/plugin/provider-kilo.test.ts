@@ -1,14 +1,14 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { ProviderPlugins } from "@opencode-ai/core/plugin/provider"
-import { KiloPlugin } from "@opencode-ai/core/plugin/provider/kilo"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Catalog } from "@gte-agent/core/catalog"
+import { Plugin } from "@gte-agent/core/plugin"
+import { ProviderPlugins } from "@gte-agent/core/plugin/provider"
+import { KiloPlugin } from "@gte-agent/core/plugin/provider/kilo"
+import { Provider } from "@gte-agent/core/provider"
 import { expectPluginRegistered, it, provider } from "./provider-helper"
 
 describe("KiloPlugin", () => {
-  it.effect("is registered so legacy referer headers can be applied", () =>
+  it.effect("is registered so GTE Agent referer headers can be applied", () =>
     Effect.sync(() =>
       expectPluginRegistered(
         ProviderPlugins.map((item) => item.id),
@@ -17,9 +17,9 @@ describe("KiloPlugin", () => {
     ),
   )
 
-  it.effect("applies legacy referer headers only to kilo", () =>
+  it.effect("applies GTE Agent referer headers only to kilo", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const catalog = yield* Catalog.Service
       yield* plugin.add(KiloPlugin)
       const transform = yield* catalog.transform()
@@ -34,18 +34,18 @@ describe("KiloPlugin", () => {
         })
         catalog.provider.update(provider("openrouter").id, () => {})
       })
-      expect((yield* catalog.provider.get(ProviderV2.ID.make("kilo"))).request.headers).toEqual({
+      expect((yield* catalog.provider.get(Provider.ID.make("kilo"))).request.headers).toEqual({
         Existing: "value",
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
+        "HTTP-Referer": "https://gte-agent.ai/",
+        "X-Title": "gte-agent",
       })
-      expect((yield* catalog.provider.get(ProviderV2.ID.openrouter)).request.headers).toEqual({})
+      expect((yield* catalog.provider.get(Provider.ID.openrouter)).request.headers).toEqual({})
     }),
   )
 
-  it.effect("uses the exact legacy Kilo header casing and set", () =>
+  it.effect("uses the exact GTE Agent Kilo header casing and set", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const catalog = yield* Catalog.Service
       yield* plugin.add(KiloPlugin)
       const transform = yield* catalog.transform()
@@ -58,10 +58,10 @@ describe("KiloPlugin", () => {
         })
       })
 
-      const result = yield* catalog.provider.get(ProviderV2.ID.make("kilo"))
+      const result = yield* catalog.provider.get(Provider.ID.make("kilo"))
       expect(result.request.headers).toEqual({
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
+        "HTTP-Referer": "https://gte-agent.ai/",
+        "X-Title": "gte-agent",
       })
       expect(result.request.headers).not.toHaveProperty("http-referer")
       expect(result.request.headers).not.toHaveProperty("x-title")
@@ -69,9 +69,9 @@ describe("KiloPlugin", () => {
     }),
   )
 
-  it.effect("uses the legacy provider-id guard instead of endpoint package matching", () =>
+  it.effect("uses the GTE Agent provider-id guard instead of endpoint package matching", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const catalog = yield* Catalog.Service
       yield* plugin.add(KiloPlugin)
       const transform = yield* catalog.transform()
@@ -90,11 +90,11 @@ describe("KiloPlugin", () => {
         })
       })
 
-      expect((yield* catalog.provider.get(ProviderV2.ID.make("kilo"))).request.headers).toEqual({
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
+      expect((yield* catalog.provider.get(Provider.ID.make("kilo"))).request.headers).toEqual({
+        "HTTP-Referer": "https://gte-agent.ai/",
+        "X-Title": "gte-agent",
       })
-      expect((yield* catalog.provider.get(ProviderV2.ID.make("custom-kilo"))).request.headers).toEqual({})
+      expect((yield* catalog.provider.get(Provider.ID.make("custom-kilo"))).request.headers).toEqual({})
     }),
   )
 })

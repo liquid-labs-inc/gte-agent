@@ -1,26 +1,28 @@
 import { DateTime } from "effect"
-import { AgentV2 } from "../agent"
-import { Location } from "../location"
-import { ModelV2 } from "../model"
-import { ProjectV2 } from "../project"
-import { ProviderV2 } from "../provider"
+import { Agent } from "../agent"
+import { Model } from "../model"
+import { Project } from "../project"
+import { Provider } from "../provider"
 import { AbsolutePath, RelativePath } from "../schema"
-import { WorkspaceV2 } from "../workspace"
 import { SessionSchema } from "./schema"
 import { SessionTable } from "./sql"
+import { GTEAuth } from "../gte-auth"
+import { RuntimeScope } from "../runtime-scope"
 
 export function fromRow(row: typeof SessionTable.$inferSelect): SessionSchema.Info {
   return SessionSchema.Info.make({
     id: SessionSchema.ID.make(row.id),
-    projectID: ProjectV2.ID.make(row.project_id),
+    projectID: Project.ID.make(row.project_id),
+    principalID: GTEAuth.PrincipalID.make(row.principal_id),
+    authorityID: GTEAuth.AuthorityID.make(row.authority_id),
     title: row.title,
     parentID: row.parent_id ? SessionSchema.ID.make(row.parent_id) : undefined,
-    agent: row.agent ? AgentV2.ID.make(row.agent) : undefined,
+    agent: row.agent ? Agent.ID.make(row.agent) : undefined,
     model: row.model
       ? {
-          id: ModelV2.ID.make(row.model.id),
-          providerID: ProviderV2.ID.make(row.model.providerID),
-          variant: ModelV2.VariantID.make(row.model.variant ?? "default"),
+          id: Model.ID.make(row.model.id),
+          providerID: Provider.ID.make(row.model.providerID),
+          variant: Model.VariantID.make(row.model.variant ?? "default"),
         }
       : undefined,
     cost: row.cost,
@@ -33,11 +35,13 @@ export function fromRow(row: typeof SessionTable.$inferSelect): SessionSchema.In
         write: row.tokens_cache_write,
       },
     },
-    location: Location.Ref.make({
+    runtimeScope: RuntimeScope.Ref.make({
       directory: AbsolutePath.make(row.directory),
-      workspaceID: row.workspace_id ? WorkspaceV2.ID.make(row.workspace_id) : undefined,
     }),
     subpath: row.path ? RelativePath.make(row.path) : undefined,
+    selectedMarket: row.selected_market ?? undefined,
+    trackedAddress: row.tracked_address ?? undefined,
+    pinnedPanels: row.pinned_panels ?? undefined,
     time: {
       created: DateTime.makeUnsafe(row.time_created),
       updated: DateTime.makeUnsafe(row.time_updated),

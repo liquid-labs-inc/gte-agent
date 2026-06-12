@@ -1,9 +1,9 @@
 import fs from "fs/promises"
 import os from "os"
 import { Effect, Layer } from "effect"
-import { FSUtil } from "@opencode-ai/core/fs-util"
-import { EffectFlock } from "@opencode-ai/core/util/effect-flock"
-import { Global } from "@opencode-ai/core/global"
+import { FSUtil } from "@gte-agent/core/fs-util"
+import { EffectFlock } from "@gte-agent/core/util/effect-flock"
+import { Global } from "@gte-agent/core/global"
 
 type Msg = {
   key: string

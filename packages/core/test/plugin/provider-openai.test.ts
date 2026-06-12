@@ -1,16 +1,16 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { OpenAIPlugin } from "@opencode-ai/core/plugin/provider/openai"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Catalog } from "@gte-agent/core/catalog"
+import { Model } from "@gte-agent/core/model"
+import { Plugin } from "@gte-agent/core/plugin"
+import { OpenAIPlugin } from "@gte-agent/core/plugin/provider/openai"
+import { Provider } from "@gte-agent/core/provider"
 import { fakeSelectorSdk, it, model, provider } from "./provider-helper"
 
 describe("OpenAIPlugin", () => {
   it.effect("creates an OpenAI SDK for @ai-sdk/openai using the provider ID as SDK name", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(OpenAIPlugin)
       const result = yield* plugin.trigger(
         "aisdk.sdk",
@@ -27,7 +27,7 @@ describe("OpenAIPlugin", () => {
 
   it.effect("ignores non-OpenAI SDK packages", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(OpenAIPlugin)
       const result = yield* plugin.trigger(
         "aisdk.sdk",
@@ -40,14 +40,14 @@ describe("OpenAIPlugin", () => {
 
   it.effect("uses the Responses API for language models", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(OpenAIPlugin)
       const result = yield* plugin.trigger(
         "aisdk.language",
         {
           model: model("openai", "alias", {
-            api: { id: ModelV2.ID.make("gpt-5"), type: "aisdk", package: "test-provider" },
+            api: { id: Model.ID.make("gpt-5"), type: "aisdk", package: "test-provider" },
           }),
           sdk: fakeSelectorSdk(calls),
           options: {},
@@ -61,7 +61,7 @@ describe("OpenAIPlugin", () => {
 
   it.effect("ignores non-OpenAI providers", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(OpenAIPlugin)
       const result = yield* plugin.trigger(
@@ -76,7 +76,7 @@ describe("OpenAIPlugin", () => {
 
   it.effect("disables gpt-5-chat-latest during catalog transforms", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const catalog = yield* Catalog.Service
       yield* plugin.add(OpenAIPlugin)
       const transform = yield* catalog.transform()
@@ -85,27 +85,27 @@ describe("OpenAIPlugin", () => {
         catalog.provider.update(item.id, (draft) => {
           draft.api = item.api
         })
-        catalog.model.update(item.id, ModelV2.ID.make("gpt-5"), () => {})
-        catalog.model.update(item.id, ModelV2.ID.make("gpt-5-chat-latest"), () => {})
+        catalog.model.update(item.id, Model.ID.make("gpt-5"), () => {})
+        catalog.model.update(item.id, Model.ID.make("gpt-5-chat-latest"), () => {})
       })
-      expect((yield* catalog.model.get(ProviderV2.ID.openai, ModelV2.ID.make("gpt-5"))).enabled).toBe(true)
-      expect((yield* catalog.model.get(ProviderV2.ID.openai, ModelV2.ID.make("gpt-5-chat-latest"))).enabled).toBe(false)
+      expect((yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5"))).enabled).toBe(true)
+      expect((yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5-chat-latest"))).enabled).toBe(false)
     }),
   )
 
   it.effect("does not disable gpt-5-chat-latest for non-OpenAI providers", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const catalog = yield* Catalog.Service
       yield* plugin.add(OpenAIPlugin)
       const transform = yield* catalog.transform()
       yield* transform((catalog) => {
         const item = provider("custom-openai")
         catalog.provider.update(item.id, () => {})
-        catalog.model.update(item.id, ModelV2.ID.make("gpt-5-chat-latest"), () => {})
+        catalog.model.update(item.id, Model.ID.make("gpt-5-chat-latest"), () => {})
       })
       expect(
-        (yield* catalog.model.get(ProviderV2.ID.make("custom-openai"), ModelV2.ID.make("gpt-5-chat-latest"))).enabled,
+        (yield* catalog.model.get(Provider.ID.make("custom-openai"), Model.ID.make("gpt-5-chat-latest"))).enabled,
       ).toBe(true)
     }),
   )

@@ -8,16 +8,19 @@ import { Runtime } from "./framework/runtime"
 import { Daemon } from "./services/daemon"
 
 const Handlers = Runtime.handlers(Commands, {
-  debug: {
-    agents: () => import("./commands/handlers/debug/agents"),
-  },
-  migrate: () => import("./commands/handlers/migrate"),
   service: {
     start: () => import("./commands/handlers/service/start"),
     restart: () => import("./commands/handlers/service/restart"),
     status: () => import("./commands/handlers/service/status"),
     stop: () => import("./commands/handlers/service/stop"),
     password: () => import("./commands/handlers/service/password"),
+  },
+  session: {
+    create: () => import("./commands/handlers/session/create"),
+    events: () => import("./commands/handlers/session/events"),
+    list: () => import("./commands/handlers/session/list"),
+    messages: () => import("./commands/handlers/session/messages"),
+    prompt: () => import("./commands/handlers/session/prompt"),
   },
   serve: () => import("./commands/handlers/serve"),
 })

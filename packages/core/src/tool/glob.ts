@@ -1,29 +1,29 @@
 export * as GlobTool from "./glob"
 
-import { Tool, ToolFailure, toolText } from "@opencode-ai/llm"
+import { Tool, ToolFailure, toolText } from "@gte-agent/llm"
 import { Cause, Effect, Layer, Schema } from "effect"
 import { FileSystem } from "../filesystem"
-import { LocationSearch } from "../location-search"
+import { RuntimeScopeSearch } from "../runtime-scope-search"
 import { ToolRegistry } from "./registry"
 
 export const name = "glob"
 
 export const Parameters = Schema.Struct({
-  pattern: LocationSearch.FilesInput.fields.pattern.annotate({ description: "Glob pattern to match files against" }),
-  path: LocationSearch.FilesInput.fields.path.annotate({
-    description: "Relative directory to search. Defaults to the active Location.",
+  pattern: RuntimeScopeSearch.FilesInput.fields.pattern.annotate({ description: "Glob pattern to match files against" }),
+  path: RuntimeScopeSearch.FilesInput.fields.path.annotate({
+    description: "Relative directory to search. Defaults to the active RuntimeScope.",
   }),
-  reference: LocationSearch.FilesInput.fields.reference.annotate({
-    description: "Named project reference to search instead of the active Location",
+  reference: RuntimeScopeSearch.FilesInput.fields.reference.annotate({
+    description: "Named project reference to search instead of the active RuntimeScope",
   }),
-  limit: LocationSearch.FilesInput.fields.limit.annotate({
-    description: `Maximum results to return (default: ${LocationSearch.DEFAULT_RESULT_LIMIT})`,
+  limit: RuntimeScopeSearch.FilesInput.fields.limit.annotate({
+    description: `Maximum results to return (default: ${RuntimeScopeSearch.DEFAULT_RESULT_LIMIT})`,
   }),
 })
 
-type ModelOutput = typeof LocationSearch.FilesResult.Encoded
+type ModelOutput = typeof RuntimeScopeSearch.FilesResult.Encoded
 
-/** Format raw Location search results into the concise line-oriented output models expect. */
+/** Format raw RuntimeScope search results into the concise line-oriented output models expect. */
 export const toModelOutput = (output: ModelOutput) => {
   const lines = output.items.length === 0 ? ["No files found"] : output.items.map((item) => item.resource)
   if (output.truncated) {
@@ -38,15 +38,15 @@ export const toModelOutput = (output: ModelOutput) => {
 
 const definition = Tool.make({
   description:
-    "Find files by glob pattern within the active Location or a named project reference. Returns concise relative file resources. Use a relative path to narrow the search and limit to bound the result count.",
+    "Find files by glob pattern within the active RuntimeScope or a named project reference. Returns concise relative file resources. Use a relative path to narrow the search and limit to bound the result count.",
   parameters: Parameters,
-  success: LocationSearch.FilesResult,
+  success: RuntimeScopeSearch.FilesResult,
   toModelOutput: ({ output }) => [toolText({ type: "text", text: toModelOutput(output) })],
 })
 
 /**
- * Location-scoped glob leaf. FileSystem selects a canonical root for
- * permission metadata; LocationSearch owns containment and traversal.
+ * RuntimeScope-scoped glob leaf. FileSystem selects a canonical root for
+ * permission metadata; RuntimeScopeSearch owns containment and traversal.
  *
  * TODO: Revisit root-specific search permission resources if named-reference policy needs independent allow/deny rules.
  */
@@ -54,7 +54,7 @@ export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const registry = yield* ToolRegistry.Service
     const filesystem = yield* FileSystem.Service
-    const search = yield* LocationSearch.Service
+    const search = yield* RuntimeScopeSearch.Service
 
     yield* registry.contribute((editor) =>
       editor.set(name, {

@@ -1,7 +1,7 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { SapAICorePlugin } from "@opencode-ai/core/plugin/provider/sap-ai-core"
+import { Plugin } from "@gte-agent/core/plugin"
+import { SapAICorePlugin } from "@gte-agent/core/plugin/provider/sap-ai-core"
 import { fixtureProvider, it, model, npmLayer, withEnv } from "./provider-helper"
 
 const pluginWithNpm = { id: SapAICorePlugin.id, effect: SapAICorePlugin.effect.pipe(Effect.provide(npmLayer)) }
@@ -12,7 +12,7 @@ describe("SapAICorePlugin", () => {
       { AICORE_SERVICE_KEY: undefined, AICORE_DEPLOYMENT_ID: "deployment", AICORE_RESOURCE_GROUP: "resource-group" },
       () =>
         Effect.gen(function* () {
-          const plugin = yield* PluginV2.Service
+          const plugin = yield* Plugin.Service
           yield* plugin.add(pluginWithNpm)
           const sdk = yield* plugin.trigger(
             "aisdk.sdk",
@@ -38,7 +38,7 @@ describe("SapAICorePlugin", () => {
       },
       () =>
         Effect.gen(function* () {
-          const plugin = yield* PluginV2.Service
+          const plugin = yield* Plugin.Service
           yield* plugin.add(pluginWithNpm)
           const sdk = yield* plugin.trigger(
             "aisdk.sdk",
@@ -60,7 +60,7 @@ describe("SapAICorePlugin", () => {
       { AICORE_SERVICE_KEY: undefined, AICORE_DEPLOYMENT_ID: "deployment", AICORE_RESOURCE_GROUP: "resource-group" },
       () =>
         Effect.gen(function* () {
-          const plugin = yield* PluginV2.Service
+          const plugin = yield* Plugin.Service
           yield* plugin.add(pluginWithNpm)
           const sdk = yield* plugin.trigger(
             "aisdk.sdk",
@@ -75,7 +75,7 @@ describe("SapAICorePlugin", () => {
 
   it.effect("uses the callable SDK for language selection", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(pluginWithNpm)
       const sdk = Object.assign((modelID: string) => ({ modelID, provider: "callable" }), {
         languageModel() {
@@ -96,7 +96,7 @@ describe("SapAICorePlugin", () => {
       { AICORE_SERVICE_KEY: undefined, AICORE_DEPLOYMENT_ID: "deployment", AICORE_RESOURCE_GROUP: "resource-group" },
       () =>
         Effect.gen(function* () {
-          const plugin = yield* PluginV2.Service
+          const plugin = yield* Plugin.Service
           yield* plugin.add(pluginWithNpm)
           const sdk = yield* plugin.trigger(
             "aisdk.sdk",

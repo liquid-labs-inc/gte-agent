@@ -1,32 +1,32 @@
 import { describe, expect } from "bun:test"
 import { Cause, Effect, Exit, Layer, Queue } from "effect"
-import { EventV2 } from "@opencode-ai/core/event"
-import { Location } from "@opencode-ai/core/location"
-import { Pty } from "@opencode-ai/core/pty"
-import type { PtyID } from "@opencode-ai/core/pty/schema"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { location } from "../fixture/location"
+import { Event } from "@gte-agent/core/event"
+import { RuntimeScope } from "@gte-agent/core/runtime-scope"
+import { Pty } from "@gte-agent/core/pty"
+import type { PtyID } from "@gte-agent/core/pty/schema"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { runtimeScope } from "../fixture/runtime-scope"
 import { testEffect } from "../lib/effect"
 
 type PtyEvent = { type: "created" | "exited" | "deleted"; id: PtyID }
 
-const locationLayer = Layer.succeed(
-  Location.Service,
-  Location.Service.of(location({ directory: AbsolutePath.make("/tmp") })),
+const runtimeScopeLayer = Layer.succeed(
+  RuntimeScope.Service,
+  RuntimeScope.Service.of(runtimeScope({ directory: AbsolutePath.make("/tmp") })),
 )
-const it = testEffect(Pty.layer.pipe(Layer.provideMerge(EventV2.defaultLayer), Layer.provideMerge(locationLayer)))
+const it = testEffect(Pty.layer.pipe(Layer.provideMerge(Event.defaultLayer), Layer.provideMerge(runtimeScopeLayer)))
 const ptyTest = process.platform === "win32" ? it.live.skip : it.live
 
 const subscribePtyEvents = Effect.fn("PtySessionTest.subscribePtyEvents")(function* () {
-  const source = yield* EventV2.Service
+  const source = yield* Event.Service
   const events = yield* Queue.unbounded<PtyEvent>()
   const unsubscribe = yield* source.listen((event) => {
-    if (event.type === Pty.Event.Created.type)
-      Queue.offerUnsafe(events, { type: "created", id: (event.data as typeof Pty.Event.Created.data.Type).info.id })
-    if (event.type === Pty.Event.Exited.type)
-      Queue.offerUnsafe(events, { type: "exited", id: (event.data as typeof Pty.Event.Exited.data.Type).id })
-    if (event.type === Pty.Event.Deleted.type)
-      Queue.offerUnsafe(events, { type: "deleted", id: (event.data as typeof Pty.Event.Deleted.data.Type).id })
+    if (event.type === Pty.PtyEvent.Created.type)
+      Queue.offerUnsafe(events, { type: "created", id: (event.data as typeof Pty.PtyEvent.Created.data.Type).info.id })
+    if (event.type === Pty.PtyEvent.Exited.type)
+      Queue.offerUnsafe(events, { type: "exited", id: (event.data as typeof Pty.PtyEvent.Exited.data.Type).id })
+    if (event.type === Pty.PtyEvent.Deleted.type)
+      Queue.offerUnsafe(events, { type: "deleted", id: (event.data as typeof Pty.PtyEvent.Deleted.data.Type).id })
     return Effect.void
   })
   yield* Effect.addFinalizer(() => unsubscribe)
@@ -36,7 +36,7 @@ const subscribePtyEvents = Effect.fn("PtySessionTest.subscribePtyEvents")(functi
 const createPty = Effect.fn("PtySessionTest.createPty")(function* (command: string, args: string[] = []) {
   const pty = yield* Pty.Service
   return yield* Effect.acquireRelease(
-    pty.create({ command, args, cwd: "/tmp", env: { TERM: "xterm-256color", OPENCODE_TERMINAL: "1" } }),
+    pty.create({ command, args, cwd: "/tmp", env: { TERM: "xterm-256color", GTE_AGENT_TERMINAL: "1" } }),
     (info) => pty.remove(info.id).pipe(Effect.ignore),
   )
 })

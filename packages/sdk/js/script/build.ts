@@ -6,17 +6,17 @@ process.chdir(dir)
 
 import { $ } from "bun"
 import path from "path"
+import { OpenApi } from "effect/unstable/httpapi"
+import { GTEAgentApi } from "@gte-agent/server/api"
 
 import { createClient } from "@hey-api/openapi-ts"
 
-const opencode = path.resolve(dir, "../../opencode")
-
-await $`bun dev generate > ${dir}/openapi.json`.cwd(opencode)
+await Bun.write(path.join(dir, "openapi.json"), JSON.stringify(OpenApi.fromApi(GTEAgentApi), null, 2))
 
 await createClient({
   input: "./openapi.json",
   output: {
-    path: "./src/v2/gen",
+    path: "./src/gen",
     tsConfigPath: path.join(dir, "tsconfig.json"),
     clean: true,
   },
@@ -27,7 +27,7 @@ await createClient({
     },
     {
       name: "@hey-api/sdk",
-      instance: "OpencodeClient",
+      instance: "GteAgentClient",
       exportFromIndex: false,
       auth: false,
       paramsStructure: "flat",
@@ -46,7 +46,7 @@ await createClient({
 // to do with HTTP errors, and any consumer that calls `.return()` or returns
 // from a mock generator gets type-checked against the wrong shape. Drop the
 // arg so TReturn defaults to void.
-const sseTypesPath = "./src/v2/gen/client/types.gen.ts"
+const sseTypesPath = "./src/gen/client/types.gen.ts"
 const sseTypesFile = Bun.file(sseTypesPath)
 const sseTypesSource = await sseTypesFile.text()
 const sseTypesPatched = sseTypesSource.replace(
@@ -59,7 +59,6 @@ if (sseTypesPatched === sseTypesSource) {
 await Bun.write(sseTypesPath, sseTypesPatched)
 
 await $`bun prettier --write src/gen`
-await $`bun prettier --write src/v2`
 await $`rm -rf dist`
 await $`bun tsc`
 await $`rm openapi.json`

@@ -2,20 +2,20 @@ export * as ConfigCommandPlugin from "./command"
 
 import path from "path"
 import { Effect, Option, Schema } from "effect"
-import { CommandV2 } from "../../command"
+import { Command } from "../../command"
 import { Config } from "../../config"
 import { FSUtil } from "../../fs-util"
-import { ModelV2 } from "../../model"
-import { PluginV2 } from "../../plugin"
+import { Model } from "../../model"
+import { define, ID } from "../../plugin"
 import { ConfigCommand } from "../command"
 import { ConfigMarkdown } from "../markdown"
 
 const decodeCommand = Schema.decodeUnknownOption(ConfigCommand.Info)
 
-export const Plugin = PluginV2.define({
-  id: PluginV2.ID.make("config-command"),
+export const Plugin = define({
+  id: ID.make("config-command"),
   effect: Effect.gen(function* () {
-    const command = yield* CommandV2.Service
+    const command = yield* Command.Service
     const config = yield* Config.Service
     const fs = yield* FSUtil.Service
     const transform = yield* command.transform()
@@ -36,11 +36,11 @@ export const Plugin = PluginV2.define({
             if (command.description !== undefined) item.description = command.description
             if (command.agent !== undefined) item.agent = command.agent
             if (command.model !== undefined) {
-              const model = ModelV2.parse(command.model)
+              const model = Model.parse(command.model)
               item.model = { id: model.modelID, providerID: model.providerID, variant: item.model?.variant }
             }
             if (command.variant !== undefined && item.model !== undefined) {
-              item.model.variant = ModelV2.VariantID.make(command.variant)
+              item.model.variant = Model.VariantID.make(command.variant)
             }
             if (command.subtask !== undefined) item.subtask = command.subtask
           })

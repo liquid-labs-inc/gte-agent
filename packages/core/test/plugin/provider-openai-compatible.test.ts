@@ -1,13 +1,13 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { OpenAICompatiblePlugin } from "@opencode-ai/core/plugin/provider/openai-compatible"
+import { Plugin } from "@gte-agent/core/plugin"
+import { OpenAICompatiblePlugin } from "@gte-agent/core/plugin/provider/openai-compatible"
 import { it, model } from "./provider-helper"
 
 describe("OpenAICompatiblePlugin", () => {
   it.effect("preserves explicit includeUsage false and defaults it to true", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(OpenAICompatiblePlugin)
       const defaulted = yield* plugin.trigger(
         "aisdk.sdk",
@@ -30,7 +30,7 @@ describe("OpenAICompatiblePlugin", () => {
 
   it.effect("defaults includeUsage for OpenAI-compatible package matches", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(OpenAICompatiblePlugin)
       const result = yield* plugin.trigger(
         "aisdk.sdk",
@@ -47,11 +47,11 @@ describe("OpenAICompatiblePlugin", () => {
 
   it.effect("uses the provider ID as the OpenAI-compatible provider name", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const observed: string[] = []
       yield* plugin.add(OpenAICompatiblePlugin)
       yield* plugin.add({
-        id: PluginV2.ID.make("inspector"),
+        id: Plugin.ID.make("inspector"),
         effect: Effect.succeed({
           "aisdk.sdk": (evt) =>
             Effect.sync(() => {
@@ -74,10 +74,10 @@ describe("OpenAICompatiblePlugin", () => {
 
   it.effect("does not overwrite an SDK created by an earlier provider-specific plugin", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const sentinel = { languageModel: (modelID: string) => ({ modelID }) }
       yield* plugin.add({
-        id: PluginV2.ID.make("sentinel"),
+        id: Plugin.ID.make("sentinel"),
         effect: Effect.succeed({
           "aisdk.sdk": (evt) =>
             Effect.sync(() => {

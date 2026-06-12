@@ -3,7 +3,7 @@ export * as ConfigMCP from "./mcp"
 import { Schema } from "effect"
 import { PositiveInt } from "../schema"
 
-export class Local extends Schema.Class<Local>("ConfigV2.MCP.Local")({
+export class Local extends Schema.Class<Local>("Config.MCP.Local")({
   type: Schema.Literal("local"),
   command: Schema.String.pipe(Schema.Array),
   environment: Schema.Record(Schema.String, Schema.String).pipe(Schema.optional),
@@ -11,7 +11,7 @@ export class Local extends Schema.Class<Local>("ConfigV2.MCP.Local")({
   timeout: PositiveInt.pipe(Schema.optional),
 }) {}
 
-export class OAuth extends Schema.Class<OAuth>("ConfigV2.MCP.OAuth")({
+export class OAuth extends Schema.Class<OAuth>("Config.MCP.OAuth")({
   client_id: Schema.String.pipe(Schema.optional),
   client_secret: Schema.String.pipe(Schema.optional),
   scope: Schema.String.pipe(Schema.optional),
@@ -19,7 +19,7 @@ export class OAuth extends Schema.Class<OAuth>("ConfigV2.MCP.OAuth")({
   redirect_uri: Schema.String.pipe(Schema.optional),
 }) {}
 
-export class Remote extends Schema.Class<Remote>("ConfigV2.MCP.Remote")({
+export class Remote extends Schema.Class<Remote>("Config.MCP.Remote")({
   type: Schema.Literal("remote"),
   url: Schema.String,
   headers: Schema.Record(Schema.String, Schema.String).pipe(Schema.optional),
@@ -30,7 +30,7 @@ export class Remote extends Schema.Class<Remote>("ConfigV2.MCP.Remote")({
 
 export const Server = Schema.Union([Local, Remote]).pipe(Schema.toTaggedUnion("type"))
 
-export class Info extends Schema.Class<Info>("ConfigV2.MCP")({
+export class Info extends Schema.Class<Info>("Config.MCP")({
   timeout: PositiveInt.pipe(Schema.optional),
   servers: Schema.Record(Schema.String, Server).pipe(Schema.optional),
 }) {}

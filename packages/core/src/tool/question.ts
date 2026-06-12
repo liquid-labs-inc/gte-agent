@@ -1,8 +1,8 @@
 export * as QuestionTool from "./question"
 
-import { Tool, toolText } from "@opencode-ai/llm"
+import { Tool, toolText } from "@gte-agent/llm"
 import { Effect, Layer, Schema } from "effect"
-import { QuestionV2 } from "../question"
+import { Question } from "../question"
 import { ToolRegistry } from "./registry"
 
 export const name = "question"
@@ -19,17 +19,17 @@ Usage notes:
 - If you recommend a specific option, make that the first option in the list and add "(Recommended)" at the end of the label`
 
 export const Parameters = Schema.Struct({
-  questions: Schema.Array(QuestionV2.Prompt).annotate({ description: "Questions to ask" }),
+  questions: Schema.Array(Question.Prompt).annotate({ description: "Questions to ask" }),
 })
 
 export const Success = Schema.Struct({
-  answers: Schema.Array(QuestionV2.Answer),
+  answers: Schema.Array(Question.Answer),
 })
 export type Success = typeof Success.Type
 
 export const toModelOutput = (
-  questions: ReadonlyArray<QuestionV2.Prompt>,
-  answers: ReadonlyArray<QuestionV2.Answer>,
+  questions: ReadonlyArray<Question.Prompt>,
+  answers: ReadonlyArray<Question.Answer>,
 ) => {
   const formatted = questions
     .map(
@@ -52,7 +52,7 @@ const definition = Tool.make({
 export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const registry = yield* ToolRegistry.Service
-    const question = yield* QuestionV2.Service
+    const question = yield* Question.Service
 
     yield* registry.contribute((editor) =>
       editor.set(name, {

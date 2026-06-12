@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@opencode-ai/sdk",
+  "name": "@gte-agent/sdk",
   "version": "1.16.0",
   "type": "module",
   "license": "MIT",
@@ -11,21 +11,20 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
-    "./server": "./src/server.ts",
-    "./v2": "./src/v2/index.ts",
-    "./v2/client": "./src/v2/client.ts",
-    "./v2/gen/client": "./src/v2/gen/client/index.ts",
-    "./v2/server": "./src/v2/server.ts"
+    "./gen/client": "./src/gen/client/index.ts",
+    "./server": "./src/server.ts"
   },
   "files": [
     "dist"
   ],
   "devDependencies": {
     "@hey-api/openapi-ts": "0.90.10",
+    "@gte-agent/server": "workspace:*",
     "@tsconfig/node22": "catalog:",
     "@types/cross-spawn": "catalog:",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
+    "effect": "catalog:",
     "typescript": "catalog:"
   },
   "dependencies": {

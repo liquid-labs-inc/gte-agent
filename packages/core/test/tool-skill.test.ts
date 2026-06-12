@@ -2,19 +2,19 @@ import fs from "fs/promises"
 import path from "path"
 import { describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
-import { FSUtil } from "@opencode-ai/core/fs-util"
-import { PermissionV2 } from "@opencode-ai/core/permission"
-import { PluginBoot } from "@opencode-ai/core/plugin/boot"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { SkillV2 } from "@opencode-ai/core/skill"
-import { SkillTool } from "@opencode-ai/core/tool/skill"
-import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
+import { FSUtil } from "@gte-agent/core/fs-util"
+import { Permission } from "@gte-agent/core/permission"
+import { PluginBoot } from "@gte-agent/core/plugin/boot"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { Session } from "@gte-agent/core/session"
+import { Skill } from "@gte-agent/core/skill"
+import { SkillTool } from "@gte-agent/core/tool/skill"
+import { ToolOutputStore } from "@gte-agent/core/tool-output-store"
+import { ToolRegistry } from "@gte-agent/core/tool/registry"
 import { tmpdir } from "./fixture/tmpdir"
 import { it } from "./lib/effect"
 
-const sessionID = SessionV2.ID.make("ses_skill_tool_test")
+const sessionID = Session.ID.make("ses_skill_tool_test")
 
 describe("SkillTool", () => {
   it.live("lists available skills, authorizes the selected name, and loads model-facing content", () =>
@@ -32,13 +32,13 @@ describe("SkillTool", () => {
             Promise.all([fs.writeFile(location, "unused"), fs.writeFile(reference, "reference")]),
           )
 
-          const info: SkillV2.Info = {
+          const info: Skill.Info = {
             name: "effect",
             description: "Use Effect",
             location: AbsolutePath.make(location),
             content: "# Effect\n\nGuidance",
           }
-          const assertions: PermissionV2.AssertInput[] = []
+          const assertions: Permission.AssertInput[] = []
           const truncations: ToolOutputStore.TruncateInput[] = []
           let truncate = (input: ToolOutputStore.TruncateInput): Effect.Effect<ToolOutputStore.TruncateResult> =>
             Effect.succeed({ content: input.content, truncated: false })
@@ -53,8 +53,8 @@ describe("SkillTool", () => {
             }),
           )
           const permission = Layer.succeed(
-            PermissionV2.Service,
-            PermissionV2.Service.of({
+            Permission.Service,
+            Permission.Service.of({
               assert: (input) => Effect.sync(() => assertions.push(input)),
               ask: () => Effect.die("unused"),
               reply: () => Effect.die("unused"),
@@ -64,8 +64,8 @@ describe("SkillTool", () => {
             }),
           )
           const skills = Layer.succeed(
-            SkillV2.Service,
-            SkillV2.Service.of({
+            Skill.Service,
+            Skill.Service.of({
               transform: () => Effect.die("unused"),
               sources: () => Effect.die("unused"),
               list: () => Effect.succeed([info]),

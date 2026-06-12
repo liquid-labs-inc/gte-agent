@@ -303,6 +303,23 @@ describe("LLMClient tools", () => {
     }),
   )
 
+  it.effect("normalizes empty-struct parameters to a plain object input schema", () =>
+    Effect.sync(() => {
+      // Schema.Struct({}) generates { anyOf: [{ type: "object" }, { type: "array" }] },
+      // which providers reject: tool input schemas must declare type "object"
+      // (Anthropic returns HTTP 400 "input_schema.type: Field required").
+      const [definition] = toDefinitions({
+        no_params: Tool.make({
+          description: "Tool without parameters.",
+          parameters: Schema.Struct({}),
+          success: Schema.String,
+          execute: () => Effect.succeed("ok"),
+        }),
+      })
+      expect(definition?.inputSchema).toEqual({ type: "object", properties: {} })
+    }),
+  )
+
   it.effect("derives typed output schemas and preserves dynamic output schemas", () =>
     Effect.sync(() => {
       const [typed] = toDefinitions({ get_weather })

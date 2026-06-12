@@ -1,19 +1,19 @@
 import { describe, expect } from "bun:test"
 import { Context, Deferred, Effect, Exit, Fiber, Layer, Scope } from "effect"
-import { EventV2 } from "@opencode-ai/core/event"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { State } from "@opencode-ai/core/state"
+import { Event } from "@gte-agent/core/event"
+import { Plugin } from "@gte-agent/core/plugin"
+import { State } from "@gte-agent/core/state"
 import { it } from "./lib/effect"
 
-const events = Layer.mock(EventV2.Service)({
+const events = Layer.mock(Event.Service)({
   publish: (definition, data) =>
     Effect.succeed({
-      id: EventV2.ID.make("evt_plugin_test"),
+      id: Event.ID.make("evt_plugin_test"),
       type: definition.type,
       data,
     }),
 })
-const plugins = PluginV2.layer.pipe(Layer.provide(events))
+const plugins = Plugin.layer.pipe(Layer.provide(events))
 
 function state() {
   return State.create({
@@ -24,15 +24,15 @@ function state() {
   })
 }
 
-describe("PluginV2", () => {
+describe("Plugin", () => {
   it.effect("closes plugin-owned scopes when the registry layer finalizes", () =>
     Effect.gen(function* () {
       const values = state()
       const layerScope = yield* Scope.fork(yield* Scope.Scope)
-      const plugin = Context.get(yield* Layer.buildWithScope(Layer.fresh(plugins), layerScope), PluginV2.Service)
+      const plugin = Context.get(yield* Layer.buildWithScope(Layer.fresh(plugins), layerScope), Plugin.Service)
 
       yield* plugin.add({
-        id: PluginV2.ID.make("scoped"),
+        id: Plugin.ID.make("scoped"),
         effect: Effect.gen(function* () {
           const transform = yield* values.transform()
           yield* transform((editor) => editor.add("scoped"))
@@ -49,8 +49,8 @@ describe("PluginV2", () => {
     Effect.gen(function* () {
       const values = state()
       const layerScope = yield* Scope.fork(yield* Scope.Scope)
-      const plugin = Context.get(yield* Layer.buildWithScope(Layer.fresh(plugins), layerScope), PluginV2.Service)
-      const id = PluginV2.ID.make("shared")
+      const plugin = Context.get(yield* Layer.buildWithScope(Layer.fresh(plugins), layerScope), Plugin.Service)
+      const id = Plugin.ID.make("shared")
       const firstStarted = yield* Deferred.make<void>()
       const releaseFirst = yield* Deferred.make<void>()
 

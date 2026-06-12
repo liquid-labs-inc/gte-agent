@@ -1,14 +1,14 @@
 import { describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
 import * as TestClock from "effect/testing/TestClock"
-import { Location } from "@opencode-ai/core/location"
-import { FSUtil } from "@opencode-ai/core/fs-util"
-import { Global } from "@opencode-ai/core/global"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SystemContext } from "@opencode-ai/core/system-context"
-import { SystemContextBuiltIns } from "@opencode-ai/core/system-context-builtins"
-import { SystemContextRegistry } from "@opencode-ai/core/system-context-registry"
-import { location } from "./fixture/location"
+import { RuntimeScope } from "@gte-agent/core/runtime-scope"
+import { FSUtil } from "@gte-agent/core/fs-util"
+import { Global } from "@gte-agent/core/global"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { SystemContext } from "@gte-agent/core/system-context"
+import { SystemContextBuiltIns } from "@gte-agent/core/system-context-builtins"
+import { SystemContextRegistry } from "@gte-agent/core/system-context-registry"
+import { runtimeScope } from "./fixture/runtime-scope"
 import { testEffect } from "./lib/effect"
 
 const directory = AbsolutePath.make(FSUtil.resolve("/repo/packages/core"))
@@ -16,20 +16,20 @@ const projectDirectory = AbsolutePath.make(FSUtil.resolve("/repo"))
 const instructionFile = FSUtil.resolve("/repo/AGENTS.md")
 const timestamp = Date.parse("2026-06-03T12:00:00.000Z")
 const localDate = (time: number) => new Date(time).toDateString()
-const locationLayer = Layer.succeed(
-  Location.Service,
-  Location.Service.of(
-    location(
+const runtimeScopeLayer = Layer.succeed(
+  RuntimeScope.Service,
+  RuntimeScope.Service.of(
+    runtimeScope(
       { directory },
       { projectDirectory, vcs: { type: "git", store: AbsolutePath.make(FSUtil.resolve("/repo/.git")) } },
     ),
   ),
 )
 const it = testEffect(
-  SystemContextBuiltIns.locationLayer.pipe(
+  SystemContextBuiltIns.runtimeScopeLayer.pipe(
     Layer.provide(FSUtil.defaultLayer),
     Layer.provide(Global.layerWith({ config: "/global" })),
-    Layer.provide(locationLayer),
+    Layer.provide(runtimeScopeLayer),
   ),
 )
 const instructionFS = Layer.effect(
@@ -45,10 +45,10 @@ const instructionFS = Layer.effect(
   ),
 ).pipe(Layer.provide(FSUtil.defaultLayer))
 const itWithInstructions = testEffect(
-  SystemContextBuiltIns.locationLayer.pipe(
+  SystemContextBuiltIns.runtimeScopeLayer.pipe(
     Layer.provide(instructionFS),
     Layer.provide(Global.layerWith({ config: "/global" })),
-    Layer.provide(locationLayer),
+    Layer.provide(runtimeScopeLayer),
   ),
 )
 
@@ -64,7 +64,7 @@ describe("SystemContextBuiltIns", () => {
           "Here is some useful information about the environment you are running in:",
           "<env>",
           `  Working directory: ${directory}`,
-          `  Workspace root folder: ${projectDirectory}`,
+          `  Project root folder: ${projectDirectory}`,
           "  Is directory a git repo: yes",
           `  Platform: ${process.platform}`,
           "</env>",
@@ -112,7 +112,7 @@ describe("SystemContextBuiltIns", () => {
           "Here is some useful information about the environment you are running in:",
           "<env>",
           `  Working directory: ${directory}`,
-          `  Workspace root folder: ${projectDirectory}`,
+          `  Project root folder: ${projectDirectory}`,
           "  Is directory a git repo: yes",
           `  Platform: ${process.platform}`,
           "</env>",

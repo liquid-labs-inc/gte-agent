@@ -1,15 +1,15 @@
 import { describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
-import { Location } from "@opencode-ai/core/location"
-import { Policy } from "@opencode-ai/core/policy"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { location } from "./fixture/location"
+import { RuntimeScope } from "@gte-agent/core/runtime-scope"
+import { Policy } from "@gte-agent/core/policy"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { runtimeScope } from "./fixture/runtime-scope"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(
-  Policy.locationLayer.pipe(
+  Policy.runtimeScopeLayer.pipe(
     Layer.provide(
-      Layer.succeed(Location.Service, Location.Service.of(location({ directory: AbsolutePath.make("test") }))),
+      Layer.succeed(RuntimeScope.Service, RuntimeScope.Service.of(runtimeScope({ directory: AbsolutePath.make("test") }))),
     ),
   ),
 )

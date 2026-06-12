@@ -1,6 +1,6 @@
 import { Effect } from "effect"
-import { PluginV2 } from "../../plugin"
-import { ProviderV2 } from "../../provider"
+import { Plugin } from "../../plugin"
+import { Provider } from "../../provider"
 
 function resolveProject(options: Record<string, any>) {
   // models.dev advertises GOOGLE_VERTEX_PROJECT for Vertex, while Google SDKs
@@ -54,8 +54,8 @@ function authFetch(fetchWithRuntimeOptions?: unknown) {
   }
 }
 
-export const GoogleVertexPlugin = PluginV2.define({
-  id: PluginV2.ID.make("google-vertex"),
+export const GoogleVertexPlugin = Plugin.define({
+  id: Plugin.ID.make("google-vertex"),
   effect: Effect.gen(function* () {
     return {
       "catalog.transform": Effect.fn(function* (evt) {
@@ -81,7 +81,7 @@ export const GoogleVertexPlugin = PluginV2.define({
         }
       }),
       "aisdk.sdk": Effect.fn(function* (evt) {
-        if (evt.model.providerID === ProviderV2.ID.googleVertex && evt.package.includes("@ai-sdk/openai-compatible")) {
+        if (evt.model.providerID === Provider.ID.googleVertex && evt.package.includes("@ai-sdk/openai-compatible")) {
           evt.options.fetch = authFetch(evt.options.fetch)
           return
         }
@@ -98,15 +98,15 @@ export const GoogleVertexPlugin = PluginV2.define({
         })
       }),
       "aisdk.language": Effect.fn(function* (evt) {
-        if (evt.model.providerID !== ProviderV2.ID.googleVertex) return
+        if (evt.model.providerID !== Provider.ID.googleVertex) return
         evt.language = evt.sdk.languageModel(String(evt.model.api.id).trim())
       }),
     }
   }),
 })
 
-export const GoogleVertexAnthropicPlugin = PluginV2.define({
-  id: PluginV2.ID.make("google-vertex-anthropic"),
+export const GoogleVertexAnthropicPlugin = Plugin.define({
+  id: Plugin.ID.make("google-vertex-anthropic"),
   effect: Effect.gen(function* () {
     return {
       "catalog.transform": Effect.fn(function* (evt) {
@@ -154,7 +154,7 @@ export const GoogleVertexAnthropicPlugin = PluginV2.define({
         })
       }),
       "aisdk.language": Effect.fn(function* (evt) {
-        if (evt.model.providerID !== ProviderV2.ID.make("google-vertex-anthropic")) return
+        if (evt.model.providerID !== Provider.ID.make("google-vertex-anthropic")) return
         evt.language = evt.sdk.languageModel(String(evt.model.api.id).trim())
       }),
     }

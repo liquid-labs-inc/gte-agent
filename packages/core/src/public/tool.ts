@@ -8,8 +8,8 @@ export type { Any, Content, Context, Executable } from "../tool/native"
 
 export interface Service {
   /**
-   * Attach same-process tools to this OpenCode instance for the current Scope.
-   * Location tools with the same name take precedence where they are installed.
+   * Attach same-process tools for the current Scope.
+   * RuntimeScope tools with the same name take precedence where they are installed.
    * Closing the Scope removes the tools immediately, so calls that have not
    * started settling may fail because the tool is no longer available.
    */

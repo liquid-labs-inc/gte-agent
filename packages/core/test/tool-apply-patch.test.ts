@@ -2,21 +2,21 @@ import fs from "fs/promises"
 import path from "path"
 import { describe, expect } from "bun:test"
 import { Deferred, Effect, Fiber, Layer } from "effect"
-import { FileMutation } from "@opencode-ai/core/file-mutation"
-import { FSUtil } from "@opencode-ai/core/fs-util"
-import { Location } from "@opencode-ai/core/location"
-import { LocationMutation } from "@opencode-ai/core/location-mutation"
-import { PermissionV2 } from "@opencode-ai/core/permission"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
-import { ApplyPatchTool } from "@opencode-ai/core/tool/apply-patch"
-import { location } from "./fixture/location"
+import { FileMutation } from "@gte-agent/core/file-mutation"
+import { FSUtil } from "@gte-agent/core/fs-util"
+import { RuntimeScope } from "@gte-agent/core/runtime-scope"
+import { RuntimeScopeMutation } from "@gte-agent/core/runtime-scope-mutation"
+import { Permission } from "@gte-agent/core/permission"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { Session } from "@gte-agent/core/session"
+import { ToolRegistry } from "@gte-agent/core/tool/registry"
+import { ApplyPatchTool } from "@gte-agent/core/tool/apply-patch"
+import { runtimeScope } from "./fixture/runtime-scope"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
 
-const sessionID = SessionV2.ID.make("ses_apply_patch_tool_test")
-const assertions: PermissionV2.AssertInput[] = []
+const sessionID = Session.ID.make("ses_apply_patch_tool_test")
+const assertions: Permission.AssertInput[] = []
 let denyAction: string | undefined
 let failRemoveTarget: string | undefined
 let readsBeforeEditApproval = 0
@@ -26,15 +26,15 @@ let removeStarted: Deferred.Deferred<void> | undefined
 let releaseRemove: Deferred.Deferred<void> | undefined
 
 const permission = Layer.succeed(
-  PermissionV2.Service,
-  PermissionV2.Service.of({
+  Permission.Service,
+  Permission.Service.of({
     assert: (input) =>
       Effect.sync(() => {
         assertions.push(input)
         if (input.action === "edit") editApproved = true
       }).pipe(
         Effect.andThen(
-          input.action === denyAction ? Effect.fail(new PermissionV2.DeniedError({ rules: [] })) : Effect.void,
+          input.action === denyAction ? Effect.fail(new Permission.DeniedError({ rules: [] })) : Effect.void,
         ),
       ),
     ask: () => Effect.die("unused"),
@@ -81,10 +81,10 @@ const filesystem = Layer.effect(
 
 const withTool = <A, E, R>(directory: string, body: (registry: ToolRegistry.Interface) => Effect.Effect<A, E, R>) => {
   const activeLocation = Layer.succeed(
-    Location.Service,
-    Location.Service.of(location({ directory: AbsolutePath.make(directory) })),
+    RuntimeScope.Service,
+    RuntimeScope.Service.of(runtimeScope({ directory: AbsolutePath.make(directory) })),
   )
-  const planning = LocationMutation.layer.pipe(Layer.provide(filesystem), Layer.provide(activeLocation))
+  const planning = RuntimeScopeMutation.layer.pipe(Layer.provide(filesystem), Layer.provide(activeLocation))
   const commits = FileMutation.layer.pipe(Layer.provide(filesystem), Layer.provide(planning))
   const registry = ToolRegistry.defaultLayer.pipe(Layer.provide(permission))
   const patch = ApplyPatchTool.layer.pipe(

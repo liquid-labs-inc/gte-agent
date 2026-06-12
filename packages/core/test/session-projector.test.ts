@@ -1,33 +1,52 @@
 import { describe, expect } from "bun:test"
 import { DateTime, Effect, Layer, Schema } from "effect"
 import { asc, eq } from "drizzle-orm"
-import { Database } from "@opencode-ai/core/database/database"
-import { EventV2 } from "@opencode-ai/core/event"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { Project } from "@opencode-ai/core/project"
-import { ProjectTable } from "@opencode-ai/core/project/sql"
-import { ProviderV2 } from "@opencode-ai/core/provider"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { SessionEvent } from "@opencode-ai/core/session/event"
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { Prompt } from "@opencode-ai/core/session/prompt"
-import { SessionMessageUpdater } from "@opencode-ai/core/session/message-updater"
-import { SessionProjector } from "@opencode-ai/core/session/projector"
-import { SessionExecution } from "@opencode-ai/core/session/execution"
-import { SessionInput } from "@opencode-ai/core/session/input"
-import { SessionStore } from "@opencode-ai/core/session/store"
-import { SessionInputTable, SessionMessageTable, SessionTable } from "@opencode-ai/core/session/sql"
+import { Database } from "@gte-agent/core/database/database"
+import { Event } from "@gte-agent/core/event"
+import { GTEAuth } from "@gte-agent/core/gte-auth"
+import { Model } from "@gte-agent/core/model"
+import { Project } from "@gte-agent/core/project"
+import { ProjectTable } from "@gte-agent/core/project/sql"
+import { Provider } from "@gte-agent/core/provider"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { Session } from "@gte-agent/core/session"
+import { SessionEvent } from "@gte-agent/core/session/event"
+import { SessionMessage } from "@gte-agent/core/session/message"
+import { Prompt } from "@gte-agent/core/session/prompt"
+import { SessionMessageUpdater } from "@gte-agent/core/session/message-updater"
+import { SessionProjector } from "@gte-agent/core/session/projector"
+import { SessionExecution } from "@gte-agent/core/session/execution"
+import { SessionInput } from "@gte-agent/core/session/input"
+import { SessionStore } from "@gte-agent/core/session/store"
+import { SessionInputTable, SessionMessageTable, SessionTable } from "@gte-agent/core/session/sql"
 import { testEffect } from "./lib/effect"
 
 const database = Database.layerFromPath(":memory:")
-const events = EventV2.layer.pipe(Layer.provide(database))
+const events = Event.layer.pipe(Layer.provide(database))
+const projects = Layer.succeed(
+  Project.Service,
+  Project.Service.of({
+    resolve: (directory) => Effect.succeed({ id: Project.ID.global, directory }),
+    directories: () => Effect.succeed([]),
+    commit: () => Effect.void,
+  }),
+)
 const projector = SessionProjector.layer.pipe(Layer.provide(events), Layer.provide(database))
-const it = testEffect(Layer.mergeAll(database, events, projector))
-const sessionID = SessionV2.ID.make("ses_projector_test")
+const it = testEffect(Layer.mergeAll(database, events, projects, projector))
+const sessionID = Session.ID.make("ses_projector_test")
 const created = DateTime.makeUnsafe(0)
-const model = { id: ModelV2.ID.make("model"), providerID: ProviderV2.ID.make("provider") }
+const model = { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") }
 const encodeMessage = Schema.encodeSync(SessionMessage.Message)
+const sessionRow = {
+  id: sessionID,
+  project_id: Project.ID.global,
+  principal_id: GTEAuth.DEV_PRINCIPAL_ID,
+  authority_id: GTEAuth.DEV_AUTHORITY_ID,
+  slug: "test",
+  directory: "/project",
+  title: "test",
+  version: "test",
+}
 
 const assistantRow = (
   id: SessionMessage.ID,
@@ -53,42 +72,28 @@ describe("SessionProjector", () => {
         .pipe(Effect.orDie)
       yield* db
         .insert(SessionTable)
-        .values({
-          id: sessionID,
-          project_id: Project.ID.global,
-          slug: "test",
-          directory: "/project",
-          title: "test",
-          version: "test",
-        })
+        .values(sessionRow)
         .run()
         .pipe(Effect.orDie)
-      const events = yield* EventV2.Service
+      const events = yield* Event.Service
 
-      yield* events.publish(
-        SessionEvent.Prompted,
-        {
-          sessionID,
-          messageID: SessionMessage.ID.make("msg_first"),
-          timestamp: created,
-          prompt: new Prompt({ text: "first" }),
-          delivery: "steer",
-        },
-        { id: EventV2.ID.make("evt_z") },
-      )
-      yield* events.publish(
-        SessionEvent.Prompted,
-        {
-          sessionID,
-          messageID: SessionMessage.ID.make("msg_second"),
-          timestamp: created,
-          prompt: new Prompt({ text: "second" }),
-          delivery: "steer",
-        },
-        { id: EventV2.ID.make("evt_a") },
-      )
+      const first = SessionMessage.ID.make("msg_first")
+      const second = SessionMessage.ID.make("msg_second")
+      yield* SessionInput.admit(db, events, {
+        id: first,
+        sessionID,
+        prompt: new Prompt({ text: "first" }),
+        delivery: "steer",
+      })
+      yield* SessionInput.admit(db, events, {
+        id: second,
+        sessionID,
+        prompt: new Prompt({ text: "second" }),
+        delivery: "steer",
+      })
+      yield* SessionInput.promoteSteers(db, events, sessionID, Number.MAX_SAFE_INTEGER)
 
-      const sessions = yield* SessionV2.Service
+      const sessions = yield* Session.Service
       const firstPage = yield* sessions.messages({ sessionID, limit: 1, order: "asc" })
       expect(firstPage.map((message) => (message.type === "user" ? message.text : message.type))).toEqual(["first"])
       const secondPage = yield* sessions.messages({
@@ -111,10 +116,10 @@ describe("SessionProjector", () => {
       ).toEqual(["first", "second"])
     }).pipe(
       Effect.provide(
-        SessionV2.layer.pipe(
+        Session.layer.pipe(
           Layer.provide(events),
           Layer.provide(database),
-          Layer.provide(Project.defaultLayer),
+          Layer.provide(projects),
           Layer.provide(SessionStore.layer.pipe(Layer.provide(database))),
           Layer.provide(SessionExecution.noopLayer),
         ),
@@ -132,17 +137,10 @@ describe("SessionProjector", () => {
         .pipe(Effect.orDie)
       yield* db
         .insert(SessionTable)
-        .values({
-          id: sessionID,
-          project_id: Project.ID.global,
-          slug: "test",
-          directory: "/project",
-          title: "test",
-          version: "test",
-        })
+        .values(sessionRow)
         .run()
         .pipe(Effect.orDie)
-      const events = yield* EventV2.Service
+      const events = yield* Event.Service
       const id = SessionMessage.ID.make("msg_admitted")
       yield* SessionInput.admit(db, events, {
         id,
@@ -175,17 +173,10 @@ describe("SessionProjector", () => {
         .pipe(Effect.orDie)
       yield* db
         .insert(SessionTable)
-        .values({
-          id: sessionID,
-          project_id: Project.ID.global,
-          slug: "test",
-          directory: "/project",
-          title: "test",
-          version: "test",
-        })
+        .values(sessionRow)
         .run()
         .pipe(Effect.orDie)
-      const events = yield* EventV2.Service
+      const events = yield* Event.Service
 
       yield* events.publish(SessionEvent.AgentSwitched, {
         sessionID,
@@ -278,17 +269,10 @@ describe("SessionProjector", () => {
         .pipe(Effect.orDie)
       yield* db
         .insert(SessionTable)
-        .values({
-          id: sessionID,
-          project_id: Project.ID.global,
-          slug: "test",
-          directory: "/project",
-          title: "test",
-          version: "test",
-        })
+        .values(sessionRow)
         .run()
         .pipe(Effect.orDie)
-      const events = yield* EventV2.Service
+      const events = yield* Event.Service
       const id = SessionMessage.ID.make("msg_creator_collision")
 
       yield* events.publish(SessionEvent.Synthetic, { sessionID, messageID: id, timestamp: created, text: "keep me" })
@@ -309,52 +293,6 @@ describe("SessionProjector", () => {
     }),
   )
 
-  it.effect("rejects a Prompted event that conflicts with an admitted inbox row", () =>
-    Effect.gen(function* () {
-      const { db } = yield* Database.Service
-      yield* db
-        .insert(ProjectTable)
-        .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
-        .run()
-        .pipe(Effect.orDie)
-      yield* db
-        .insert(SessionTable)
-        .values({
-          id: sessionID,
-          project_id: Project.ID.global,
-          slug: "test",
-          directory: "/project",
-          title: "test",
-          version: "test",
-        })
-        .run()
-        .pipe(Effect.orDie)
-      const events = yield* EventV2.Service
-      const id = SessionMessage.ID.make("msg_conflict")
-      yield* SessionInput.admit(db, events, {
-        id,
-        sessionID,
-        prompt: new Prompt({ text: "admitted" }),
-        delivery: "steer",
-      })
-
-      const exit = yield* events
-        .publish(SessionEvent.Prompted, {
-          sessionID,
-          messageID: id,
-          timestamp: created,
-          prompt: new Prompt({ text: "different" }),
-          delivery: "steer",
-        })
-        .pipe(Effect.exit)
-
-      expect(String(exit)).toContain("SessionInput.LifecycleConflict")
-      expect(
-        yield* db.select().from(SessionInputTable).where(eq(SessionInputTable.id, id)).get().pipe(Effect.orDie),
-      ).toMatchObject({ promoted_seq: null })
-    }),
-  )
-
   it.effect("rejects an assistant message ID that conflicts with an admitted inbox row", () =>
     Effect.gen(function* () {
       const { db } = yield* Database.Service
@@ -365,17 +303,10 @@ describe("SessionProjector", () => {
         .pipe(Effect.orDie)
       yield* db
         .insert(SessionTable)
-        .values({
-          id: sessionID,
-          project_id: Project.ID.global,
-          slug: "test",
-          directory: "/project",
-          title: "test",
-          version: "test",
-        })
+        .values(sessionRow)
         .run()
         .pipe(Effect.orDie)
-      const events = yield* EventV2.Service
+      const events = yield* Event.Service
       const id = SessionMessage.ID.make("msg_conflict")
       yield* SessionInput.admit(db, events, {
         id,
@@ -398,42 +329,6 @@ describe("SessionProjector", () => {
       expect(
         yield* db.select().from(SessionMessageTable).where(eq(SessionMessageTable.id, id)).get().pipe(Effect.orDie),
       ).toBeUndefined()
-    }),
-  )
-
-  it.effect("rejects a Prompted delivery mode that conflicts with an admitted inbox row", () =>
-    Effect.gen(function* () {
-      const { db } = yield* Database.Service
-      yield* db
-        .insert(ProjectTable)
-        .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
-        .run()
-        .pipe(Effect.orDie)
-      yield* db
-        .insert(SessionTable)
-        .values({
-          id: sessionID,
-          project_id: Project.ID.global,
-          slug: "test",
-          directory: "/project",
-          title: "test",
-          version: "test",
-        })
-        .run()
-        .pipe(Effect.orDie)
-      const events = yield* EventV2.Service
-      const id = SessionMessage.ID.make("msg_delivery_conflict")
-      const prompt = new Prompt({ text: "admitted" })
-      yield* SessionInput.admit(db, events, { id, sessionID, prompt, delivery: "queue" })
-
-      const exit = yield* events
-        .publish(SessionEvent.Prompted, { sessionID, messageID: id, timestamp: created, prompt, delivery: "steer" })
-        .pipe(Effect.exit)
-
-      expect(String(exit)).toContain("SessionInput.LifecycleConflict")
-      expect(
-        yield* db.select().from(SessionInputTable).where(eq(SessionInputTable.id, id)).get().pipe(Effect.orDie),
-      ).toMatchObject({ delivery: "queue", promoted_seq: null })
     }),
   )
 
@@ -472,14 +367,7 @@ describe("SessionProjector", () => {
         .pipe(Effect.orDie)
       yield* db
         .insert(SessionTable)
-        .values({
-          id: sessionID,
-          project_id: Project.ID.global,
-          slug: "test",
-          directory: "/project",
-          title: "test",
-          version: "test",
-        })
+        .values(sessionRow)
         .run()
         .pipe(Effect.orDie)
       yield* db
@@ -491,7 +379,7 @@ describe("SessionProjector", () => {
         .run()
         .pipe(Effect.orDie)
 
-      const service = yield* EventV2.Service
+      const service = yield* Event.Service
       yield* service.publish(SessionEvent.Step.Ended, {
         sessionID,
         timestamp: DateTime.makeUnsafe(1),
@@ -530,14 +418,7 @@ describe("SessionProjector", () => {
         .pipe(Effect.orDie)
       yield* db
         .insert(SessionTable)
-        .values({
-          id: sessionID,
-          project_id: Project.ID.global,
-          slug: "test",
-          directory: "/project",
-          title: "test",
-          version: "test",
-        })
+        .values(sessionRow)
         .run()
         .pipe(Effect.orDie)
       yield* db
@@ -552,7 +433,7 @@ describe("SessionProjector", () => {
         .run()
         .pipe(Effect.orDie)
 
-      const service = yield* EventV2.Service
+      const service = yield* Event.Service
       yield* service.publish(SessionEvent.Text.Started, {
         sessionID,
         assistantMessageID: SessionMessage.ID.make("msg_assistant_completed"),

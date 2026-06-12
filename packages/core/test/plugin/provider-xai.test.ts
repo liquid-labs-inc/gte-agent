@@ -1,19 +1,19 @@
 import { describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
-import { EventV2 } from "@opencode-ai/core/event"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { XAIPlugin } from "@opencode-ai/core/plugin/provider/xai"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Event } from "@gte-agent/core/event"
+import { Model } from "@gte-agent/core/model"
+import { Plugin } from "@gte-agent/core/plugin"
+import { XAIPlugin } from "@gte-agent/core/plugin/provider/xai"
+import { Provider } from "@gte-agent/core/provider"
 import { testEffect } from "../lib/effect"
 import { fakeSelectorSdk } from "./provider-helper"
 
-const it = testEffect(PluginV2.locationLayer.pipe(Layer.provide(EventV2.defaultLayer)))
+const it = testEffect(Plugin.runtimeScopeLayer.pipe(Layer.provide(Event.defaultLayer)))
 
-const model = new ModelV2.Info({
-  ...ModelV2.Info.empty(ProviderV2.ID.make("xai"), ModelV2.ID.make("grok-4")),
+const model = new Model.Info({
+  ...Model.Info.empty(Provider.ID.make("xai"), Model.ID.make("grok-4")),
   api: {
-    id: ModelV2.ID.make("grok-4"),
+    id: Model.ID.make("grok-4"),
     type: "aisdk",
     package: "@ai-sdk/xai",
   },
@@ -22,7 +22,7 @@ const model = new ModelV2.Info({
 describe("XAIPlugin", () => {
   it.effect("creates an xAI SDK only for @ai-sdk/xai", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(XAIPlugin)
 
       const ignored = yield* plugin.trigger(
@@ -40,13 +40,13 @@ describe("XAIPlugin", () => {
 
   it.effect("creates xAI SDKs for custom provider IDs", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const providers: string[] = []
 
       yield* plugin.add(XAIPlugin)
       yield* plugin.add(
-        PluginV2.define({
-          id: PluginV2.ID.make("xai-sdk-name-observer"),
+        Plugin.define({
+          id: Plugin.ID.make("xai-sdk-name-observer"),
           effect: Effect.gen(function* () {
             return {
               "aisdk.sdk": Effect.fn(function* (evt) {
@@ -61,7 +61,7 @@ describe("XAIPlugin", () => {
       yield* plugin.trigger(
         "aisdk.sdk",
         {
-          model: new ModelV2.Info({ ...model, providerID: ProviderV2.ID.make("custom-xai") }),
+          model: new Model.Info({ ...model, providerID: Provider.ID.make("custom-xai") }),
           package: "@ai-sdk/xai",
           options: {},
         },
@@ -74,14 +74,14 @@ describe("XAIPlugin", () => {
 
   it.effect("uses responses with the model api.id for xAI language models", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
 
       yield* plugin.add(XAIPlugin)
       const result = yield* plugin.trigger(
         "aisdk.language",
         {
-          model: new ModelV2.Info({ ...model, id: ModelV2.ID.make("alias") }),
+          model: new Model.Info({ ...model, id: Model.ID.make("alias") }),
           sdk: fakeSelectorSdk(calls),
           options: {},
         },
@@ -95,14 +95,14 @@ describe("XAIPlugin", () => {
 
   it.effect("ignores non-xAI providers", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
 
       yield* plugin.add(XAIPlugin)
       const result = yield* plugin.trigger(
         "aisdk.language",
         {
-          model: new ModelV2.Info({ ...model, providerID: ProviderV2.ID.openai }),
+          model: new Model.Info({ ...model, providerID: Provider.ID.openai }),
           sdk: fakeSelectorSdk(calls),
           options: {},
         },

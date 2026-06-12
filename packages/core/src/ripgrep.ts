@@ -8,7 +8,7 @@ import { NonNegativeInt, PositiveInt } from "./schema"
 
 /**
  * Small core-owned ripgrep execution adapter. It deliberately exposes raw
- * process-oriented rows, not model text or permission behavior. LocationSearch
+ * process-oriented rows, not model text or permission behavior. RuntimeScopeSearch
  * supplies read authority and bounded substrate results; future leaf tools own
  * presentation and permission prompts.
  */
@@ -73,7 +73,7 @@ export interface Interface {
   readonly grep: (input: GrepInput) => Effect.Effect<Result<Match>, Error | InvalidPatternError>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Ripgrep") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/Ripgrep") {}
 
 const failure = (message: string, cause?: unknown) => new Error({ message, cause })
 

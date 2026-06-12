@@ -1,10 +1,10 @@
 import { Npm } from "../../npm"
 import { Effect, Option } from "effect"
 import { pathToFileURL } from "url"
-import { PluginV2 } from "../../plugin"
+import { Plugin } from "../../plugin"
 
-export const DynamicProviderPlugin = PluginV2.define({
-  id: PluginV2.ID.make("dynamic-provider"),
+export const DynamicProviderPlugin = Plugin.define({
+  id: Plugin.ID.make("dynamic-provider"),
   effect: Effect.gen(function* () {
     const npm = yield* Npm.Service
     return {

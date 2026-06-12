@@ -1,28 +1,28 @@
 import { describe, expect } from "bun:test"
 import { asc, eq } from "drizzle-orm"
 import { DateTime, Effect, Layer, Schema } from "effect"
-import { Database } from "@opencode-ai/core/database/database"
-import { EventV2 } from "@opencode-ai/core/event"
-import { EventTable } from "@opencode-ai/core/event/sql"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { Project } from "@opencode-ai/core/project"
-import { ProjectTable } from "@opencode-ai/core/project/sql"
-import { ProviderV2 } from "@opencode-ai/core/provider"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { SessionEvent } from "@opencode-ai/core/session/event"
-import { SessionMessage } from "@opencode-ai/core/session/message"
-import { SessionProjector } from "@opencode-ai/core/session/projector"
-import { SessionTable, SessionMessageTable } from "@opencode-ai/core/session/sql"
-import { ToolOutput } from "@opencode-ai/core/tool-output"
+import { Database } from "@gte-agent/core/database/database"
+import { Event } from "@gte-agent/core/event"
+import { EventTable } from "@gte-agent/core/event/sql"
+import { Model } from "@gte-agent/core/model"
+import { Project } from "@gte-agent/core/project"
+import { ProjectTable } from "@gte-agent/core/project/sql"
+import { Provider } from "@gte-agent/core/provider"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { Session } from "@gte-agent/core/session"
+import { SessionEvent } from "@gte-agent/core/session/event"
+import { SessionMessage } from "@gte-agent/core/session/message"
+import { SessionProjector } from "@gte-agent/core/session/projector"
+import { SessionTable, SessionMessageTable } from "@gte-agent/core/session/sql"
+import { ToolOutput } from "@gte-agent/core/tool-output"
 import { testEffect } from "./lib/effect"
 
 const database = Database.layerFromPath(":memory:")
-const events = EventV2.layer.pipe(Layer.provide(database))
+const events = Event.layer.pipe(Layer.provide(database))
 const projector = SessionProjector.layer.pipe(Layer.provide(events), Layer.provide(database))
 const it = testEffect(Layer.mergeAll(database, events, projector))
 const timestamp = DateTime.makeUnsafe(1)
-const model = { id: ModelV2.ID.make("model"), providerID: ProviderV2.ID.make("provider") }
+const model = { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") }
 
 const content = (text: string) => [ToolOutput.text({ type: "text", text })]
 
@@ -30,8 +30,8 @@ describe("Tool.Progress", () => {
   it.effect("projects durable progress and keeps final settlements durable", () =>
     Effect.gen(function* () {
       const { db } = yield* Database.Service
-      const service = yield* EventV2.Service
-      const sessionID = SessionV2.ID.make("ses_tool_progress_projector")
+      const service = yield* Event.Service
+      const sessionID = Session.ID.make("ses_tool_progress_projector")
       yield* db
         .insert(ProjectTable)
         .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
@@ -153,9 +153,9 @@ describe("Tool.Progress", () => {
         .orderBy(asc(EventTable.seq))
         .all()
         .pipe(Effect.orDie)
-      expect(rows.map((row) => row.type)).toContain(EventV2.versionedType(SessionEvent.Tool.Progress.type, 1))
-      expect(rows.map((row) => row.type)).toContain(EventV2.versionedType(SessionEvent.Tool.Success.type, 1))
-      expect(rows.map((row) => row.type)).toContain(EventV2.versionedType(SessionEvent.Tool.Failed.type, 1))
+      expect(rows.map((row) => row.type)).toContain(Event.versionedType(SessionEvent.Tool.Progress.type, 1))
+      expect(rows.map((row) => row.type)).toContain(Event.versionedType(SessionEvent.Tool.Success.type, 1))
+      expect(rows.map((row) => row.type)).toContain(Event.versionedType(SessionEvent.Tool.Failed.type, 1))
     }),
   )
 })

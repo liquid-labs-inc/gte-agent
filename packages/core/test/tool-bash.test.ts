@@ -4,23 +4,23 @@ import path from "path"
 import { describe, expect, test } from "bun:test"
 import { Effect, Layer } from "effect"
 import { ChildProcess } from "effect/unstable/process"
-import { FSUtil } from "@opencode-ai/core/fs-util"
-import { Config } from "@opencode-ai/core/config"
-import { Location } from "@opencode-ai/core/location"
-import { LocationMutation } from "@opencode-ai/core/location-mutation"
-import { PermissionV2 } from "@opencode-ai/core/permission"
-import { AppProcess } from "@opencode-ai/core/process"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { BashTool } from "@opencode-ai/core/tool/bash"
-import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
-import { location } from "./fixture/location"
+import { FSUtil } from "@gte-agent/core/fs-util"
+import { Config } from "@gte-agent/core/config"
+import { RuntimeScope } from "@gte-agent/core/runtime-scope"
+import { RuntimeScopeMutation } from "@gte-agent/core/runtime-scope-mutation"
+import { Permission } from "@gte-agent/core/permission"
+import { AppProcess } from "@gte-agent/core/process"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { Session } from "@gte-agent/core/session"
+import { BashTool } from "@gte-agent/core/tool/bash"
+import { ToolOutputStore } from "@gte-agent/core/tool-output-store"
+import { ToolRegistry } from "@gte-agent/core/tool/registry"
+import { runtimeScope } from "./fixture/runtime-scope"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
 
-const sessionID = SessionV2.ID.make("ses_bash_tool_test")
-const assertions: PermissionV2.AssertInput[] = []
+const sessionID = Session.ID.make("ses_bash_tool_test")
+const assertions: Permission.AssertInput[] = []
 const runs: Array<{
   readonly command: string
   readonly cwd?: string
@@ -42,12 +42,12 @@ let truncate = (input: ToolOutputStore.TruncateInput): Effect.Effect<ToolOutputS
   Effect.succeed({ content: input.content, truncated: false })
 
 const permission = Layer.succeed(
-  PermissionV2.Service,
-  PermissionV2.Service.of({
+  Permission.Service,
+  Permission.Service.of({
     assert: (input) =>
       Effect.sync(() => assertions.push(input)).pipe(
         Effect.andThen(
-          input.action === denyAction ? Effect.fail(new PermissionV2.DeniedError({ rules: [] })) : Effect.void,
+          input.action === denyAction ? Effect.fail(new Permission.DeniedError({ rules: [] })) : Effect.void,
         ),
       ),
     ask: () => Effect.die("unused"),
@@ -109,10 +109,10 @@ const withTool = <A, E, R>(
 ) => {
   const filesystem = FSUtil.defaultLayer
   const activeLocation = Layer.succeed(
-    Location.Service,
-    Location.Service.of(location({ directory: AbsolutePath.make(directory) })),
+    RuntimeScope.Service,
+    RuntimeScope.Service.of(runtimeScope({ directory: AbsolutePath.make(directory) })),
   )
-  const mutation = LocationMutation.layer.pipe(Layer.provide(filesystem), Layer.provide(activeLocation))
+  const mutation = RuntimeScopeMutation.layer.pipe(Layer.provide(filesystem), Layer.provide(activeLocation))
   const registry = ToolRegistry.defaultLayer.pipe(Layer.provide(permission))
   const bash = BashTool.layer.pipe(
     Layer.provide(registry),
@@ -135,7 +135,7 @@ const call = (input: typeof BashTool.Parameters.Type, id = "call-bash") => ({
 const it = testEffect(Layer.empty)
 
 describe("BashTool", () => {
-  it.live("registers and returns structured successful output from the active Location", () =>
+  it.live("registers and returns structured successful output from the active RuntimeScope", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => tmpdir()),
       (tmp) => {
@@ -171,7 +171,7 @@ describe("BashTool", () => {
     ),
   )
 
-  it.live("resolves a relative workdir from the active Location", () =>
+  it.live("resolves a relative workdir from the active RuntimeScope", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => tmpdir()),
       (tmp) => {
@@ -394,8 +394,8 @@ test("keeps locked deferred parity TODOs visible", async () => {
     "Port BashArity reusable command-prefix approvals.",
     "Replace token-based command-argument external-directory advisories with parser-based detection.",
     "Restore PowerShell and cmd-specific invocation/path handling on Windows.",
-    "Add plugin shell.env environment augmentation once V2 plugin hooks exist.",
-    "Add durable/live progress metadata streaming for long-running commands once V2 tool invocation progress context is wired.",
+    "Add plugin shell.env environment augmentation once plugin hooks exist.",
+    "Add durable/live progress metadata streaming for long-running commands once tool invocation progress context is wired.",
     "Persist background job status and define restart recovery before exposing remote observation.",
     "Revisit process-group cleanup and platform coverage with shell-specific tests if current AppProcess semantics do not fully cover it.",
     "Revisit binary output handling if stdout/stderr decoding is text-only.",

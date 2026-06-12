@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test"
 import { Effect, Layer, Schema } from "effect"
 import { HttpClient, HttpClientResponse } from "effect/unstable/http"
-import { PermissionV2 } from "@opencode-ai/core/permission"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
-import { WebSearchTool } from "@opencode-ai/core/tool/websearch"
-import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
+import { Permission } from "@gte-agent/core/permission"
+import { Session } from "@gte-agent/core/session"
+import { ToolRegistry } from "@gte-agent/core/tool/registry"
+import { WebSearchTool } from "@gte-agent/core/tool/websearch"
+import { ToolOutputStore } from "@gte-agent/core/tool-output-store"
 import { testEffect } from "./lib/effect"
 
-const sessionID = SessionV2.ID.make("ses_websearch_test")
+const sessionID = Session.ID.make("ses_websearch_test")
 const payload = (text: string) =>
   JSON.stringify({
     jsonrpc: "2.0",
@@ -64,7 +64,7 @@ interface Request {
 }
 
 const requests: Request[] = []
-const assertions: PermissionV2.AssertInput[] = []
+const assertions: Permission.AssertInput[] = []
 const truncations: ToolOutputStore.TruncateInput[] = []
 let responseBody = payload("search results")
 let config: WebSearchTool.Config = { enableExa: false, enableParallel: false }
@@ -86,8 +86,8 @@ const http = Layer.succeed(
   ),
 )
 const permission = Layer.succeed(
-  PermissionV2.Service,
-  PermissionV2.Service.of({
+  Permission.Service,
+  Permission.Service.of({
     assert: (input) => Effect.sync(() => assertions.push(input)),
     ask: () => Effect.die("unused"),
     reply: () => Effect.die("unused"),

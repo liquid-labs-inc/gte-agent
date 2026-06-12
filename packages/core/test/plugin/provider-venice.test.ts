@@ -1,13 +1,13 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { VenicePlugin } from "@opencode-ai/core/plugin/provider/venice"
+import { Plugin } from "@gte-agent/core/plugin"
+import { VenicePlugin } from "@gte-agent/core/plugin/provider/venice"
 import { fakeSelectorSdk, it, model } from "./provider-helper"
 
 describe("VenicePlugin", () => {
   it.effect("creates a Venice SDK for venice-ai-sdk-provider", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(VenicePlugin)
       const result = yield* plugin.trigger(
         "aisdk.sdk",
@@ -20,11 +20,11 @@ describe("VenicePlugin", () => {
 
   it.effect("uses the model provider ID as the bundled Venice SDK name", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const observed: string[] = []
       yield* plugin.add(VenicePlugin)
       yield* plugin.add({
-        id: PluginV2.ID.make("inspector"),
+        id: Plugin.ID.make("inspector"),
         effect: Effect.succeed({
           "aisdk.sdk": (evt) =>
             Effect.sync(() => {
@@ -48,7 +48,7 @@ describe("VenicePlugin", () => {
 
   it.effect("only handles the bundled venice-ai-sdk-provider package", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(VenicePlugin)
       const similar = yield* plugin.trigger(
         "aisdk.sdk",
@@ -71,7 +71,7 @@ describe("VenicePlugin", () => {
 
   it.effect("leaves Venice language selection to the default languageModel fallback", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(VenicePlugin)
       const result = yield* plugin.trigger(

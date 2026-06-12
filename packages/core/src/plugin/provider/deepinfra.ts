@@ -1,8 +1,8 @@
 import { Effect } from "effect"
-import { PluginV2 } from "../../plugin"
+import { Plugin } from "../../plugin"
 
-export const DeepInfraPlugin = PluginV2.define({
-  id: PluginV2.ID.make("deepinfra"),
+export const DeepInfraPlugin = Plugin.define({
+  id: Plugin.ID.make("deepinfra"),
   effect: Effect.gen(function* () {
     return {
       "aisdk.sdk": Effect.fn(function* (evt) {

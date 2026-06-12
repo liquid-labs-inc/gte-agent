@@ -1,14 +1,14 @@
-export * as AgentV2 from "./agent"
+export * as Agent from "./agent"
 
 import { Array, Context, Effect, Layer, Schema, Scope } from "effect"
 import { castDraft, enableMapSet, type Draft } from "immer"
-import { ModelV2 } from "./model"
+import { Model } from "./model"
 import { PermissionSchema } from "./permission/schema"
-import { ProviderV2 } from "./provider"
+import { Provider } from "./provider"
 import { PositiveInt } from "./schema"
 import { State } from "./state"
 
-export const ID = Schema.String.pipe(Schema.brand("AgentV2.ID"))
+export const ID = Schema.String.pipe(Schema.brand("Agent.ID"))
 export type ID = typeof ID.Type
 
 export const Color = Schema.Union([
@@ -16,10 +16,10 @@ export const Color = Schema.Union([
   Schema.Literals(["primary", "secondary", "accent", "success", "warning", "error", "info"]),
 ])
 
-export class Info extends Schema.Class<Info>("AgentV2.Info")({
+export class Info extends Schema.Class<Info>("Agent.Info")({
   id: ID,
-  model: ModelV2.Ref.pipe(Schema.optional),
-  request: ProviderV2.Request,
+  model: Model.Ref.pipe(Schema.optional),
+  request: Provider.Request,
   system: Schema.String.pipe(Schema.optional),
   description: Schema.String.pipe(Schema.optional),
   mode: Schema.Literals(["subagent", "primary", "all"]),
@@ -60,7 +60,7 @@ export interface Interface {
   readonly all: () => Effect.Effect<Info[]>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Agent") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/Agent") {}
 
 enableMapSet()
 
@@ -86,18 +86,18 @@ export const layer = Layer.effect(
 
     return Service.of({
       transform: state.transform,
-      update: Effect.fn("AgentV2.update")(function* (update) {
+      update: Effect.fn("Agent.update")(function* (update) {
         const transform = yield* state.transform()
         yield* transform(update)
       }),
-      get: Effect.fn("AgentV2.get")(function* (id) {
+      get: Effect.fn("Agent.get")(function* (id) {
         return state.get().agents.get(id)
       }),
-      all: Effect.fn("AgentV2.all")(function* () {
+      all: Effect.fn("Agent.all")(function* () {
         return Array.fromIterable(state.get().agents.values())
       }),
     })
   }),
 )
 
-export const locationLayer = layer
+export const runtimeScopeLayer = layer

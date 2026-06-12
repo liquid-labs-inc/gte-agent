@@ -3,7 +3,7 @@ export * as SessionTodo from "./todo"
 import { asc, eq } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Database } from "../database/database"
-import { EventV2 } from "../event"
+import { Event } from "../event"
 import { SessionSchema } from "./schema"
 import { TodoTable } from "./sql"
 
@@ -16,8 +16,8 @@ export const Info = Schema.Struct({
 }).annotate({ identifier: "SessionTodo.Info" })
 export type Info = typeof Info.Type
 
-export const Event = {
-  Updated: EventV2.define({
+export const SessionTodoEvent = {
+  Updated: Event.define({
     type: "todo.updated",
     schema: {
       sessionID: SessionSchema.ID,
@@ -34,13 +34,13 @@ export interface Interface {
   readonly get: (sessionID: SessionSchema.ID) => Effect.Effect<ReadonlyArray<Info>>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/SessionTodo") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/SessionTodo") {}
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const { db } = yield* Database.Service
-    const events = yield* EventV2.Service
+    const events = yield* Event.Service
 
     const update = Effect.fn("SessionTodo.update")(function* (input: {
       readonly sessionID: SessionSchema.ID
@@ -66,7 +66,7 @@ export const layer = Layer.effect(
           }),
         )
         .pipe(Effect.orDie)
-      yield* events.publish(Event.Updated, input)
+      yield* events.publish(SessionTodoEvent.Updated, input)
     })
 
     const get = Effect.fn("SessionTodo.get")(function* (sessionID: SessionSchema.ID) {
@@ -88,4 +88,4 @@ export const layer = Layer.effect(
   }),
 )
 
-export const defaultLayer = layer.pipe(Layer.provide(EventV2.defaultLayer), Layer.provide(Database.defaultLayer))
+export const defaultLayer = layer.pipe(Layer.provide(Event.defaultLayer), Layer.provide(Database.defaultLayer))

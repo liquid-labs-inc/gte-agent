@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@opencode-ai/server",
+  "name": "@gte-agent/server",
   "version": "1.16.0",
   "private": true,
   "type": "module",
@@ -9,10 +9,12 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
+    "test": "bun test",
+    "test:ci": "mkdir -p .artifacts/unit && bun test --timeout 30000 --reporter=junit --reporter-outfile=.artifacts/unit/junit.xml",
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@opencode-ai/core": "workspace:*",
+    "@gte-agent/core": "workspace:*",
     "drizzle-orm": "catalog:",
     "effect": "catalog:"
   },

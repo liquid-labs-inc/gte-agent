@@ -1,28 +1,28 @@
 import { describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
-import { FileSystem } from "@opencode-ai/core/filesystem"
-import { LocationSearch } from "@opencode-ai/core/location-search"
-import { PermissionV2 } from "@opencode-ai/core/permission"
-import { RelativePath } from "@opencode-ai/core/schema"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { GlobTool } from "@opencode-ai/core/tool/glob"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
+import { FileSystem } from "@gte-agent/core/filesystem"
+import { RuntimeScopeSearch } from "@gte-agent/core/runtime-scope-search"
+import { Permission } from "@gte-agent/core/permission"
+import { RelativePath } from "@gte-agent/core/schema"
+import { Session } from "@gte-agent/core/session"
+import { GlobTool } from "@gte-agent/core/tool/glob"
+import { ToolRegistry } from "@gte-agent/core/tool/registry"
 import { testEffect } from "./lib/effect"
 
-const sessionID = SessionV2.ID.make("ses_glob_tool_test")
-const assertions: PermissionV2.AssertInput[] = []
+const sessionID = Session.ID.make("ses_glob_tool_test")
+const assertions: Permission.AssertInput[] = []
 const resolutions: FileSystem.ListInput[] = []
-const searches: LocationSearch.FilesInput[] = []
+const searches: RuntimeScopeSearch.FilesInput[] = []
 const roots: FileSystem.RootTarget[] = []
 let allow = true
-let result = new LocationSearch.FilesResult({ items: [], truncated: false, partial: false })
+let result = new RuntimeScopeSearch.FilesResult({ items: [], truncated: false, partial: false })
 
 const permission = Layer.succeed(
-  PermissionV2.Service,
-  PermissionV2.Service.of({
+  Permission.Service,
+  Permission.Service.of({
     assert: (input) =>
       Effect.sync(() => assertions.push(input)).pipe(
-        Effect.andThen(allow ? Effect.void : Effect.fail(new PermissionV2.DeniedError({ rules: [] }))),
+        Effect.andThen(allow ? Effect.void : Effect.fail(new Permission.DeniedError({ rules: [] }))),
       ),
     ask: () => Effect.die("unused"),
     reply: () => Effect.die("unused"),
@@ -69,8 +69,8 @@ const filesystem = Layer.succeed(
 )
 
 const search = Layer.succeed(
-  LocationSearch.Service,
-  LocationSearch.Service.of({
+  RuntimeScopeSearch.Service,
+  RuntimeScopeSearch.Service.of({
     files: (input, root) =>
       Effect.sync(() => {
         searches.push(input)
@@ -96,7 +96,7 @@ const reset = () => {
   searches.length = 0
   roots.length = 0
   allow = true
-  result = new LocationSearch.FilesResult({ items: [], truncated: false, partial: false })
+  result = new RuntimeScopeSearch.FilesResult({ items: [], truncated: false, partial: false })
 }
 
 const call = (input: typeof GlobTool.Parameters.Type, id = "call-glob") => ({
@@ -112,7 +112,7 @@ describe("GlobTool", () => {
     }),
   )
 
-  it.effect("authorizes the active Location pattern and delegates traversal only to LocationSearch.files", () =>
+  it.effect("authorizes the active RuntimeScope pattern and delegates traversal only to RuntimeScopeSearch.files", () =>
     Effect.gen(function* () {
       reset()
       const registry = yield* ToolRegistry.Service
@@ -136,7 +136,7 @@ describe("GlobTool", () => {
     }),
   )
 
-  it.effect("prevents Location search when permission is denied", () =>
+  it.effect("prevents RuntimeScope search when permission is denied", () =>
     Effect.gen(function* () {
       reset()
       allow = false
@@ -149,12 +149,12 @@ describe("GlobTool", () => {
     }),
   )
 
-  it.effect("returns active Location glob resources", () =>
+  it.effect("returns active RuntimeScope glob resources", () =>
     Effect.gen(function* () {
       reset()
-      result = new LocationSearch.FilesResult({
+      result = new RuntimeScopeSearch.FilesResult({
         items: [
-          new LocationSearch.File({
+          new RuntimeScopeSearch.File({
             path: RelativePath.make("src/index.ts"),
             canonical: "/project/src/index.ts",
             resource: "src/index.ts",
@@ -178,9 +178,9 @@ describe("GlobTool", () => {
   it.effect("searches named references with root and reference metadata", () =>
     Effect.gen(function* () {
       reset()
-      result = new LocationSearch.FilesResult({
+      result = new RuntimeScopeSearch.FilesResult({
         items: [
-          new LocationSearch.File({
+          new RuntimeScopeSearch.File({
             path: RelativePath.make("guide.md"),
             canonical: "/project/docs/guide.md",
             resource: "docs:guide.md",
@@ -210,9 +210,9 @@ describe("GlobTool", () => {
 
   it.effect("formats bounded and partial results without discarding structured output", () =>
     Effect.sync(() => {
-      const output = new LocationSearch.FilesResult({
+      const output = new RuntimeScopeSearch.FilesResult({
         items: [
-          new LocationSearch.File({
+          new RuntimeScopeSearch.File({
             path: RelativePath.make("one.ts"),
             canonical: "/project/one.ts",
             resource: "one.ts",

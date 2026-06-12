@@ -2,38 +2,15 @@ export * from "./gen/types.gen.js"
 
 import { createClient } from "./gen/client/client.gen.js"
 import { type Config } from "./gen/client/types.gen.js"
-import { OpencodeClient } from "./gen/sdk.gen.js"
+import { GteAgentClient } from "./gen/sdk.gen.js"
 import { wrapClientError } from "./error-interceptor.js"
-export { type Config as OpencodeClientConfig, OpencodeClient }
 
-function pick(value: string | null, fallback?: string) {
-  if (!value) return
-  if (!fallback) return value
-  if (value === fallback) return fallback
-  if (value === encodeURIComponent(fallback)) return fallback
-  return value
-}
+export { type Config as GTEAgentClientConfig, GteAgentClient }
 
-function rewrite(request: Request, directory?: string) {
-  if (request.method !== "GET" && request.method !== "HEAD") return request
-
-  const value = pick(request.headers.get("x-opencode-directory"), directory)
-  if (!value) return request
-
-  const url = new URL(request.url)
-  if (!url.searchParams.has("directory")) {
-    url.searchParams.set("directory", value)
-  }
-
-  const next = new Request(url, request)
-  next.headers.delete("x-opencode-directory")
-  return next
-}
-
-export function createOpencodeClient(config?: Config & { directory?: string }) {
+export function createGTEAgentClient(config?: Config) {
   if (!config?.fetch) {
     const customFetch: any = (req: any) => {
-      // @ts-ignore
+      // @ts-ignore fetch Request timeout is a Bun extension used by callers.
       req.timeout = false
       return fetch(req)
     }
@@ -43,15 +20,14 @@ export function createOpencodeClient(config?: Config & { directory?: string }) {
     }
   }
 
-  if (config?.directory) {
-    config.headers = {
-      ...config.headers,
-      "x-opencode-directory": encodeURIComponent(config.directory),
-    }
-  }
-
   const client = createClient(config)
-  client.interceptors.request.use((request) => rewrite(request, config?.directory))
+  client.interceptors.response.use((response) => {
+    const contentType = response.headers.get("content-type")
+    if (contentType === "text/html")
+      throw new Error("Request is not supported by this version of GTE Agent Server (Server responded with text/html)")
+
+    return response
+  })
   client.interceptors.error.use(wrapClientError)
-  return new OpencodeClient({ client })
+  return new GteAgentClient({ client })
 }

@@ -1,9 +1,9 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { GoogleVertexAnthropicPlugin, GoogleVertexPlugin } from "@opencode-ai/core/plugin/provider/google-vertex"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Catalog } from "@gte-agent/core/catalog"
+import { Plugin } from "@gte-agent/core/plugin"
+import { GoogleVertexAnthropicPlugin, GoogleVertexPlugin } from "@gte-agent/core/plugin/provider/google-vertex"
+import { Provider } from "@gte-agent/core/provider"
 import { fakeSelectorSdk, it, model, withEnv } from "./provider-helper"
 
 describe("GoogleVertexAnthropicPlugin", () => {
@@ -19,16 +19,16 @@ describe("GoogleVertexAnthropicPlugin", () => {
       },
       () =>
         Effect.gen(function* () {
-          const plugin = yield* PluginV2.Service
+          const plugin = yield* Plugin.Service
           const catalog = yield* Catalog.Service
           yield* plugin.add(GoogleVertexAnthropicPlugin)
           const transform = yield* catalog.transform()
           yield* transform((catalog) =>
-            catalog.provider.update(ProviderV2.ID.make("google-vertex-anthropic"), (provider) => {
+            catalog.provider.update(Provider.ID.make("google-vertex-anthropic"), (provider) => {
               provider.api = { type: "aisdk", package: "@ai-sdk/google-vertex/anthropic" }
             }),
           )
-          const provider = yield* catalog.provider.get(ProviderV2.ID.make("google-vertex-anthropic"))
+          const provider = yield* catalog.provider.get(Provider.ID.make("google-vertex-anthropic"))
           expect(provider.request.body.project).toBe("cloud-project")
           expect(provider.request.body.location).toBe("cloud-location")
         }),
@@ -38,18 +38,18 @@ describe("GoogleVertexAnthropicPlugin", () => {
   it.effect("keeps configured project and location over env fallback", () =>
     withEnv({ GOOGLE_CLOUD_PROJECT: "env-project", GOOGLE_CLOUD_LOCATION: "env-location" }, () =>
       Effect.gen(function* () {
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         const catalog = yield* Catalog.Service
         yield* plugin.add(GoogleVertexAnthropicPlugin)
         const transform = yield* catalog.transform()
         yield* transform((catalog) =>
-          catalog.provider.update(ProviderV2.ID.make("google-vertex-anthropic"), (provider) => {
+          catalog.provider.update(Provider.ID.make("google-vertex-anthropic"), (provider) => {
             provider.api = { type: "aisdk", package: "@ai-sdk/google-vertex/anthropic" }
             provider.request.body.project = "configured-project"
             provider.request.body.location = "configured-location"
           }),
         )
-        const provider = yield* catalog.provider.get(ProviderV2.ID.make("google-vertex-anthropic"))
+        const provider = yield* catalog.provider.get(Provider.ID.make("google-vertex-anthropic"))
         expect(provider.request.body.project).toBe("configured-project")
         expect(provider.request.body.location).toBe("configured-location")
       }),
@@ -68,7 +68,7 @@ describe("GoogleVertexAnthropicPlugin", () => {
       },
       () =>
         Effect.gen(function* () {
-          const plugin = yield* PluginV2.Service
+          const plugin = yield* Plugin.Service
           yield* plugin.add(GoogleVertexAnthropicPlugin)
           const result = yield* plugin.trigger(
             "aisdk.sdk",
@@ -91,7 +91,7 @@ describe("GoogleVertexAnthropicPlugin", () => {
       { GOOGLE_CLOUD_PROJECT: "project", GOOGLE_CLOUD_LOCATION: "cloud-location", VERTEX_LOCATION: "vertex-location" },
       () =>
         Effect.gen(function* () {
-          const plugin = yield* PluginV2.Service
+          const plugin = yield* Plugin.Service
           yield* plugin.add(GoogleVertexAnthropicPlugin)
           const result = yield* plugin.trigger(
             "aisdk.sdk",
@@ -111,7 +111,7 @@ describe("GoogleVertexAnthropicPlugin", () => {
 
   it.effect("creates SDKs for google-vertex Anthropic models with multi-region endpoints", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(GoogleVertexAnthropicPlugin)
       const result = yield* plugin.trigger(
         "aisdk.sdk",
@@ -130,7 +130,7 @@ describe("GoogleVertexAnthropicPlugin", () => {
 
   it.effect("keeps configured baseURL for google-vertex Anthropic models", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(GoogleVertexAnthropicPlugin)
       const result = yield* plugin.trigger(
         "aisdk.sdk",
@@ -145,9 +145,9 @@ describe("GoogleVertexAnthropicPlugin", () => {
     }),
   )
 
-  it.effect("selects google-vertex Anthropic language models through V2 plugins", () =>
+  it.effect("selects google-vertex Anthropic language models through plugins", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(GoogleVertexPlugin)
       yield* plugin.add(GoogleVertexAnthropicPlugin)
       const sdkResult = yield* plugin.trigger(
@@ -178,7 +178,7 @@ describe("GoogleVertexAnthropicPlugin", () => {
 
   it.effect("trims model IDs before selecting language models", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(GoogleVertexAnthropicPlugin)
       yield* plugin.trigger(
@@ -196,7 +196,7 @@ describe("GoogleVertexAnthropicPlugin", () => {
 
   it.effect("ignores non Vertex Anthropic providers for language selection", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(GoogleVertexAnthropicPlugin)
       const result = yield* plugin.trigger(

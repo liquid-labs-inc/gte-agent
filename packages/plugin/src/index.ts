@@ -1,73 +1,39 @@
-import type {
-  Event,
-  createOpencodeClient,
-  Project,
-  Model,
-  Provider,
-  Permission,
-  UserMessage,
-  Message,
-  Part,
-  Config as SDKConfig,
-} from "@opencode-ai/sdk"
-import type { Provider as ProviderV2, Model as ModelV2, Auth } from "@opencode-ai/sdk/v2"
+import type { createGTEAgentClient, SessionMessageUser, SessionPublicMessage } from "@gte-agent/sdk"
 
 import type { BunShell } from "./shell.js"
 import { type ToolDefinition } from "./tool.js"
 
 export * from "./tool.js"
 
+type SDKRecord = Record<string, unknown>
+type Auth = unknown
+type Event = SDKRecord
+type Project = SDKRecord
+type Model = SDKRecord
+type Provider = SDKRecord
+type Permission = SDKRecord
+type UserMessage = SessionMessageUser
+type Message = SessionPublicMessage
+type Part = SDKRecord
+
 export type ProviderContext = {
   source: "env" | "config" | "custom" | "api"
   info: Provider
-  options: Record<string, any>
-}
-
-export type WorkspaceInfo = {
-  id: string
-  type: string
-  name: string
-  branch: string | null
-  directory: string | null
-  extra: unknown | null
-  projectID: string
-}
-
-export type WorkspaceTarget =
-  | {
-      type: "local"
-      directory: string
-    }
-  | {
-      type: "remote"
-      url: string | URL
-      headers?: HeadersInit
-    }
-
-export type WorkspaceAdapter = {
-  name: string
-  description: string
-  configure(config: WorkspaceInfo): WorkspaceInfo | Promise<WorkspaceInfo>
-  create(config: WorkspaceInfo, env: Record<string, string | undefined>, from?: WorkspaceInfo): Promise<void>
-  remove(config: WorkspaceInfo): Promise<void>
-  target(config: WorkspaceInfo): WorkspaceTarget | Promise<WorkspaceTarget>
+  options: SDKRecord
 }
 
 export type PluginInput = {
-  client: ReturnType<typeof createOpencodeClient>
+  client: ReturnType<typeof createGTEAgentClient>
   project: Project
   directory: string
   worktree: string
-  experimental_workspace: {
-    register(type: string, adapter: WorkspaceAdapter): void
-  }
   serverUrl: URL
   $: BunShell
 }
 
 export type PluginOptions = Record<string, unknown>
 
-export type Config = Omit<SDKConfig, "plugin"> & {
+export type Config = SDKRecord & {
   plugin?: Array<string | [string, PluginOptions]>
 }
 
@@ -87,7 +53,7 @@ type Rule = {
 
 export type AuthHook = {
   provider: string
-  loader?: (auth: () => Promise<Auth>, provider: Provider) => Promise<Record<string, any>>
+  loader?: (auth: () => Promise<Auth>, provider: Provider) => Promise<SDKRecord>
   methods: (
     | {
         type: "oauth"
@@ -174,7 +140,6 @@ export type AuthOAuthResult = { url: string; instructions: string } & (
                 refresh: string
                 access: string
                 expires: number
-                accountId?: string
                 enterpriseUrl?: string
               }
             | { key: string; metadata?: Record<string, string> }
@@ -195,7 +160,6 @@ export type AuthOAuthResult = { url: string; instructions: string } & (
                 refresh: string
                 access: string
                 expires: number
-                accountId?: string
                 enterpriseUrl?: string
               }
             | { key: string; metadata?: Record<string, string> }
@@ -213,7 +177,7 @@ export type ProviderHookContext = {
 
 export type ProviderHook = {
   id: string
-  models?: (provider: ProviderV2, ctx: ProviderHookContext) => Promise<Record<string, ModelV2>>
+  models?: (provider: Provider, ctx: ProviderHookContext) => Promise<Record<string, Model>>
 }
 
 /** @deprecated Use AuthOAuthResult instead. */
@@ -251,7 +215,7 @@ export interface Hooks {
       topP: number
       topK: number
       maxOutputTokens: number | undefined
-      options: Record<string, any>
+      options: SDKRecord
     },
   ) => Promise<void>
   "chat.headers"?: (
@@ -265,18 +229,18 @@ export interface Hooks {
   ) => Promise<void>
   "tool.execute.before"?: (
     input: { tool: string; sessionID: string; callID: string },
-    output: { args: any },
+    output: { args: unknown },
   ) => Promise<void>
   "shell.env"?: (
     input: { cwd: string; sessionID?: string; callID?: string },
     output: { env: Record<string, string> },
   ) => Promise<void>
   "tool.execute.after"?: (
-    input: { tool: string; sessionID: string; callID: string; args: any },
+    input: { tool: string; sessionID: string; callID: string; args: unknown },
     output: {
       title: string
       output: string
-      metadata: any
+      metadata: unknown
     },
   ) => Promise<void>
   "experimental.chat.messages.transform"?: (
@@ -294,7 +258,7 @@ export interface Hooks {
       system: string[]
     },
   ) => Promise<void>
-  "experimental.provider.small_model"?: (input: { provider: ProviderV2 }, output: { model?: ModelV2 }) => Promise<void>
+  "experimental.provider.small_model"?: (input: { provider: Provider }, output: { model?: Model }) => Promise<void>
   /**
    * Called before session compaction starts. Allows plugins to customize
    * the compaction prompt.
@@ -331,5 +295,5 @@ export interface Hooks {
   /**
    * Modify tool definitions (description and parameters) sent to LLM
    */
-  "tool.definition"?: (input: { toolID: string }, output: { description: string; parameters: any }) => Promise<void>
+  "tool.definition"?: (input: { toolID: string }, output: { description: string; parameters: unknown }) => Promise<void>
 }

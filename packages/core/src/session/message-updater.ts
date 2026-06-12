@@ -120,6 +120,10 @@ export function update(adapter: Adapter, event: SessionEvent.Event) {
 
   return Effect.gen(function* () {
     yield* SessionEvent.All.match(event, {
+      "session.created": () => Effect.void,
+      "session.intent.updated": () => Effect.void,
+      // Snapshots live in the durable event stream, not the message store.
+      "session.snapshot.recorded": () => Effect.void,
       "session.next.agent.switched": (event) => {
         return adapter.appendMessage(
           new SessionMessage.AgentSwitched({

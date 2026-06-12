@@ -1,14 +1,15 @@
 import { describe, expect } from "bun:test"
-import { LLM } from "@opencode-ai/llm"
-import { LLMClient } from "@opencode-ai/llm/route"
+import { LLM } from "@gte-agent/llm"
+import { LLMClient } from "@gte-agent/llm/route"
 import { ConfigProvider, DateTime, Effect } from "effect"
 import { Headers } from "effect/unstable/http"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { ProviderV2 } from "@opencode-ai/core/provider"
-import { ProjectV2 } from "@opencode-ai/core/project"
-import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { AbsolutePath } from "@opencode-ai/core/schema"
+import { Model } from "@gte-agent/core/model"
+import { Provider } from "@gte-agent/core/provider"
+import { Project } from "@gte-agent/core/project"
+import { SessionRunnerModel } from "@gte-agent/core/session/runner/model"
+import { Session } from "@gte-agent/core/session"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { GTEAuth } from "@gte-agent/core/gte-auth"
 import { it } from "./lib/effect"
 
 type Api =
@@ -20,12 +21,12 @@ type Api =
     }
   | { readonly type: "native"; readonly url?: string; readonly settings: Record<string, unknown> }
 
-const model = (api: Api, variants: ModelV2.Info["variants"] = []) =>
-  new ModelV2.Info({
-    id: ModelV2.ID.make("test-model"),
-    providerID: ProviderV2.ID.make("test-provider"),
+const model = (api: Api, variants: Model.Info["variants"] = []) =>
+  new Model.Info({
+    id: Model.ID.make("test-model"),
+    providerID: Provider.ID.make("test-provider"),
     name: "Test model",
-    api: { id: ModelV2.ID.make("api-test-model"), ...api },
+    api: { id: Model.ID.make("api-test-model"), ...api },
     capabilities: { tools: true, input: ["text"], output: ["text"] },
     request: {
       headers: { "x-test": "header" },
@@ -39,9 +40,9 @@ const model = (api: Api, variants: ModelV2.Info["variants"] = []) =>
     limit: { context: 100, output: 20 },
   })
 
-const provider = (api: ProviderV2.Info["api"]) =>
-  new ProviderV2.Info({
-    id: ProviderV2.ID.make("test-provider"),
+const provider = (api: Provider.Info["api"]) =>
+  new Provider.Info({
+    id: Provider.ID.make("test-provider"),
     name: "Test provider",
     enabled: { via: "env", name: "TEST_PROVIDER_API_KEY" },
     env: ["TEST_PROVIDER_API_KEY"],
@@ -84,7 +85,7 @@ describe("SessionRunnerModel", () => {
   it.effect("uses merged API settings for OpenAI-compatible auth and request defaults", () =>
     Effect.gen(function* () {
       const resolved = yield* SessionRunnerModel.fromCatalogModel(
-        new ModelV2.Info({
+        new Model.Info({
           ...model({
             type: "aisdk",
             package: "@ai-sdk/openai-compatible",
@@ -112,24 +113,26 @@ describe("SessionRunnerModel", () => {
     Effect.gen(function* () {
       const catalog = model({ type: "aisdk", package: "@ai-sdk/openai", url: "https://openai.example/v1" }, [
         {
-          id: ModelV2.VariantID.make("high"),
+          id: Model.VariantID.make("high"),
           headers: { "x-variant": "high" },
           body: { reasoningEffort: "high" },
         },
       ])
-      const session = SessionV2.Info.make({
-        id: SessionV2.ID.make("ses_model_variant"),
-        projectID: ProjectV2.ID.global,
+      const session = Session.Info.make({
+        id: Session.ID.make("ses_model_variant"),
+        projectID: Project.ID.global,
+        principalID: GTEAuth.DEV_PRINCIPAL_ID,
+        authorityID: GTEAuth.DEV_AUTHORITY_ID,
         title: "test",
         model: {
           id: catalog.id,
           providerID: catalog.providerID,
-          variant: ModelV2.VariantID.make("high"),
+          variant: Model.VariantID.make("high"),
         },
         cost: 0,
         tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
         time: { created: DateTime.makeUnsafe(0), updated: DateTime.makeUnsafe(0) },
-        location: { directory: AbsolutePath.make("/project") },
+        runtimeScope: { directory: AbsolutePath.make("/project") },
       })
 
       const resolved = yield* SessionRunnerModel.resolve(session, catalog)
@@ -157,7 +160,7 @@ describe("SessionRunnerModel", () => {
   it.effect("preserves environment-backed bearer auth", () =>
     Effect.gen(function* () {
       const resolved = yield* SessionRunnerModel.fromCatalogModel(
-        new ModelV2.Info({
+        new Model.Info({
           ...model({ type: "aisdk", package: "@ai-sdk/openai", url: "https://openai.example/v1" }),
           request: { headers: {}, body: {} },
         }),

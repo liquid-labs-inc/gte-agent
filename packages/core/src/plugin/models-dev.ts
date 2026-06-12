@@ -1,10 +1,10 @@
 import { DateTime, Effect, Scope, Stream } from "effect"
 import { Catalog } from "../catalog"
-import { EventV2 } from "../event"
-import { ModelV2 } from "../model"
+import { Event } from "../event"
+import { Model } from "../model"
 import { ModelsDev } from "../models-dev"
-import { PluginV2 } from "../plugin"
-import { ProviderV2 } from "../provider"
+import { Plugin } from "../plugin"
+import { Provider } from "../provider"
 
 function released(date: string) {
   const time = Date.parse(date)
@@ -40,25 +40,25 @@ function cost(input: ModelsDev.Model["cost"]) {
 
 function variants(model: ModelsDev.Model) {
   return Object.entries(model.experimental?.modes ?? {}).map(([id, item]) => ({
-    id: ModelV2.VariantID.make(id),
+    id: Model.VariantID.make(id),
     headers: { ...(item.provider?.headers ?? {}) },
     body: { ...(item.provider?.body ?? {}) },
   }))
 }
 
-export const ModelsDevPlugin = PluginV2.define({
-  id: PluginV2.ID.make("models-dev"),
+export const ModelsDevPlugin = Plugin.define({
+  id: Plugin.ID.make("models-dev"),
   effect: Effect.gen(function* () {
     const catalog = yield* Catalog.Service
     const modelsDev = yield* ModelsDev.Service
-    const events = yield* EventV2.Service
+    const events = yield* Event.Service
     const scope = yield* Scope.Scope
     const transform = yield* catalog.transform()
     const refresh = Effect.fn("ModelsDevPlugin.refresh")(function* () {
       const data = yield* modelsDev.get()
       yield* transform((catalog) => {
         for (const item of Object.values(data)) {
-          const providerID = ProviderV2.ID.make(item.id)
+          const providerID = Provider.ID.make(item.id)
           catalog.provider.update(providerID, (provider) => {
             provider.name = item.name
             provider.env = [...item.env]
@@ -76,10 +76,10 @@ export const ModelsDevPlugin = PluginV2.define({
           })
 
           for (const model of Object.values(item.models)) {
-            const modelID = ModelV2.ID.make(model.id)
+            const modelID = Model.ID.make(model.id)
             catalog.model.update(providerID, modelID, (draft) => {
               draft.name = model.name
-              draft.family = model.family ? ModelV2.Family.make(model.family) : undefined
+              draft.family = model.family ? Model.Family.make(model.family) : undefined
               draft.api = model.provider?.npm
                 ? {
                     id: draft.api.id,
@@ -114,7 +114,7 @@ export const ModelsDevPlugin = PluginV2.define({
       })
     })
     yield* refresh()
-    yield* events.subscribe(ModelsDev.Event.Refreshed).pipe(
+    yield* events.subscribe(ModelsDev.ModelsDevEvent.Refreshed).pipe(
       Stream.runForEach(() => refresh()),
       Effect.forkScoped({ startImmediately: true }),
     )

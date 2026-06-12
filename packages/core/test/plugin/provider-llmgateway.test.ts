@@ -1,14 +1,14 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { ProviderPlugins } from "@opencode-ai/core/plugin/provider"
-import { LLMGatewayPlugin } from "@opencode-ai/core/plugin/provider/llmgateway"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Catalog } from "@gte-agent/core/catalog"
+import { Plugin } from "@gte-agent/core/plugin"
+import { ProviderPlugins } from "@gte-agent/core/plugin/provider"
+import { LLMGatewayPlugin } from "@gte-agent/core/plugin/provider/llmgateway"
+import { Provider } from "@gte-agent/core/provider"
 import { expectPluginRegistered, it, provider } from "./provider-helper"
 
 describe("LLMGatewayPlugin", () => {
-  it.effect("is registered so legacy referer headers can be applied", () =>
+  it.effect("is registered so GTE Agent referer headers can be applied", () =>
     Effect.sync(() =>
       expectPluginRegistered(
         ProviderPlugins.map((item) => item.id),
@@ -17,9 +17,9 @@ describe("LLMGatewayPlugin", () => {
     ),
   )
 
-  it.effect("applies legacy referer headers only to enabled llmgateway", () =>
+  it.effect("applies GTE Agent referer headers only to enabled llmgateway", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const catalog = yield* Catalog.Service
       yield* plugin.add(LLMGatewayPlugin)
       const transform = yield* catalog.transform()
@@ -41,19 +41,19 @@ describe("LLMGatewayPlugin", () => {
           draft.enabled = openrouter.enabled
         })
       })
-      expect((yield* catalog.provider.get(ProviderV2.ID.make("llmgateway"))).request.headers).toEqual({
+      expect((yield* catalog.provider.get(Provider.ID.make("llmgateway"))).request.headers).toEqual({
         Existing: "value",
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
-        "X-Source": "opencode",
+        "HTTP-Referer": "https://gte-agent.ai/",
+        "X-Title": "gte-agent",
+        "X-Source": "gte-agent",
       })
-      expect((yield* catalog.provider.get(ProviderV2.ID.openrouter)).request.headers).toEqual({})
+      expect((yield* catalog.provider.get(Provider.ID.openrouter)).request.headers).toEqual({})
     }),
   )
 
-  it.effect("does not apply legacy headers to a disabled llmgateway provider", () =>
+  it.effect("does not apply GTE Agent headers to a disabled llmgateway provider", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const catalog = yield* Catalog.Service
       yield* plugin.add(LLMGatewayPlugin)
       const transform = yield* catalog.transform()
@@ -66,8 +66,8 @@ describe("LLMGatewayPlugin", () => {
         })
       })
 
-      expect((yield* catalog.provider.get(ProviderV2.ID.make("llmgateway"))).enabled).toBe(false)
-      expect((yield* catalog.provider.get(ProviderV2.ID.make("llmgateway"))).request.headers).toEqual({})
+      expect((yield* catalog.provider.get(Provider.ID.make("llmgateway"))).enabled).toBe(false)
+      expect((yield* catalog.provider.get(Provider.ID.make("llmgateway"))).request.headers).toEqual({})
     }),
   )
 })

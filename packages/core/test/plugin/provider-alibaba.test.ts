@@ -1,15 +1,15 @@
 import { describe, expect } from "bun:test"
 import { createAlibaba } from "@ai-sdk/alibaba"
 import { Effect } from "effect"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { AlibabaPlugin } from "@opencode-ai/core/plugin/provider/alibaba"
+import { Model } from "@gte-agent/core/model"
+import { Plugin } from "@gte-agent/core/plugin"
+import { AlibabaPlugin } from "@gte-agent/core/plugin/provider/alibaba"
 import { it, model } from "./provider-helper"
 
 describe("AlibabaPlugin", () => {
   it.effect("creates an Alibaba SDK for @ai-sdk/alibaba", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(AlibabaPlugin)
       const result = yield* plugin.trigger(
         "aisdk.sdk",
@@ -22,7 +22,7 @@ describe("AlibabaPlugin", () => {
 
   it.effect("ignores non-Alibaba SDK packages", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(AlibabaPlugin)
       const result = yield* plugin.trigger(
         "aisdk.sdk",
@@ -35,7 +35,7 @@ describe("AlibabaPlugin", () => {
 
   it.effect("matches the old bundled Alibaba SDK provider naming", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(AlibabaPlugin)
       const result = yield* plugin.trigger(
         "aisdk.sdk",
@@ -55,9 +55,9 @@ describe("AlibabaPlugin", () => {
 
   it.effect("uses the old default languageModel(api.id) behavior", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(AlibabaPlugin)
-      const item = model("alibaba", "alias", { api: { id: ModelV2.ID.make("qwen-plus") } })
+      const item = model("alibaba", "alias", { api: { id: Model.ID.make("qwen-plus") } })
       const result = yield* plugin.trigger("aisdk.sdk", { model: item, package: "@ai-sdk/alibaba", options: {} }, {})
       const language = result.sdk?.languageModel(item.api.id)
       expect(language?.modelId).toBe("qwen-plus")

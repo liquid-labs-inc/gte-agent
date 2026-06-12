@@ -2,63 +2,64 @@ export * as Catalog from "./catalog"
 
 import { Context, Effect, Layer, Option, Order, pipe, Schema, Array, Scope, Stream } from "effect"
 import { castDraft, enableMapSet, type Draft } from "immer"
-import { ModelV2 } from "./model"
-import { PluginV2 } from "./plugin"
-import { ProviderV2 } from "./provider"
-import { Location } from "./location"
-import { EventV2 } from "./event"
+import { CatalogCurated } from "./catalog-curated"
+import { Model } from "./model"
+import { Plugin } from "./plugin"
+import { Provider } from "./provider"
+import { RuntimeScope } from "./runtime-scope"
+import { Event } from "./event"
 import { Policy } from "./policy"
 import { State } from "./state"
 
 export type ProviderRecord = {
-  provider: ProviderV2.Info
-  models: Map<ModelV2.ID, ModelV2.Info>
+  provider: Provider.Info
+  models: Map<Model.ID, Model.Info>
 }
 
-export type DefaultModel = { providerID: ProviderV2.ID; modelID: ModelV2.ID }
+export type DefaultModel = { providerID: Provider.ID; modelID: Model.ID }
 
 export class ProviderNotFoundError extends Schema.TaggedErrorClass<ProviderNotFoundError>()(
-  "CatalogV2.ProviderNotFound",
+  "Catalog.ProviderNotFound",
   {
-    providerID: ProviderV2.ID,
+    providerID: Provider.ID,
   },
 ) {}
 
-export class ModelNotFoundError extends Schema.TaggedErrorClass<ModelNotFoundError>()("CatalogV2.ModelNotFound", {
-  providerID: ProviderV2.ID,
-  modelID: ModelV2.ID,
+export class ModelNotFoundError extends Schema.TaggedErrorClass<ModelNotFoundError>()("Catalog.ModelNotFound", {
+  providerID: Provider.ID,
+  modelID: Model.ID,
 }) {}
 
 export const PolicyActions = Schema.Literals(["provider.use"])
 
-export const Event = {
-  ModelUpdated: EventV2.define({
+export const CatalogEvent = {
+  ModelUpdated: Event.define({
     type: "catalog.model.updated",
     schema: {
-      model: ModelV2.Info,
+      model: Model.Info,
     },
   }),
 }
 
 type Data = {
-  providers: Map<ProviderV2.ID, ProviderRecord>
+  providers: Map<Provider.ID, ProviderRecord>
   defaultModel?: DefaultModel
 }
 
 export type Editor = {
   provider: {
     list: () => readonly ProviderRecord[]
-    get: (providerID: ProviderV2.ID) => ProviderRecord | undefined
-    update: (providerID: ProviderV2.ID, fn: (provider: Draft<ProviderV2.Info>) => void) => void
-    remove: (providerID: ProviderV2.ID) => void
+    get: (providerID: Provider.ID) => ProviderRecord | undefined
+    update: (providerID: Provider.ID, fn: (provider: Draft<Provider.Info>) => void) => void
+    remove: (providerID: Provider.ID) => void
   }
   model: {
-    get: (providerID: ProviderV2.ID, modelID: ModelV2.ID) => ModelV2.Info | undefined
-    update: (providerID: ProviderV2.ID, modelID: ModelV2.ID, fn: (model: Draft<ModelV2.Info>) => void) => void
-    remove: (providerID: ProviderV2.ID, modelID: ModelV2.ID) => void
+    get: (providerID: Provider.ID, modelID: Model.ID) => Model.Info | undefined
+    update: (providerID: Provider.ID, modelID: Model.ID, fn: (model: Draft<Model.Info>) => void) => void
+    remove: (providerID: Provider.ID, modelID: Model.ID) => void
     default: {
       get: () => DefaultModel | undefined
-      set: (providerID: ProviderV2.ID, modelID: ModelV2.ID) => void
+      set: (providerID: Provider.ID, modelID: Model.ID) => void
     }
   }
 }
@@ -66,36 +67,36 @@ export type Editor = {
 export interface Interface {
   readonly transform: State.Interface<Data, Editor>["transform"]
   readonly provider: {
-    readonly get: (providerID: ProviderV2.ID) => Effect.Effect<ProviderV2.Info, ProviderNotFoundError>
-    readonly all: () => Effect.Effect<ProviderV2.Info[]>
-    readonly available: () => Effect.Effect<ProviderV2.Info[]>
+    readonly get: (providerID: Provider.ID) => Effect.Effect<Provider.Info, ProviderNotFoundError>
+    readonly all: () => Effect.Effect<Provider.Info[]>
+    readonly available: () => Effect.Effect<Provider.Info[]>
   }
   readonly model: {
     readonly get: (
-      providerID: ProviderV2.ID,
-      modelID: ModelV2.ID,
-    ) => Effect.Effect<ModelV2.Info, ProviderNotFoundError | ModelNotFoundError>
-    readonly all: () => Effect.Effect<ModelV2.Info[]>
-    readonly available: () => Effect.Effect<ModelV2.Info[]>
-    readonly default: () => Effect.Effect<Option.Option<ModelV2.Info>>
-    readonly small: (providerID: ProviderV2.ID) => Effect.Effect<Option.Option<ModelV2.Info>>
+      providerID: Provider.ID,
+      modelID: Model.ID,
+    ) => Effect.Effect<Model.Info, ProviderNotFoundError | ModelNotFoundError>
+    readonly all: () => Effect.Effect<Model.Info[]>
+    readonly available: () => Effect.Effect<Model.Info[]>
+    readonly default: () => Effect.Effect<Option.Option<Model.Info>>
+    readonly small: (providerID: Provider.ID) => Effect.Effect<Option.Option<Model.Info>>
   }
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Catalog") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/Catalog") {}
 
 enableMapSet()
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const location = yield* Location.Service
-    const plugin = yield* PluginV2.Service
-    const events = yield* EventV2.Service
+    const runtimeScope = yield* RuntimeScope.Service
+    const plugin = yield* Plugin.Service
+    const events = yield* Event.Service
     const policy = yield* Policy.Service
     const scope = yield* Scope.Scope
 
-    const resolve = (model: ModelV2.Info) => {
+    const resolve = (model: Model.Info) => {
       const provider = state.get().providers.get(model.providerID)!.provider
       const api =
         model.api.type === "native" && !model.api.url && Object.keys(model.api.settings).length === 0
@@ -116,27 +117,31 @@ export const layer = Layer.effect(
         },
         variant: model.request.variant,
       }
-      return new ModelV2.Info({
+      return new Model.Info({
         ...model,
         api,
         request,
       })
     }
 
-    function* getRecord(providerID: ProviderV2.ID) {
+    function* getRecord(providerID: Provider.ID) {
       const match = state.get().providers.get(providerID)
       if (!match) return yield* new ProviderNotFoundError({ providerID })
       return match
     }
 
-    const normalizeApi = (item: Draft<ProviderV2.Info> | Draft<ModelV2.Info>) => {
+    const normalizeApi = (item: Draft<Provider.Info> | Draft<Model.Info>) => {
       if (typeof item.request.body.baseURL !== "string") return
       item.api.url = item.request.body.baseURL
       delete item.request.body.baseURL
     }
 
     const state = State.create<Data, Editor>({
-      initial: () => ({ providers: new Map() }),
+      // The catalog baseline is the curated, static, GTE-owned provider/model
+      // list. Transforms (config overrides, plugins, policy) layer on top and
+      // replay over this baseline on every rebuild; there is no network
+      // catalog source.
+      initial: () => ({ providers: CatalogCurated.providers() }),
       editor: (draft) => {
         const result: Editor = {
           provider: {
@@ -146,8 +151,8 @@ export const layer = Layer.effect(
               let current = draft.providers.get(providerID)
               if (!current) {
                 current = castDraft({
-                  provider: ProviderV2.Info.empty(providerID),
-                  models: new Map<ModelV2.ID, ModelV2.Info>(),
+                  provider: Provider.Info.empty(providerID),
+                  models: new Map<Model.ID, Model.Info>(),
                 })
                 draft.providers.set(providerID, current)
               }
@@ -164,12 +169,12 @@ export const layer = Layer.effect(
               let record = draft.providers.get(providerID)
               if (!record) {
                 record = castDraft({
-                  provider: ProviderV2.Info.empty(providerID),
-                  models: new Map<ModelV2.ID, ModelV2.Info>(),
+                  provider: Provider.Info.empty(providerID),
+                  models: new Map<Model.ID, Model.Info>(),
                 })
                 draft.providers.set(providerID, record)
               }
-              const model = record.models.get(modelID) ?? castDraft(ModelV2.Info.empty(providerID, modelID))
+              const model = record.models.get(modelID) ?? castDraft(Model.Info.empty(providerID, modelID))
               if (!record.models.has(modelID)) record.models.set(modelID, model)
               fn(model)
               model.id = modelID
@@ -189,7 +194,7 @@ export const layer = Layer.effect(
         }
         return result
       },
-      finalize: Effect.fn("CatalogV2.finalize")(function* (catalog, reason) {
+      finalize: Effect.fn("Catalog.finalize")(function* (catalog, reason) {
         if (reason !== "plugin.added") yield* plugin.trigger("catalog.transform", catalog, {}).pipe(Effect.asVoid)
         if (!policy.hasStatements()) return
         for (const record of [...catalog.provider.list()]) {
@@ -200,12 +205,9 @@ export const layer = Layer.effect(
       }),
     })
 
-    yield* events.subscribe(PluginV2.Event.Added).pipe(
-      // Plugin registries are location scoped even though the event bus is process scoped.
-      Stream.filter(
-        (event) =>
-          event.location?.directory === location.directory && event.location.workspaceID === location.workspaceID,
-      ),
+    yield* events.subscribe(Plugin.PluginEvent.Added).pipe(
+      // Plugin registries are runtime-scope scoped even though the event bus is process scoped.
+      Stream.filter((event) => event.runtimeScope?.directory === runtimeScope.directory),
       Stream.runForEach((event) =>
         state.update((catalog) => plugin.triggerFor(event.data.id, "catalog.transform", catalog, {}), "plugin.added"),
       ),
@@ -216,16 +218,16 @@ export const layer = Layer.effect(
       transform: state.transform,
 
       provider: {
-        get: Effect.fn("CatalogV2.provider.get")(function* (providerID) {
+        get: Effect.fn("Catalog.provider.get")(function* (providerID) {
           const record = yield* getRecord(providerID)
           return record.provider
         }),
 
-        all: Effect.fn("CatalogV2.provider.all")(function* () {
+        all: Effect.fn("Catalog.provider.all")(function* () {
           return Array.fromIterable(state.get().providers.values()).map((record) => record.provider)
         }),
 
-        available: Effect.fn("CatalogV2.provider.available")(function* () {
+        available: Effect.fn("Catalog.provider.available")(function* () {
           return Array.fromIterable(state.get().providers.values())
             .map((record) => record.provider)
             .filter((provider) => provider.enabled)
@@ -233,14 +235,14 @@ export const layer = Layer.effect(
       },
 
       model: {
-        get: Effect.fn("CatalogV2.model.get")(function* (providerID, modelID) {
+        get: Effect.fn("Catalog.model.get")(function* (providerID, modelID) {
           const record = yield* getRecord(providerID)
           const model = record.models.get(modelID)
           if (!model) return yield* new ModelNotFoundError({ providerID, modelID })
           return resolve(model)
         }),
 
-        all: Effect.fn("CatalogV2.model.all")(function* () {
+        all: Effect.fn("Catalog.model.all")(function* () {
           return pipe(
             Array.fromIterable(state.get().providers.values()),
             Array.flatMap((record) => Array.fromIterable(record.models.values())),
@@ -249,14 +251,14 @@ export const layer = Layer.effect(
           )
         }),
 
-        available: Effect.fn("CatalogV2.model.available")(function* () {
+        available: Effect.fn("Catalog.model.available")(function* () {
           return (yield* result.model.all()).filter((model) => {
             const record = state.get().providers.get(model.providerID)
             return record?.provider.enabled !== false && model.enabled
           })
         }),
 
-        default: Effect.fn("CatalogV2.model.default")(function* () {
+        default: Effect.fn("Catalog.model.default")(function* () {
           const defaultModel = state.get().defaultModel
           if (defaultModel) {
             const model = yield* result.model.get(defaultModel.providerID, defaultModel.modelID).pipe(Effect.option)
@@ -270,12 +272,12 @@ export const layer = Layer.effect(
           )
         }),
 
-        small: Effect.fn("CatalogV2.model.small")(function* (providerID) {
+        small: Effect.fn("Catalog.model.small")(function* (providerID) {
           const record = state.get().providers.get(providerID)
-          if (!record) return Option.none<ModelV2.Info>()
+          if (!record) return Option.none<Model.Info>()
 
-          if (providerID === ProviderV2.ID.opencode) {
-            const gpt5Nano = record.models.get(ModelV2.ID.make("gpt-5-nano"))
+          if (providerID === Provider.ID.gteAgent) {
+            const gpt5Nano = record.models.get(Model.ID.make("gpt-5-nano"))
             if (gpt5Nano?.enabled && gpt5Nano.status === "active") return Option.some(resolve(gpt5Nano))
           }
 
@@ -324,7 +326,7 @@ export const layer = Layer.effect(
 
 const SMALL_MODEL_RE = /\b(nano|flash|lite|mini|haiku|small|fast)\b/
 
-export const locationLayer = layer.pipe(
-  Layer.provideMerge(PluginV2.locationLayer),
-  Layer.provideMerge(Policy.locationLayer),
+export const runtimeScopeLayer = layer.pipe(
+  Layer.provideMerge(Plugin.runtimeScopeLayer),
+  Layer.provideMerge(Policy.runtimeScopeLayer),
 )

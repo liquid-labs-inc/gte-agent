@@ -1,25 +1,25 @@
 import { describe, expect } from "bun:test"
 import { Duration, Effect, Layer, Queue } from "effect"
-import { EventV2 } from "@opencode-ai/core/event"
-import { Location } from "@opencode-ai/core/location"
-import { Pty } from "@opencode-ai/core/pty"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { location } from "../fixture/location"
+import { Event } from "@gte-agent/core/event"
+import { RuntimeScope } from "@gte-agent/core/runtime-scope"
+import { Pty } from "@gte-agent/core/pty"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { runtimeScope } from "../fixture/runtime-scope"
 import { testEffect } from "../lib/effect"
 
 type Socket = Parameters<Pty.Interface["connect"]>[1]
 
-const locationLayer = Layer.succeed(
-  Location.Service,
-  Location.Service.of(location({ directory: AbsolutePath.make("/tmp") })),
+const runtimeScopeLayer = Layer.succeed(
+  RuntimeScope.Service,
+  RuntimeScope.Service.of(runtimeScope({ directory: AbsolutePath.make("/tmp") })),
 )
-const it = testEffect(Pty.layer.pipe(Layer.provideMerge(EventV2.defaultLayer), Layer.provideMerge(locationLayer)))
+const it = testEffect(Pty.layer.pipe(Layer.provideMerge(Event.defaultLayer), Layer.provideMerge(runtimeScopeLayer)))
 const ptyTest = process.platform === "win32" ? it.live.skip : it.live
 
 const createPty = Effect.fn("PtyOutputIsolationTest.createPty")(function* (command: string) {
   const pty = yield* Pty.Service
   return yield* Effect.acquireRelease(
-    pty.create({ command, args: [], cwd: "/tmp", env: { TERM: "xterm-256color", OPENCODE_TERMINAL: "1" } }),
+    pty.create({ command, args: [], cwd: "/tmp", env: { TERM: "xterm-256color", GTE_AGENT_TERMINAL: "1" } }),
     (info) => pty.remove(info.id).pipe(Effect.ignore),
   )
 })

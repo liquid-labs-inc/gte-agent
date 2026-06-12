@@ -1,21 +1,21 @@
 import { describe, expect } from "bun:test"
 import { asc } from "drizzle-orm"
 import { Effect, Layer } from "effect"
-import { Database } from "@opencode-ai/core/database/database"
-import { EventV2 } from "@opencode-ai/core/event"
-import { Project } from "@opencode-ai/core/project"
-import { ProjectTable } from "@opencode-ai/core/project/sql"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { SessionTable, TodoTable } from "@opencode-ai/core/session/sql"
-import { SessionTodo } from "@opencode-ai/core/session/todo"
+import { Database } from "@gte-agent/core/database/database"
+import { Event } from "@gte-agent/core/event"
+import { Project } from "@gte-agent/core/project"
+import { ProjectTable } from "@gte-agent/core/project/sql"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { Session } from "@gte-agent/core/session"
+import { SessionTable, TodoTable } from "@gte-agent/core/session/sql"
+import { SessionTodo } from "@gte-agent/core/session/todo"
 import { testEffect } from "./lib/effect"
 
 const database = Database.layerFromPath(":memory:")
-const events = EventV2.layer.pipe(Layer.provide(database))
+const events = Event.layer.pipe(Layer.provide(database))
 const todos = SessionTodo.layer.pipe(Layer.provide(database), Layer.provide(events))
 const it = testEffect(Layer.mergeAll(database, events, todos))
-const sessionID = SessionV2.ID.make("ses_todo_test")
+const sessionID = Session.ID.make("ses_todo_test")
 
 const setup = Effect.gen(function* () {
   const { db } = yield* Database.Service
@@ -43,12 +43,12 @@ describe("SessionTodo", () => {
     Effect.gen(function* () {
       yield* setup
       const { db } = yield* Database.Service
-      const events = yield* EventV2.Service
+      const events = yield* Event.Service
       const todos = yield* SessionTodo.Service
-      const published = new Array<EventV2.Payload>()
+      const published = new Array<Event.Payload>()
       const unsubscribe = yield* events.listen((event) =>
         Effect.sync(() => {
-          if (event.type === SessionTodo.Event.Updated.type) published.push(event)
+          if (event.type === SessionTodo.SessionTodoEvent.Updated.type) published.push(event)
         }),
       )
       yield* Effect.addFinalizer(() => unsubscribe)

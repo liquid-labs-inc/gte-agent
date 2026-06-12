@@ -1,13 +1,13 @@
 import os from "os"
 import { InstallationVersion } from "../../installation/version"
 import { Effect } from "effect"
-import { PluginV2 } from "../../plugin"
-import { ProviderV2 } from "../../provider"
+import { Plugin } from "../../plugin"
+import { Provider } from "../../provider"
 
-const providerID = ProviderV2.ID.make("cloudflare-workers-ai")
+const providerID = Provider.ID.make("cloudflare-workers-ai")
 
-export const CloudflareWorkersAIPlugin = PluginV2.define({
-  id: PluginV2.ID.make("cloudflare-workers-ai"),
+export const CloudflareWorkersAIPlugin = Plugin.define({
+  id: Plugin.ID.make("cloudflare-workers-ai"),
   effect: Effect.gen(function* () {
     return {
       "catalog.transform": Effect.fn(function* (evt) {
@@ -44,7 +44,7 @@ function workersEndpoint(accountId: string) {
   return `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1`
 }
 
-function hasWorkersEndpoint(api: ProviderV2.Api) {
+function hasWorkersEndpoint(api: Provider.Api) {
   return api.type === "aisdk" && Boolean(api.url)
 }
 
@@ -54,7 +54,7 @@ function sdkOptions(options: Record<string, any>) {
     baseURL: expandAccountId(options.baseURL),
     apiKey: process.env.CLOUDFLARE_API_KEY ?? options.apiKey,
     headers: {
-      "User-Agent": `opencode/${InstallationVersion} cloudflare-workers-ai (${os.platform()} ${os.release()}; ${os.arch()})`,
+      "User-Agent": `gte-agent/${InstallationVersion} cloudflare-workers-ai (${os.platform()} ${os.release()}; ${os.arch()})`,
       ...options.headers,
     },
     name: providerID,

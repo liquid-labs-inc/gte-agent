@@ -1,24 +1,19 @@
-export * as SessionV2 from "./session"
+export * as Session from "./session"
 export * from "./session/schema"
 
-import { Cause, Effect, Layer, Schema, Context, Stream } from "effect"
-import { and, asc, desc, eq, gt, like, lt, or, type SQL } from "drizzle-orm"
-import { ProjectV2 } from "./project"
-import { WorkspaceV2 } from "./workspace"
-import { ModelV2 } from "./model"
-import { Location } from "./location"
+import { Cause, DateTime, Effect, Layer, Schema, Context, Option, Stream } from "effect"
+import { and, asc, desc, eq, gt, inArray, like, lt, or, type SQL } from "drizzle-orm"
+import { Project } from "./project"
+import { Model } from "./model"
 import { SessionMessage } from "./session/message"
 import { Prompt } from "./session/prompt"
-import { EventV2 } from "./event"
+import { Event } from "./event"
 import { Database } from "./database/database"
 import { SessionProjector } from "./session/projector"
 import { SessionMessageTable, SessionTable } from "./session/sql"
 import { SessionSchema } from "./session/schema"
 import { AbsolutePath, PositiveInt, RelativePath } from "./schema"
-import { AgentV2 } from "./agent"
-import { SessionV1 } from "./v1/session"
-import { InstallationVersion } from "./installation/version"
-import { Slug } from "./util/slug"
+import { Agent } from "./agent"
 import { ProjectTable } from "./project/sql"
 import path from "path"
 import { fromRow } from "./session/info"
@@ -28,6 +23,8 @@ import { SessionExecution } from "./session/execution"
 import { MessageDecodeError } from "./session/error"
 import { SessionEvent } from "./session/event"
 import { SessionInput } from "./session/input"
+import { RuntimeScope } from "./runtime-scope"
+import { GTEAuth } from "./gte-auth"
 
 // get project -> project.locations
 //
@@ -36,7 +33,7 @@ import { SessionInput } from "./session/input"
 
 // - by project
 //   - by subpath
-// - by workspace (home is special)
+// - by location (home is special)
 
 export const ListAnchor = Schema.Struct({
   id: SessionSchema.ID,
@@ -46,7 +43,6 @@ export const ListAnchor = Schema.Struct({
 export type ListAnchor = typeof ListAnchor.Type
 
 const ListInputBase = {
-  workspaceID: WorkspaceV2.ID.pipe(Schema.optional),
   search: Schema.String.pipe(Schema.optional),
   limit: PositiveInt.pipe(Schema.optional),
   order: Schema.Literals(["asc", "desc"]).pipe(Schema.optional),
@@ -60,7 +56,7 @@ const ListDirectoryInput = Schema.Struct({
 
 const ListProjectInput = Schema.Struct({
   ...ListInputBase,
-  project: ProjectV2.ID,
+  project: Project.ID,
   subpath: RelativePath.pipe(Schema.optional),
 })
 
@@ -71,14 +67,18 @@ export type ListInput = typeof ListInput.Type
 
 type CreateInput = {
   id?: SessionSchema.ID
-  agent?: AgentV2.ID
-  model?: ModelV2.Ref
-  location: Location.Ref
+  agent?: Agent.ID
+  model?: Model.Ref
+  runtimeScope: RuntimeScope.Ref
+  authorityID?: GTEAuth.AuthorityID
 }
 
-type CompactInput = {
+/** Session-scoped UI intent patch: `undefined` leaves a field unchanged, `null` clears it. */
+type UpdateIntentInput = {
   sessionID: SessionSchema.ID
-  prompt?: Prompt
+  selectedMarket?: string | null
+  trackedAddress?: SessionSchema.TrackedAddress | null
+  pinnedPanels?: SessionSchema.PinnedPanels | null
 }
 
 export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("Session.NotFoundError", {
@@ -88,7 +88,7 @@ export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("Ses
 export class OperationUnavailableError extends Schema.TaggedErrorClass<OperationUnavailableError>()(
   "Session.OperationUnavailableError",
   {
-    operation: Schema.Literals(["move", "shell", "skill", "switchAgent", "switchModel", "compact", "wait"]),
+    operation: Schema.Literals(["move", "shell", "skill", "switchAgent", "switchModel"]),
   },
 ) {}
 
@@ -99,12 +99,26 @@ export class PromptConflictError extends Schema.TaggedErrorClass<PromptConflictE
   messageID: SessionMessage.ID,
 }) {}
 
-export type Error = NotFoundError | MessageDecodeError | OperationUnavailableError | PromptConflictError
+export type Error =
+  | NotFoundError
+  | MessageDecodeError
+  | OperationUnavailableError
+  | PromptConflictError
+  | GTEAuth.AuthorityRequiredError
+  | GTEAuth.AuthorizationError
 
 export interface Interface {
   readonly list: (input?: ListInput) => Effect.Effect<SessionSchema.Info[]>
-  readonly create: (input: CreateInput) => Effect.Effect<SessionSchema.Info>
-  readonly get: (sessionID: SessionSchema.ID) => Effect.Effect<SessionSchema.Info, NotFoundError>
+  readonly create: (
+    input: CreateInput,
+  ) => Effect.Effect<
+    SessionSchema.Info,
+    GTEAuth.AuthorityRequiredError | GTEAuth.MutationDeniedError | GTEAuth.AuthorityConflictError
+  >
+  readonly get: (sessionID: SessionSchema.ID) => Effect.Effect<SessionSchema.Info, NotFoundError | GTEAuth.ReadDeniedError>
+  readonly updateIntent: (
+    input: UpdateIntentInput,
+  ) => Effect.Effect<SessionSchema.Info, NotFoundError | GTEAuth.ReadDeniedError | GTEAuth.MutationDeniedError>
   readonly messages: (input: {
     sessionID: SessionSchema.ID
     limit?: number
@@ -113,25 +127,25 @@ export interface Interface {
       id: SessionMessage.ID
       direction: "previous" | "next"
     }
-  }) => Effect.Effect<SessionMessage.Message[], NotFoundError | MessageDecodeError>
+  }) => Effect.Effect<SessionMessage.Message[], NotFoundError | MessageDecodeError | GTEAuth.ReadDeniedError>
   readonly message: (input: {
     sessionID: SessionSchema.ID
     messageID: SessionMessage.ID
-  }) => Effect.Effect<SessionMessage.Message | undefined>
+  }) => Effect.Effect<SessionMessage.Message | undefined, NotFoundError | GTEAuth.ReadDeniedError>
   readonly context: (
     sessionID: SessionSchema.ID,
-  ) => Effect.Effect<SessionMessage.Message[], NotFoundError | MessageDecodeError>
+  ) => Effect.Effect<SessionMessage.Message[], NotFoundError | MessageDecodeError | GTEAuth.ReadDeniedError>
   readonly events: (input: {
     sessionID: SessionSchema.ID
-    after?: EventV2.Cursor
-  }) => Stream.Stream<EventV2.CursorEvent<SessionEvent.DurableEvent>, NotFoundError>
+    after?: Event.Cursor
+  }) => Stream.Stream<Event.CursorEvent<SessionEvent.DurableEvent>, NotFoundError | GTEAuth.ReadDeniedError>
   readonly switchAgent: (input: {
     sessionID: SessionSchema.ID
     agent: string
   }) => Effect.Effect<void, OperationUnavailableError>
   readonly switchModel: (input: {
     sessionID: SessionSchema.ID
-    model: ModelV2.Ref
+    model: Model.Ref
   }) => Effect.Effect<void, OperationUnavailableError>
   readonly prompt: (input: {
     id?: SessionMessage.ID
@@ -139,34 +153,35 @@ export interface Interface {
     prompt: Prompt
     delivery?: SessionInput.Delivery
     resume?: boolean
-  }) => Effect.Effect<SessionInput.Admitted, NotFoundError | PromptConflictError>
+  }) => Effect.Effect<SessionInput.Admitted, NotFoundError | PromptConflictError | GTEAuth.ReadDeniedError | GTEAuth.MutationDeniedError>
   readonly shell: (input: {
-    id?: EventV2.ID
+    id?: Event.ID
     sessionID: SessionSchema.ID
     command: string
     resume?: boolean
   }) => Effect.Effect<void, OperationUnavailableError>
   readonly skill: (input: {
-    id?: EventV2.ID
+    id?: Event.ID
     sessionID: SessionSchema.ID
     skill: string
     resume?: boolean
   }) => Effect.Effect<void, OperationUnavailableError>
-  readonly compact: (input: CompactInput) => Effect.Effect<void, NotFoundError | OperationUnavailableError>
-  readonly wait: (id: SessionSchema.ID) => Effect.Effect<void, NotFoundError | OperationUnavailableError>
-  readonly resume: (sessionID: SessionSchema.ID) => Effect.Effect<void, NotFoundError | SessionRunner.RunError>
+  readonly resume: (
+    sessionID: SessionSchema.ID,
+  ) => Effect.Effect<void, NotFoundError | GTEAuth.ReadDeniedError | SessionRunner.RunError>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Session") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/Session") {}
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const db = (yield* Database.Service).db
-    const events = yield* EventV2.Service
-    const projects = yield* ProjectV2.Service
+    const events = yield* Event.Service
+    const projects = yield* Project.Service
     const execution = yield* SessionExecution.Service
     const store = yield* SessionStore.Service
+    const auth = Option.getOrElse(yield* Effect.serviceOption(GTEAuth.RequestContextService), () => GTEAuth.devContext)
     const decodeMessage = Schema.decodeUnknownEffect(SessionMessage.Message)
     const isDurableSessionEvent = Schema.is(SessionEvent.Durable)
     const scope = yield* Effect.scope
@@ -198,11 +213,24 @@ export const layer = Layer.effect(
       )
 
     const result = Service.of({
-      create: Effect.fn("V2Session.create")(function* (input) {
+      create: Effect.fn("Session.create")(function* (input) {
         const sessionID = input.id ?? SessionSchema.ID.create()
+        const authorityID = yield* GTEAuth.requireExplicitAuthority(auth, input.authorityID)
+        if (!GTEAuth.canAct(auth, authorityID)) {
+          return yield* new GTEAuth.MutationDeniedError({ sessionID, principalID: auth.principalID, authorityID })
+        }
         const recorded = yield* store.get(sessionID)
-        if (recorded) return recorded
-        const project = yield* projects.resolve(input.location.directory)
+        if (recorded) {
+          if (recorded.principalID !== auth.principalID || recorded.authorityID !== authorityID) {
+            return yield* new GTEAuth.AuthorityConflictError({
+              sessionID,
+              principalID: auth.principalID,
+              authorityID,
+            })
+          }
+          return recorded
+        }
+        const project = yield* projects.resolve(input.runtimeScope.directory)
         yield* db
           .insert(ProjectTable)
           .values({ id: project.id, worktree: project.directory, vcs: project.vcs?.type, sandboxes: [] })
@@ -210,29 +238,28 @@ export const layer = Layer.effect(
           .run()
           .pipe(Effect.orDie)
         const now = Date.now()
-        const info = SessionV1.SessionInfo.make({
+        const info = SessionSchema.Info.make({
           id: sessionID,
-          slug: Slug.create(),
-          version: InstallationVersion,
           projectID: project.id,
-          directory: input.location.directory,
-          path: path.relative(project.directory, input.location.directory).replaceAll("\\", "/"),
-          workspaceID: input.location.workspaceID ? WorkspaceV2.ID.make(input.location.workspaceID) : undefined,
+          principalID: auth.principalID,
+          authorityID,
+          runtimeScope: input.runtimeScope,
+          subpath: RelativePath.make(path.relative(project.directory, input.runtimeScope.directory).replaceAll("\\", "/")),
           title: `New session - ${new Date(now).toISOString()}`,
           agent: input.agent,
           model: input.model
             ? {
-                id: ModelV2.ID.make(input.model.id),
+                id: Model.ID.make(input.model.id),
                 providerID: input.model.providerID,
                 variant: input.model.variant,
               }
             : undefined,
           cost: 0,
           tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-          time: { created: now, updated: now },
+          time: { created: DateTime.makeUnsafe(now), updated: DateTime.makeUnsafe(now) },
         })
         const projected = yield* events
-          .publish(SessionV1.Event.Created, { sessionID, info }, { location: input.location })
+          .publish(SessionEvent.Created, { sessionID, timestamp: DateTime.makeUnsafe(now), info })
           .pipe(
             Effect.as({ type: "created" } as const),
             Effect.catchDefect((defect) => {
@@ -250,22 +277,58 @@ export const layer = Layer.effect(
             }),
           )
         if (projected.type === "existing") return projected.session
-        // TODO: Restore recorded sessions onto replacement synchronized workspaces in a future API slice.
         return yield* result.get(sessionID).pipe(Effect.orDie)
       }),
-      get: Effect.fn("V2Session.get")(function* (sessionID) {
+      get: Effect.fn("Session.get")(function* (sessionID) {
         const session = yield* store.get(sessionID)
         if (!session) return yield* new NotFoundError({ sessionID })
+        if (!GTEAuth.canRead(auth, session.authorityID)) {
+          return yield* new GTEAuth.ReadDeniedError({
+            sessionID,
+            principalID: auth.principalID,
+            authorityID: session.authorityID,
+          })
+        }
         return session
       }),
-      list: Effect.fn("V2Session.list")(function* (input = {}) {
+      updateIntent: Effect.fn("Session.updateIntent")(function* (input) {
+        const recorded = yield* result.get(input.sessionID)
+        if (!GTEAuth.canAct(auth, recorded.authorityID)) {
+          return yield* new GTEAuth.MutationDeniedError({
+            sessionID: input.sessionID,
+            principalID: auth.principalID,
+            authorityID: recorded.authorityID,
+          })
+        }
+        // The HTTP handler forwards omitted fields as undefined, so an empty patch
+        // must not append a durable no-op event or bump time_updated.
+        if (input.selectedMarket === undefined && input.trackedAddress === undefined && input.pinnedPanels === undefined) {
+          return recorded
+        }
+        const resolve = <T>(next: T | null | undefined, current: T | undefined) =>
+          next === null ? undefined : (next ?? current)
+        yield* events.publish(SessionEvent.IntentUpdated, {
+          sessionID: input.sessionID,
+          timestamp: DateTime.makeUnsafe(Date.now()),
+          selectedMarket: resolve(input.selectedMarket, recorded.selectedMarket),
+          trackedAddress: resolve(input.trackedAddress, recorded.trackedAddress),
+          pinnedPanels: resolve(input.pinnedPanels, recorded.pinnedPanels),
+        })
+        return yield* result.get(input.sessionID)
+      }),
+      list: Effect.fn("Session.list")(function* (input = {}) {
         const direction = input.anchor?.direction ?? "next"
         const requestedOrder = input.order ?? "desc"
         const order = direction === "previous" ? (requestedOrder === "asc" ? "desc" : "asc") : requestedOrder
         const sortColumn = SessionTable.time_created
         const conditions: SQL[] = []
+        const readableAuthorityIDs = auth.authorities
+          .filter((authority) => authority.read)
+          .map((authority) => authority.authorityID)
+        if (readableAuthorityIDs.length === 0) return []
         if ("directory" in input) conditions.push(eq(SessionTable.directory, input.directory))
-        if (input.workspaceID) conditions.push(eq(SessionTable.workspace_id, input.workspaceID))
+        conditions.push(eq(SessionTable.principal_id, auth.principalID))
+        conditions.push(inArray(SessionTable.authority_id, readableAuthorityIDs))
         if ("project" in input) conditions.push(eq(SessionTable.project_id, input.project))
         if (input.search) conditions.push(like(SessionTable.title, `%${input.search}%`))
         if (input.anchor) {
@@ -294,7 +357,7 @@ export const layer = Layer.effect(
         )
         return (direction === "previous" ? rows.toReversed() : rows).map((row) => fromRow(row))
       }),
-      messages: Effect.fn("V2Session.messages")(function* (input) {
+      messages: Effect.fn("Session.messages")(function* (input) {
         yield* result.get(input.sessionID)
         const direction = input.cursor?.direction ?? "next"
         const requestedOrder = input.order ?? "desc"
@@ -328,11 +391,12 @@ export const layer = Layer.effect(
         )
         return yield* Effect.forEach(direction === "previous" ? rows.toReversed() : rows, decode)
       }),
-      message: Effect.fn("V2Session.message")(function* (input) {
+      message: Effect.fn("Session.message")(function* (input) {
+        yield* result.get(input.sessionID)
         const stored = yield* store.message(input.messageID)
         return stored?.sessionID === input.sessionID ? stored.message : undefined
       }),
-      context: Effect.fn("V2Session.context")(function* (sessionID) {
+      context: Effect.fn("Session.context")(function* (sessionID) {
         yield* result.get(sessionID)
         return yield* store.context(sessionID)
       }),
@@ -342,14 +406,21 @@ export const layer = Layer.effect(
             .get(input.sessionID)
             .pipe(Effect.as(events.aggregateEvents({ aggregateID: input.sessionID, after: input.after }))),
         ).pipe(
-          Stream.filter((event): event is EventV2.CursorEvent<SessionEvent.DurableEvent> =>
+          Stream.filter((event): event is Event.CursorEvent<SessionEvent.DurableEvent> =>
             isDurableSessionEvent(event.event),
           ),
         ),
-      prompt: Effect.fn("V2Session.prompt")((input) =>
+      prompt: Effect.fn("Session.prompt")((input) =>
         Effect.uninterruptible(
           Effect.gen(function* () {
-            yield* result.get(input.sessionID)
+            const recorded = yield* result.get(input.sessionID)
+            if (!GTEAuth.canAct(auth, recorded.authorityID)) {
+              return yield* new GTEAuth.MutationDeniedError({
+                sessionID: input.sessionID,
+                principalID: auth.principalID,
+                authorityID: recorded.authorityID,
+              })
+            }
             const returnPrompt = Effect.fnUntraced(function* (admitted: SessionInput.Admitted) {
               if (input.resume !== false) yield* enqueueWake(input.sessionID)
               return admitted
@@ -375,27 +446,19 @@ export const layer = Layer.effect(
           }),
         ),
       ),
-      shell: Effect.fn("V2Session.shell")(function* () {
+      shell: Effect.fn("Session.shell")(function* () {
         return yield* new OperationUnavailableError({ operation: "shell" })
       }),
-      skill: Effect.fn("V2Session.skill")(function* () {
+      skill: Effect.fn("Session.skill")(function* () {
         return yield* new OperationUnavailableError({ operation: "skill" })
       }),
-      switchAgent: Effect.fn("V2Session.switchAgent")(function* () {
+      switchAgent: Effect.fn("Session.switchAgent")(function* () {
         return yield* new OperationUnavailableError({ operation: "switchAgent" })
       }),
-      switchModel: Effect.fn("V2Session.switchModel")(function* () {
+      switchModel: Effect.fn("Session.switchModel")(function* () {
         return yield* new OperationUnavailableError({ operation: "switchModel" })
       }),
-      compact: Effect.fn("V2Session.compact")(function* (input) {
-        yield* result.get(input.sessionID)
-        return yield* new OperationUnavailableError({ operation: "compact" })
-      }),
-      wait: Effect.fn("V2Session.wait")(function* (sessionID) {
-        yield* result.get(sessionID)
-        return yield* new OperationUnavailableError({ operation: "wait" })
-      }),
-      resume: Effect.fn("V2Session.resume")(function* (sessionID) {
+      resume: Effect.fn("Session.resume")(function* (sessionID) {
         yield* result.get(sessionID)
         yield* execution.resume(sessionID)
       }),
@@ -406,7 +469,7 @@ export const layer = Layer.effect(
 )
 
 const DefaultDatabase = Database.defaultLayer
-const DefaultEvents = EventV2.layer.pipe(Layer.provide(DefaultDatabase))
+const DefaultEvents = Event.layer.pipe(Layer.provide(DefaultDatabase))
 const DefaultProjector = SessionProjector.layer.pipe(Layer.provide(DefaultEvents), Layer.provide(DefaultDatabase))
 const DefaultStore = SessionStore.layer.pipe(Layer.provide(DefaultDatabase))
 export const defaultLayer = layer.pipe(
@@ -417,7 +480,8 @@ export const defaultLayer = layer.pipe(
       DefaultProjector,
       DefaultStore,
       SessionExecution.noopLayer,
-      ProjectV2.defaultLayer,
+      Project.defaultLayer,
+      GTEAuth.defaultLayer,
     ),
   ),
   Layer.orDie,

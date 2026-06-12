@@ -1,15 +1,11 @@
 export * as MoveSession from "./move-session"
 
-import { Context, DateTime, Effect, Layer, Schema } from "effect"
-import { EventV2 } from "../event"
-import { Git } from "../git"
-import { Location } from "../location"
-import { ProjectV2 } from "../project"
-import { SessionV2 } from "../session"
-import { SessionEvent } from "../session/event"
+import { Context, Effect, Layer, Schema } from "effect"
+import { Project } from "../project"
+import { Session } from "../session"
 import { SessionSchema } from "../session/schema"
-import { AbsolutePath, RelativePath } from "../schema"
-import path from "path"
+import { AbsolutePath } from "../schema"
+import { GTEAuth } from "../gte-auth"
 
 export const Destination = Schema.Struct({
   directory: AbsolutePath,
@@ -26,8 +22,8 @@ export type Input = typeof Input.Type
 export class DestinationProjectMismatchError extends Schema.TaggedErrorClass<DestinationProjectMismatchError>()(
   "MoveSession.DestinationProjectMismatchError",
   {
-    expected: ProjectV2.ID,
-    actual: ProjectV2.ID,
+    expected: Project.ID,
+    actual: Project.ID,
   },
 ) {}
 
@@ -51,8 +47,15 @@ export class ResetSourceChangesError extends Schema.TaggedErrorClass<ResetSource
   },
 ) {}
 
+export class OperationUnavailableError extends Schema.TaggedErrorClass<OperationUnavailableError>()(
+  "MoveSession.OperationUnavailableError",
+  { operation: Schema.Literal("moveSession") },
+) {}
+
 export type Error =
-  | SessionV2.NotFoundError
+  | Session.NotFoundError
+  | GTEAuth.ReadDeniedError
+  | OperationUnavailableError
   | DestinationProjectMismatchError
   | CaptureChangesError
   | ApplyChangesError
@@ -62,58 +65,16 @@ export interface Interface {
   readonly moveSession: (input: Input) => Effect.Effect<void, Error>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/ControlPlaneMoveSession") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/ControlPlaneMoveSession") {}
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const git = yield* Git.Service
-    const events = yield* EventV2.Service
-    const project = yield* ProjectV2.Service
-    const session = yield* SessionV2.Service
+    const session = yield* Session.Service
 
     const moveSession = Effect.fn("MoveSession.moveSession")(function* (input: Input) {
-      const current = yield* session.get(input.sessionID)
-      const directory = AbsolutePath.make(input.destination.directory)
-      if (current.location.directory === directory) return
-
-      const source = yield* project.resolve(current.location.directory)
-      const destination = yield* project.resolve(directory)
-      if (current.projectID !== destination.id) {
-        return yield* new DestinationProjectMismatchError({ expected: current.projectID, actual: destination.id })
-      }
-
-      const patch =
-        input.moveChanges && source.directory !== destination.directory
-          ? yield* git
-              .patch(current.location.directory)
-              .pipe(Effect.mapError((error) => new CaptureChangesError({ message: error.message })))
-          : ""
-      if (patch) {
-        yield* git
-          .applyPatch({ directory, patch })
-          .pipe(Effect.mapError((error) => new ApplyChangesError({ message: error.message })))
-      }
-
-      yield* events.publish(SessionEvent.Moved, {
-        sessionID: input.sessionID,
-        location: Location.Ref.make({ directory }),
-        subdirectory: RelativePath.make(path.relative(destination.directory, directory).replaceAll("\\", "/")),
-        timestamp: yield* DateTime.now,
-      })
-
-      if (patch) {
-        yield* git.softResetChanges(current.location.directory).pipe(
-          Effect.mapError(
-            (error) =>
-              new ResetSourceChangesError({
-                directory: current.location.directory,
-                message: error.message,
-                cause: error.cause,
-              }),
-          ),
-        )
-      }
+      yield* session.get(input.sessionID)
+      return yield* new OperationUnavailableError({ operation: "moveSession" })
     })
 
     return Service.of({ moveSession })
@@ -121,8 +82,6 @@ export const layer = Layer.effect(
 )
 
 export const defaultLayer = layer.pipe(
-  Layer.provide(Git.defaultLayer),
-  Layer.provide(EventV2.defaultLayer),
-  Layer.provide(ProjectV2.defaultLayer),
-  Layer.provide(SessionV2.defaultLayer),
+  Layer.provide(Project.defaultLayer),
+  Layer.provide(Session.defaultLayer),
 )

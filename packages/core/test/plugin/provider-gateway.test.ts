@@ -1,7 +1,7 @@
 import { describe, expect, mock } from "bun:test"
 import { Effect } from "effect"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { GatewayPlugin } from "@opencode-ai/core/plugin/provider/gateway"
+import { Plugin } from "@gte-agent/core/plugin"
+import { GatewayPlugin } from "@gte-agent/core/plugin/provider/gateway"
 import { it, model } from "./provider-helper"
 
 const gatewayCalls: Record<string, unknown>[] = []
@@ -26,7 +26,7 @@ describe("GatewayPlugin", () => {
   it.effect("creates a Gateway SDK for @ai-sdk/gateway", () =>
     Effect.gen(function* () {
       gatewayCalls.length = 0
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(GatewayPlugin)
       const result = yield* plugin.trigger(
         "aisdk.sdk",
@@ -41,7 +41,7 @@ describe("GatewayPlugin", () => {
   it.effect("passes the model providerID as the Gateway SDK name", () =>
     Effect.gen(function* () {
       gatewayCalls.length = 0
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(GatewayPlugin)
 
       const result = yield* plugin.trigger(
@@ -62,7 +62,7 @@ describe("GatewayPlugin", () => {
   it.effect("matches Vercel AI Gateway models by their @ai-sdk/gateway package", () =>
     Effect.gen(function* () {
       gatewayCalls.length = 0
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       yield* plugin.add(GatewayPlugin)
 
       for (const modelID of vercelGatewayModels) {

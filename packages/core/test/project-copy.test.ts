@@ -4,19 +4,19 @@ import fs from "fs/promises"
 import path from "path"
 import { eq } from "drizzle-orm"
 import { Effect, Fiber, Layer, Stream } from "effect"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { FSUtil } from "@opencode-ai/core/fs-util"
-import { Git } from "@opencode-ai/core/git"
-import { Database } from "@opencode-ai/core/database/database"
-import { EventV2 } from "@opencode-ai/core/event"
-import { Project } from "@opencode-ai/core/project"
-import { ProjectDirectoryTable, ProjectTable } from "@opencode-ai/core/project/sql"
-import { ProjectCopy } from "@opencode-ai/core/project/copy"
+import { AbsolutePath } from "@gte-agent/core/schema"
+import { FSUtil } from "@gte-agent/core/fs-util"
+import { Git } from "@gte-agent/core/git"
+import { Database } from "@gte-agent/core/database/database"
+import { Event } from "@gte-agent/core/event"
+import { Project } from "@gte-agent/core/project"
+import { ProjectDirectoryTable, ProjectTable } from "@gte-agent/core/project/sql"
+import { ProjectCopy } from "@gte-agent/core/project/copy"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
 
 const databaseLayer = Database.layerFromPath(":memory:")
-const eventLayer = EventV2.layer.pipe(Layer.provide(databaseLayer))
+const eventLayer = Event.layer.pipe(Layer.provide(databaseLayer))
 const copyLayer = ProjectCopy.layer.pipe(
   Layer.provide(databaseLayer),
   Layer.provide(eventLayer),
@@ -96,7 +96,7 @@ describe("ProjectCopy", () => {
     Effect.gen(function* () {
       const input = yield* setup()
       const copy = yield* ProjectCopy.Service
-      const events = yield* EventV2.Service
+      const events = yield* Event.Service
       const temp = yield* Effect.promise(() => fs.realpath(path.dirname(input.root.path)))
       const parent = abs(path.join(temp, path.basename(input.root.path) + "-copy-created"))
       const target = abs(path.join(parent, "copy"))
@@ -104,7 +104,7 @@ describe("ProjectCopy", () => {
         Effect.promise(() => fs.rm(parent, { recursive: true, force: true })).pipe(Effect.ignore),
       )
       const fiber = yield* events
-        .subscribe(ProjectCopy.Event.Updated)
+        .subscribe(ProjectCopy.ProjectCopyEvent.Updated)
         .pipe(Stream.take(1), Stream.runCollect, Effect.forkScoped)
       yield* Effect.yieldNow
 
@@ -200,8 +200,8 @@ describe("ProjectCopy", () => {
     Effect.gen(function* () {
       const input = yield* setup()
       const copy = yield* ProjectCopy.Service
-      const events = yield* EventV2.Service
-      const event = yield* events.subscribe(ProjectCopy.Event.Updated).pipe(
+      const events = yield* Event.Service
+      const event = yield* events.subscribe(ProjectCopy.ProjectCopyEvent.Updated).pipe(
         Stream.take(1),
         Stream.runCollect,
         Effect.forkScoped,
@@ -222,14 +222,14 @@ describe("ProjectCopy", () => {
     Effect.gen(function* () {
       const input = yield* setup()
       const copy = yield* ProjectCopy.Service
-      const events = yield* EventV2.Service
+      const events = yield* Event.Service
       const target = abs(`${input.root.path}-copy-external`)
       yield* Effect.addFinalizer(() =>
         Effect.promise(() => fs.rm(target, { recursive: true, force: true })).pipe(Effect.ignore),
       )
       yield* Effect.promise(() => $`git worktree add --detach ${target} HEAD`.cwd(input.root.path).quiet())
       const fiber = yield* events
-        .subscribe(ProjectCopy.Event.Updated)
+        .subscribe(ProjectCopy.ProjectCopyEvent.Updated)
         .pipe(Stream.take(1), Stream.runCollect, Effect.forkScoped)
       yield* Effect.yieldNow
 

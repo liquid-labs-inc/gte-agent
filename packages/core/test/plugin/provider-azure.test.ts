@@ -1,43 +1,25 @@
 import { describe, expect } from "bun:test"
-import { Effect, Layer } from "effect"
-import { Auth } from "@opencode-ai/core/auth"
-import { Catalog } from "@opencode-ai/core/catalog"
-import { EventV2 } from "@opencode-ai/core/event"
-import { Location } from "@opencode-ai/core/location"
-import { PluginV2 } from "@opencode-ai/core/plugin"
-import { AccountPlugin } from "@opencode-ai/core/plugin/account"
-import { AzurePlugin } from "@opencode-ai/core/plugin/provider/azure"
-import { ProviderV2 } from "@opencode-ai/core/provider"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { location } from "../fixture/location"
-import { testEffect } from "../lib/effect"
+import { Effect } from "effect"
+import { Catalog } from "@gte-agent/core/catalog"
+import { Plugin } from "@gte-agent/core/plugin"
+import { AzurePlugin } from "@gte-agent/core/plugin/provider/azure"
+import { Provider } from "@gte-agent/core/provider"
 import { fakeSelectorSdk, it, model, npmLayer, provider, withEnv } from "./provider-helper"
-
-const itWithAccount = testEffect(
-  Catalog.locationLayer.pipe(
-    Layer.provideMerge(Auth.defaultLayer),
-    Layer.provideMerge(EventV2.defaultLayer),
-    Layer.provideMerge(
-      Layer.succeed(Location.Service, Location.Service.of(location({ directory: AbsolutePath.make("test") }))),
-    ),
-    Layer.provideMerge(npmLayer),
-  ),
-)
 
 describe("AzurePlugin", () => {
   it.effect("resolves resourceName from env", () =>
     withEnv({ AZURE_RESOURCE_NAME: "from-env" }, () =>
       Effect.gen(function* () {
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         const catalog = yield* Catalog.Service
         yield* plugin.add(AzurePlugin)
         const transform = yield* catalog.transform()
         yield* transform((catalog) => {
-          catalog.provider.update(ProviderV2.ID.azure, (item) => {
+          catalog.provider.update(Provider.ID.azure, (item) => {
             item.api = { type: "aisdk", package: "@ai-sdk/azure" }
           })
         })
-        expect((yield* catalog.provider.get(ProviderV2.ID.azure)).request.body.resourceName).toBe("from-env")
+        expect((yield* catalog.provider.get(Provider.ID.azure)).request.body.resourceName).toBe("from-env")
       }),
     ),
   )
@@ -45,7 +27,7 @@ describe("AzurePlugin", () => {
   it.effect("keeps explicit resourceName over env and ignores other providers", () =>
     withEnv({ AZURE_RESOURCE_NAME: "from-env" }, () =>
       Effect.gen(function* () {
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         const catalog = yield* Catalog.Service
         yield* plugin.add(AzurePlugin)
         const transform = yield* catalog.transform()
@@ -58,58 +40,18 @@ describe("AzurePlugin", () => {
             item.api = azure.api
             item.request = azure.request
           })
-          catalog.provider.update(ProviderV2.ID.openai, () => {})
+          catalog.provider.update(Provider.ID.openai, () => {})
         })
-        expect((yield* catalog.provider.get(ProviderV2.ID.azure)).request.body.resourceName).toBe("from-config")
-        expect((yield* catalog.provider.get(ProviderV2.ID.openai)).request.body.resourceName).toBeUndefined()
+        expect((yield* catalog.provider.get(Provider.ID.azure)).request.body.resourceName).toBe("from-config")
+        expect((yield* catalog.provider.get(Provider.ID.openai)).request.body.resourceName).toBeUndefined()
       }),
-    ),
-  )
-
-  itWithAccount.effect("prefers account resourceName over env", () =>
-    withEnv(
-      {
-        AZURE_RESOURCE_NAME: "from-env",
-      },
-      () =>
-        Effect.gen(function* () {
-          const plugin = yield* PluginV2.Service
-          const accounts = yield* Auth.Service
-          const catalog = yield* Catalog.Service
-          const events = yield* EventV2.Service
-          yield* accounts.create({
-            serviceID: Auth.ServiceID.make("azure"),
-            credential: new Auth.ApiKeyCredential({
-              type: "api",
-              key: "key",
-              metadata: { resourceName: "from-account" },
-            }),
-          })
-          yield* plugin.add({
-            ...AccountPlugin,
-            effect: AccountPlugin.effect.pipe(
-              Effect.provideService(Auth.Service, accounts),
-              Effect.provideService(Catalog.Service, catalog),
-              Effect.provideService(EventV2.Service, events),
-              Effect.provideService(PluginV2.Service, plugin),
-            ),
-          })
-          yield* plugin.add(AzurePlugin)
-          const transform = yield* catalog.transform()
-          yield* transform((catalog) => {
-            catalog.provider.update(ProviderV2.ID.azure, (item) => {
-              item.api = { type: "aisdk", package: "@ai-sdk/azure" }
-            })
-          })
-          expect((yield* catalog.provider.get(ProviderV2.ID.azure)).request.body.resourceName).toBe("from-account")
-        }),
     ),
   )
 
   it.effect("falls back to env when configured resourceName is blank", () =>
     withEnv({ AZURE_RESOURCE_NAME: "from-env" }, () =>
       Effect.gen(function* () {
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         const catalog = yield* Catalog.Service
         yield* plugin.add(AzurePlugin)
         const transform = yield* catalog.transform()
@@ -123,7 +65,7 @@ describe("AzurePlugin", () => {
             item.request = azure.request
           })
         })
-        expect((yield* catalog.provider.get(ProviderV2.ID.azure)).request.body.resourceName).toBe("from-env")
+        expect((yield* catalog.provider.get(Provider.ID.azure)).request.body.resourceName).toBe("from-env")
       }),
     ),
   )
@@ -131,7 +73,7 @@ describe("AzurePlugin", () => {
   it.effect("falls back to env when configured resourceName is whitespace", () =>
     withEnv({ AZURE_RESOURCE_NAME: "from-env" }, () =>
       Effect.gen(function* () {
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         const catalog = yield* Catalog.Service
         yield* plugin.add(AzurePlugin)
         const transform = yield* catalog.transform()
@@ -145,7 +87,7 @@ describe("AzurePlugin", () => {
             item.request = azure.request
           })
         })
-        expect((yield* catalog.provider.get(ProviderV2.ID.azure)).request.body.resourceName).toBe("from-env")
+        expect((yield* catalog.provider.get(Provider.ID.azure)).request.body.resourceName).toBe("from-env")
       }),
     ),
   )
@@ -153,7 +95,7 @@ describe("AzurePlugin", () => {
   it.effect("allows configured baseURL without resourceName", () =>
     withEnv({ AZURE_RESOURCE_NAME: undefined }, () =>
       Effect.gen(function* () {
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         yield* plugin.add(AzurePlugin)
         const result = yield* plugin.trigger(
           "aisdk.sdk",
@@ -172,7 +114,7 @@ describe("AzurePlugin", () => {
   it.effect("rejects missing resourceName when baseURL is not configured", () =>
     withEnv({ AZURE_RESOURCE_NAME: undefined }, () =>
       Effect.gen(function* () {
-        const plugin = yield* PluginV2.Service
+        const plugin = yield* Plugin.Service
         yield* plugin.add(AzurePlugin)
         const exit = yield* plugin
           .trigger(
@@ -188,7 +130,7 @@ describe("AzurePlugin", () => {
 
   it.effect("selects chat only for completion URLs", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(AzurePlugin)
       yield* plugin.trigger(
@@ -202,7 +144,7 @@ describe("AzurePlugin", () => {
 
   it.effect("selects chat from per-call useCompletionUrls", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(AzurePlugin)
       yield* plugin.trigger(
@@ -216,7 +158,7 @@ describe("AzurePlugin", () => {
 
   it.effect("ignores model useCompletionUrls when per-call option is unset", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(AzurePlugin)
       yield* plugin.trigger(
@@ -236,7 +178,7 @@ describe("AzurePlugin", () => {
 
   it.effect("uses the legacy Azure selector order and provider guard", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       yield* plugin.add(AzurePlugin)
       yield* plugin.trigger(
@@ -256,7 +198,7 @@ describe("AzurePlugin", () => {
 
   it.effect("falls back through the legacy Azure selector order", () =>
     Effect.gen(function* () {
-      const plugin = yield* PluginV2.Service
+      const plugin = yield* Plugin.Service
       const calls: string[] = []
       const make = (method: string) => (id: string) => {
         calls.push(`${method}:${id}`)

@@ -1,16 +1,16 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { CommandV2 } from "@opencode-ai/core/command"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Command } from "@gte-agent/core/command"
+import { Model } from "@gte-agent/core/model"
+import { Provider } from "@gte-agent/core/provider"
 import { testEffect } from "./lib/effect"
 
-const it = testEffect(CommandV2.locationLayer)
+const it = testEffect(Command.runtimeScopeLayer)
 
-describe("CommandV2", () => {
+describe("Command", () => {
   it.effect("applies command transforms and preserves later overrides", () =>
     Effect.gen(function* () {
-      const command = yield* CommandV2.Service
+      const command = yield* Command.Service
       const transform = yield* command.transform()
       yield* transform((editor) => {
         editor.update("review", (command) => {
@@ -20,34 +20,34 @@ describe("CommandV2", () => {
         editor.update("review", (command) => {
           command.template = "Second"
           command.model = {
-            id: ModelV2.ID.make("claude"),
-            providerID: ProviderV2.ID.make("anthropic"),
-            variant: ModelV2.VariantID.make("high"),
+            id: Model.ID.make("claude"),
+            providerID: Provider.ID.make("anthropic"),
+            variant: Model.VariantID.make("high"),
           }
         })
       })
 
       expect(yield* command.get("review")).toEqual(
-        new CommandV2.Info({
+        new Command.Info({
           name: "review",
           template: "Second",
           description: "Review code",
           model: {
-            id: ModelV2.ID.make("claude"),
-            providerID: ProviderV2.ID.make("anthropic"),
-            variant: ModelV2.VariantID.make("high"),
+            id: Model.ID.make("claude"),
+            providerID: Provider.ID.make("anthropic"),
+            variant: Model.VariantID.make("high"),
           },
         }),
       )
       expect(yield* command.list()).toEqual([
-        new CommandV2.Info({
+        new Command.Info({
           name: "review",
           template: "Second",
           description: "Review code",
           model: {
-            id: ModelV2.ID.make("claude"),
-            providerID: ProviderV2.ID.make("anthropic"),
-            variant: ModelV2.VariantID.make("high"),
+            id: Model.ID.make("claude"),
+            providerID: Provider.ID.make("anthropic"),
+            variant: Model.VariantID.make("high"),
           },
         }),
       ])

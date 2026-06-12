@@ -1,0 +1,7 @@
+# Solid JSX transform for `bun run`/`bun test` invoked from this package.
+# The `gta` bin entry (src/index.ts) also registers the transform plugin at
+# runtime so the CLI works when launched from any working directory.
+preload = ["@opentui/solid/preload"]
+
+[test]
+preload = ["@opentui/solid/preload"]

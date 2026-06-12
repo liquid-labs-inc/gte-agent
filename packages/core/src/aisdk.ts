@@ -2,10 +2,10 @@ export * as AISDK from "./aisdk"
 
 import type { LanguageModelV3 } from "@ai-sdk/provider"
 import { Cause, Context, Effect, Layer, Schema } from "effect"
-import { ModelV2 } from "./model"
-import { EventV2 } from "./event"
-import { PluginV2 } from "./plugin"
-import { ProviderV2 } from "./provider"
+import { Model } from "./model"
+import { Event } from "./event"
+import { Plugin } from "./plugin"
+import { Provider } from "./provider"
 
 type SDK = any
 
@@ -57,7 +57,7 @@ function wrapSSE(res: Response, ms: number, ctl: AbortController) {
   })
 }
 
-function prepareOptions(model: ModelV2.Info, pkg: string) {
+function prepareOptions(model: Model.Info, pkg: string) {
   const options: Record<string, any> = {
     name: model.providerID,
     ...(model.api.type === "aisdk" ? (model.api.settings ?? {}) : {}),
@@ -108,24 +108,24 @@ function prepareOptions(model: ModelV2.Info, pkg: string) {
 }
 
 export class InitError extends Schema.TaggedErrorClass<InitError>()("AISDK.InitError", {
-  providerID: ProviderV2.ID,
+  providerID: Provider.ID,
   cause: Schema.Defect,
 }) {}
 
-function initError(providerID: ProviderV2.ID) {
+function initError(providerID: Provider.ID) {
   return Effect.catchCause((cause) => Effect.fail(new InitError({ providerID, cause: Cause.squash(cause) })))
 }
 
 export interface Interface {
-  readonly language: (model: ModelV2.Info) => Effect.Effect<LanguageModelV3, InitError>
+  readonly language: (model: Model.Info) => Effect.Effect<LanguageModelV3, InitError>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/AISDK") {}
+export class Service extends Context.Service<Service, Interface>()("@gte-agent/AISDK") {}
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const plugin = yield* PluginV2.Service
+    const plugin = yield* Plugin.Service
     const languages = new Map<string, LanguageModelV3>()
     const sdks = new Map<string, SDK>()
 
@@ -178,4 +178,4 @@ export const layer = Layer.effect(
   }),
 )
 
-export const defaultLayer = layer.pipe(Layer.provide(PluginV2.locationLayer.pipe(Layer.provide(EventV2.defaultLayer))))
+export const defaultLayer = layer.pipe(Layer.provide(Plugin.runtimeScopeLayer.pipe(Layer.provide(Event.defaultLayer))))
