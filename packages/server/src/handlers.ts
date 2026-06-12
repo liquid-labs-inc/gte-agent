@@ -1,5 +1,6 @@
 import { Session } from "@gte-agent/core/session"
 import { Effect, Layer } from "effect"
+import { workflowHandlers } from "./handlers/workflow"
 import { authProviderHandlers } from "./handlers/auth-provider"
 import { modelsHandlers } from "./handlers/models"
 import { messageHandlers } from "./handlers/message"
@@ -32,6 +33,11 @@ import { SystemContextBuiltIns } from "@gte-agent/core/system-context-builtins"
 import { ApplicationTools } from "@gte-agent/core/tool/application-tools"
 import { GteTools } from "@gte-agent/core/tool/gte/tools"
 import { ToolRegistry } from "@gte-agent/core/tool/registry"
+import { WorkflowTool } from "@gte-agent/core/tool/workflow"
+import { BackgroundJob } from "@gte-agent/core/background-job"
+import { Config } from "@gte-agent/core/config"
+import { WorkflowExecutor } from "@gte-agent/core/workflow/executor"
+import { WorkflowRuntime } from "@gte-agent/core/workflow/runtime"
 
 // An invalid GTE_AGENT_GTE_ENV fails server startup with a clear ConfigError
 // listing the valid environment names (owned by the gte-ts GteEnvKey type).
@@ -143,6 +149,43 @@ const modelSelection = ModelSelection.defaultLayer.pipe(
   Layer.orDie,
 )
 
+// Config for the workflow kill switch (flag + `workflows.enabled`), read from
+// the server's working-directory config files like the rest of core's Config.
+const config = Config.runtimeScopeLayer.pipe(
+  Layer.provide(runtimeScope),
+  Layer.provide(FSUtil.defaultLayer),
+  Layer.provide(Global.defaultLayer),
+  Layer.orDie,
+)
+
+// Workflow agents run as real child sessions, so the executor takes the same
+// routed Session service and curated catalog the runner uses; the runtime
+// publishes its durable and ephemeral events onto the shared event bus.
+const workflowExecutor = WorkflowExecutor.layer.pipe(
+  Layer.provide(routedSessions),
+  Layer.provide(modelCatalog),
+  Layer.orDie,
+)
+const workflowRuntime = WorkflowRuntime.layer.pipe(
+  Layer.provide(workflowExecutor),
+  Layer.provide(handlerEvents),
+  Layer.provide(Global.defaultLayer),
+  Layer.orDie,
+)
+// Dynamic workflow orchestration, gated on the kill switch: the layer
+// contributes the tool into the same `toolRegistry` the runner advertises only
+// when GTE_AGENT_DISABLE_WORKFLOWS is unset and `workflows.enabled` is not
+// false, so without this wiring the tool would never reach the running model.
+const workflowTool = WorkflowTool.layer.pipe(
+  Layer.provide(toolRegistry),
+  Layer.provide(workflowRuntime),
+  Layer.provide(BackgroundJob.defaultLayer),
+  Layer.provide(SessionStore.layer),
+  Layer.provide(config),
+  Layer.provide(Database.defaultLayer),
+  Layer.orDie,
+)
+
 export const gteAgentHandlers = Layer.mergeAll(
   healthHandlers,
   sessionHandlers,
@@ -151,4 +194,7 @@ export const gteAgentHandlers = Layer.mergeAll(
   gteDataHandlers.pipe(Layer.provide(gteData)),
   authProviderHandlers.pipe(Layer.provide(authStore)),
   modelsHandlers.pipe(Layer.provide(modelSelection)),
+  workflowHandlers.pipe(Layer.provide(workflowRuntime), Layer.provide(config)),
+  // effectDiscard: contributing the workflow tool is the build's only effect.
+  workflowTool,
 ).pipe(Layer.provide(routedSessions), Layer.provide(panelManager), Layer.provide(handlerEvents))
