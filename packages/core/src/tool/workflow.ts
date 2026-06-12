@@ -2,6 +2,7 @@ export * as WorkflowTool from "./workflow"
 
 import { Tool, ToolFailure, toolText } from "@gte-agent/llm"
 import { Cause, Effect, Layer, Schema } from "effect"
+import { BackgroundJob } from "../background-job"
 import { SessionStore } from "../session/store"
 import { WorkflowExecutor } from "../workflow/executor"
 import { WorkflowRuntime } from "../workflow/runtime"
@@ -73,6 +74,7 @@ export const layer = Layer.effectDiscard(
     if (!(yield* WorkflowRuntime.enabled)) return
     const registry = yield* ToolRegistry.Service
     const runtime = yield* WorkflowRuntime.Service
+    const background = yield* BackgroundJob.Service
     const store = yield* SessionStore.Service
 
     yield* registry.contribute((editor) =>
@@ -92,7 +94,26 @@ export const layer = Layer.effectDiscard(
               script: parameters.script,
               ...(parameters.args === undefined ? {} : { args: parameters.args }),
             })
-            if (parameters.background) return { runID: started.id, scriptPath: started.scriptPath }
+            if (parameters.background) {
+              // Only actual background runs join the registry; completion then
+              // surfaces the way background jobs already do, while the run owns
+              // its own lifecycle through the runtime.
+              yield* background.start({
+                id: started.id,
+                type: WorkflowRuntime.JOB_TYPE,
+                title: parameters.name,
+                metadata: { sessionID, scriptPath: started.scriptPath, background: true },
+                run: runtime.wait(started.id).pipe(
+                  Effect.flatMap((finished) =>
+                    finished?.status === "completed"
+                      ? Effect.succeed(finished.result ?? "")
+                      : Effect.fail(new Error(finished?.error ?? `Workflow ${finished?.status ?? "failed"}`)),
+                  ),
+                  Effect.onInterrupt(() => runtime.stop(started.id).pipe(Effect.asVoid)),
+                ),
+              })
+              return { runID: started.id, scriptPath: started.scriptPath }
+            }
             const finished = yield* runtime.wait(started.id)
             if (finished === undefined || finished.status !== "completed")
               return yield* new ToolFailure({

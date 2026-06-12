@@ -59,12 +59,12 @@ const harness = <A, E>(
     const runtime = WorkflowRuntime.layerWith({ snapshotTickMs: 20 }).pipe(
       Layer.provide(events),
       Layer.provide(Global.layerWith({ data: tmp.path })),
-      Layer.provide(BackgroundJob.layer),
       Layer.provide(Layer.succeed(WorkflowExecutor.Service, WorkflowExecutor.Service.of({ execute: echo }))),
     )
     const tool = WorkflowTool.layer.pipe(
       Layer.provide(registry),
       Layer.provide(runtime),
+      Layer.provide(BackgroundJob.layer),
       Layer.provide(sessionStore),
       Layer.provide(configWith(options?.config ?? Config.Info.make({}))),
     )
