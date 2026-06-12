@@ -227,6 +227,33 @@ describe("Catalog", () => {
     }),
   )
 
+  it.effect("carries model variants through transforms without touching the request body", () =>
+    Effect.gen(function* () {
+      const catalog = yield* Catalog.Service
+      const providerID = Provider.ID.make("test")
+      const modelID = Model.ID.make("model")
+      const variant = {
+        id: Model.VariantID.make("high"),
+        headers: {},
+        body: { providerOptions: { anthropic: { thinking: { type: "adaptive", effort: "high" } } } },
+      }
+      const transform = yield* catalog.transform()
+
+      yield* transform((catalog) => {
+        catalog.provider.update(providerID, (provider) => {
+          provider.request.body.provider = true
+        })
+        catalog.model.update(providerID, modelID, (model) => {
+          model.variants.push(variant)
+        })
+      })
+
+      const model = yield* catalog.model.get(providerID, modelID)
+      expect(model.variants).toEqual([variant])
+      expect(model.request.body).toEqual({ provider: true })
+    }),
+  )
+
   it.effect("falls back to newest available model when no default is configured", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service

@@ -19,6 +19,30 @@ import { Provider } from "./provider"
 
 const released = (date: string) => DateTime.makeUnsafe(Date.parse(date))
 
+// Reasoning-effort variants (Milestone 8). Each variant body carries the
+// exact `providerOptions.anthropic.thinking` payload; the session runner
+// merges it into the LLM request without interpreting effort names, and the
+// Anthropic protocol forces `display: "summarized"` for generations that
+// omit thinking by default.
+const adaptiveVariant = (effort: string) => ({
+  id: Model.VariantID.make(effort),
+  headers: {},
+  body: { providerOptions: { anthropic: { thinking: { type: "adaptive", effort } } } },
+})
+
+const adaptiveVariants = () => ["low", "medium", "high", "xhigh", "max"].map(adaptiveVariant)
+
+// Legacy budgeted thinking for models without adaptive efforts. Budgets match
+// the upstream opencode tiers: min(16_000, output / 2 - 1) for high and
+// min(31_999, output - 1) for max — both 64K-output models land on the caps.
+const budgetVariant = (id: string, budgetTokens: number) => ({
+  id: Model.VariantID.make(id),
+  headers: {},
+  body: { providerOptions: { anthropic: { thinking: { type: "enabled", budgetTokens } } } },
+})
+
+const budgetVariants = () => [budgetVariant("high", 16_000), budgetVariant("max", 31_999)]
+
 const model = (input: {
   providerID: Provider.ID
   id: string
@@ -28,6 +52,7 @@ const model = (input: {
   cost: (typeof Model.Cost.Type)[]
   limit: { context: number; input?: number; output: number }
   input?: string[]
+  variants?: Model.Info["variants"]
 }) =>
   new Model.Info({
     id: Model.ID.make(input.id),
@@ -45,7 +70,7 @@ const model = (input: {
       output: ["text"],
     },
     request: { headers: {}, body: {} },
-    variants: [],
+    variants: input.variants ?? [],
     time: { released: released(input.released) },
     cost: input.cost,
     status: "active",
@@ -78,6 +103,7 @@ const anthropic = () => {
         released: "2026-06-09",
         cost: [{ input: 10, output: 50, cache: { read: 1, write: 12.5 } }],
         limit: { context: 1_000_000, output: 128_000 },
+        variants: adaptiveVariants(),
       }),
       model({
         providerID,
@@ -87,6 +113,7 @@ const anthropic = () => {
         released: "2026-05-28",
         cost: [{ input: 5, output: 25, cache: { read: 0.5, write: 6.25 } }],
         limit: { context: 1_000_000, output: 128_000 },
+        variants: adaptiveVariants(),
       }),
       model({
         providerID,
@@ -96,6 +123,7 @@ const anthropic = () => {
         released: "2026-02-17",
         cost: [{ input: 3, output: 15, cache: { read: 0.3, write: 3.75 } }],
         limit: { context: 1_000_000, output: 64_000 },
+        variants: budgetVariants(),
       }),
       model({
         providerID,
@@ -105,6 +133,7 @@ const anthropic = () => {
         released: "2025-10-15",
         cost: [{ input: 1, output: 5, cache: { read: 0.1, write: 1.25 } }],
         limit: { context: 200_000, output: 64_000 },
+        variants: budgetVariants(),
       }),
     ],
   )

@@ -141,6 +141,47 @@ describe("Catalog curated entries", () => {
     }),
   )
 
+  it.effect("defines reasoning-effort variants for the curated Anthropic models", () =>
+    Effect.gen(function* () {
+      const catalog = yield* Catalog.Service
+      const variants = (id: string) =>
+        catalog.model.get(Provider.ID.anthropic, Model.ID.make(id)).pipe(Effect.map((model) => model.variants))
+
+      const adaptive = (effort: string) => ({
+        id: Model.VariantID.make(effort),
+        headers: {},
+        body: { providerOptions: { anthropic: { thinking: { type: "adaptive", effort } } } },
+      })
+      const budgeted = (id: string, budgetTokens: number) => ({
+        id: Model.VariantID.make(id),
+        headers: {},
+        body: { providerOptions: { anthropic: { thinking: { type: "enabled", budgetTokens } } } },
+      })
+
+      // Adaptive-efforts generations carry the full effort ladder; the
+      // protocol forces display: "summarized" for them, so the catalog
+      // payload stays effort-only.
+      const adaptiveLadder = ["low", "medium", "high", "xhigh", "max"].map(adaptive)
+      expect(yield* variants("claude-fable-5")).toEqual(adaptiveLadder)
+      expect(yield* variants("claude-opus-4-8")).toEqual(adaptiveLadder)
+
+      // Sonnet 4.6 and Haiku 4.5 stay on legacy budgeted thinking.
+      const budgetedTiers = [budgeted("high", 16_000), budgeted("max", 31_999)]
+      expect(yield* variants("claude-sonnet-4-6")).toEqual(budgetedTiers)
+      expect(yield* variants("claude-haiku-4-5")).toEqual(budgetedTiers)
+    }),
+  )
+
+  it.effect("leaves the curated OpenAI models without variants", () =>
+    Effect.gen(function* () {
+      const catalog = yield* Catalog.Service
+      for (const id of CURATED.openai) {
+        const model = yield* catalog.model.get(Provider.ID.openai, Model.ID.make(id))
+        expect(model.variants).toEqual([])
+      }
+    }),
+  )
+
   it.effect("defaults to the newest curated model when nothing else is configured", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service
@@ -181,6 +222,9 @@ describe("Catalog curated entries", () => {
       expect(firstAnthropic?.provider).not.toBe(secondAnthropic?.provider)
       expect(firstAnthropic?.models.get(Model.ID.make("claude-fable-5"))).not.toBe(
         secondAnthropic?.models.get(Model.ID.make("claude-fable-5")),
+      )
+      expect(firstAnthropic?.models.get(Model.ID.make("claude-fable-5"))?.variants).not.toBe(
+        secondAnthropic?.models.get(Model.ID.make("claude-fable-5"))?.variants,
       )
     }),
   )
