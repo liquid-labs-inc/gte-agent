@@ -4,6 +4,7 @@ import path from "path"
 import { Effect, Layer, type Scope } from "effect"
 import { Command } from "@gte-agent/core/command"
 import { Config } from "@gte-agent/core/config"
+import { ConfigWorkflows } from "@gte-agent/core/config/workflows"
 import { FSUtil } from "@gte-agent/core/fs-util"
 import { Global } from "@gte-agent/core/global"
 import { RuntimeScope } from "@gte-agent/core/runtime-scope"
@@ -157,7 +158,7 @@ describe("WorkflowCommandPlugin.Plugin", () => {
       run({
         home,
         project,
-        config: Config.Info.make({ workflows: { enabled: false } }),
+        config: Config.Info.make({ workflows: ConfigWorkflows.Info.make({ enabled: false }) }),
         body: (command) =>
           Effect.gen(function* () {
             expect(yield* command.get("workflow")).toBeUndefined()
