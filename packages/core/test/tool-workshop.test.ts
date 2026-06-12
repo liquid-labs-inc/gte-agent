@@ -252,7 +252,7 @@ describe("ToolWorkshopTool remove and list", () => {
         expect(text(removed)).toContain("Removed double_number")
         expect(yield* toolNames).not.toContain("double_number")
         const file = path.join(dirs.home, DynamicToolSaved.DIRECTORY, "double_number.json")
-        expect(yield* Effect.promise(() => fs.exists(file))).toBe(false)
+        expect(yield* Effect.promise(() => Bun.file(file).exists())).toBe(false)
       }).pipe(Effect.provide(layers(dirs))),
     ),
   )

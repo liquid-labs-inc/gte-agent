@@ -18,7 +18,7 @@ const VALID = {
   description: "Doubles a number",
   parameters: { value: { type: "number" } },
   code: "return params.value * 2",
-}
+} as const
 
 const writeTool = (dir: string, file: string, content: string) =>
   Effect.promise(async () => {
