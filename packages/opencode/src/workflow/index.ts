@@ -2,18 +2,18 @@
 // the prompt snippets that opt the model into workflow planning.
 import type { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 
+import { mentionsUltrathink, resolveUltrathinkVariant, ULTRATHINK_VARIANT as VARIANT } from "./ultrathink"
+
 export { WorkflowProtocol } from "./protocol"
 export { WorkflowRegistry } from "./registry"
 export { WorkflowRunner } from "./run"
 export { WorkflowScript } from "./script"
+export { Ultrathink } from "./ultrathink"
 
 export const ENV_DISABLE = "GTE_AGENT_DISABLE_WORKFLOWS"
 
 /** Pseudo-variant selected via `/effort ultrathink`. */
-export const ULTRATHINK_VARIANT = "ultrathink"
-
-/** Matches the ultrathink keyword in a user prompt. */
-export const KEYWORD = /\bultrathink\b/i
+export const ULTRATHINK_VARIANT = VARIANT
 
 export function disabledByEnv(env: Record<string, string | undefined> = process.env): boolean {
   const value = env[ENV_DISABLE]?.toLowerCase()
@@ -34,14 +34,15 @@ export function enabled(
  * `high`, else the model's last (conventionally strongest) variant.
  */
 export function bestVariant(variants: string[]): string | undefined {
-  for (const candidate of ["xhigh", "max", "high"]) {
-    if (variants.includes(candidate)) return candidate
-  }
-  return variants.at(-1)
+  return resolveUltrathinkVariant(variants) ?? variants.at(-1)
 }
 
-export function hasKeyword(parts: readonly { type: string; text?: unknown }[]): boolean {
-  return parts.some((part) => part.type === "text" && typeof part.text === "string" && KEYWORD.test(part.text))
+/** True when a non-synthetic user text part contains the ultrathink keyword. */
+export function hasKeyword(parts: readonly { type: string; text?: unknown; synthetic?: unknown }[]): boolean {
+  return parts.some(
+    (part) =>
+      part.type === "text" && part.synthetic !== true && typeof part.text === "string" && mentionsUltrathink(part.text),
+  )
 }
 
 /** System prompt addition for `/effort ultrathink` (auto-orchestration). */

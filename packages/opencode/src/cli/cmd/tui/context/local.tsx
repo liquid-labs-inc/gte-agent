@@ -14,6 +14,7 @@ import { useArgs } from "./args"
 import { useSDK } from "./sdk"
 import { RGBA } from "@opentui/core"
 import { Filesystem } from "@/util/filesystem"
+import { ultrathinkDisabledByEnv, ultrathinkOptions } from "@/workflow/ultrathink"
 
 export function parseModel(model: string) {
   const [providerID, ...rest] = model.split("/")
@@ -345,7 +346,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           current() {
             const v = this.selected()
             if (!v) return undefined
-            if (!this.list().includes(v)) return undefined
+            if (!this.options().includes(v)) return undefined
             return v
           },
           list() {
@@ -356,6 +357,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             if (!info?.variants) return []
             return Object.keys(info.variants)
           },
+          options() {
+            const config = sync.data.config as { disableWorkflows?: boolean }
+            return ultrathinkOptions(this.list(), !ultrathinkDisabledByEnv() && config.disableWorkflows !== true)
+          },
           set(value: string | undefined) {
             const m = currentModel()
             if (!m) return
@@ -364,7 +369,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             save()
           },
           cycle() {
-            const variants = this.list()
+            const variants = this.options()
             if (variants.length === 0) return
             const current = this.current()
             if (!current) {

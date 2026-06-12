@@ -20,7 +20,14 @@ import { resolveModelInfo, resolveRunTuiConfig, resolveSessionInfo } from "./run
 import { createRuntimeLifecycle } from "./runtime.lifecycle"
 import { recordRunSpanError, setRunSpanAttributes, withRunSpan } from "./otel"
 import { trace } from "./trace"
-import { cycleVariant, formatModelLabel, resolveSavedVariant, resolveVariant, saveVariant } from "./variant.shared"
+import {
+  cycleVariant,
+  effortOptions,
+  formatModelLabel,
+  resolveSavedVariant,
+  resolveVariant,
+  saveVariant,
+} from "./variant.shared"
 import type { LocalReplayAnchor, LocalReplayRow, RunInput, RunPrompt, RunProvider, StreamCommit } from "./types"
 
 /** @internal Exported for testing */
@@ -285,7 +292,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput): Promise<void> {
             }
           }
 
-          state.activeVariant = cycleVariant(state.activeVariant, state.variants)
+          state.activeVariant = cycleVariant(state.activeVariant, effortOptions(state.variants))
           saveVariant(state.model, state.activeVariant)
           setRunSpanAttributes(span, {
             "opencode.model.variant": state.activeVariant,

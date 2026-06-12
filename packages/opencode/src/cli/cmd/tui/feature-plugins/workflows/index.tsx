@@ -1,14 +1,12 @@
 // Ultrathink workflows TUI feature:
 // - /workflows opens the run progress dialog (the centerpiece view)
-// - /effort opens reasoning-effort selection including the ultrathink option
 // - a compact one-line progress indicator for active runs in the sidebar
+// (/effort is an alias of the variants dialog, which offers the ultrathink
+// pseudo-variant via local.model.variant.options())
 import type { TuiPlugin, TuiPluginApi } from "@opencode-ai/plugin/tui"
 import type { InternalTuiPlugin } from "../../plugin/internal"
 import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
-import { useLocal } from "@tui/context/local"
 import { useSDK } from "@tui/context/sdk"
-import { useDialog } from "@tui/ui/dialog"
-import { DialogSelect } from "@tui/ui/dialog-select"
 import { Workflow } from "@/workflow"
 import type { RunSnapshot } from "@/workflow/run"
 import { WorkflowsDialog, formatTokens, statusIcon } from "./dialog"
@@ -19,56 +17,6 @@ function workflowsEnabled(api: TuiPluginApi): boolean {
   if (Workflow.disabledByEnv()) return false
   const config = (api.state.config ?? {}) as { disableWorkflows?: boolean }
   return config.disableWorkflows !== true
-}
-
-export function EffortDialog() {
-  const local = useLocal()
-  const dialog = useDialog()
-
-  const options = createMemo(() => {
-    const variants = local.model.variant.list()
-    return [
-      {
-        value: "default",
-        title: "Default",
-        description: "model default reasoning effort",
-        onSelect: () => {
-          dialog.clear()
-          local.model.variant.set(undefined)
-        },
-      },
-      ...variants.map((variant) => ({
-        value: variant,
-        title: variant,
-        onSelect: () => {
-          dialog.clear()
-          local.model.variant.set(variant)
-        },
-      })),
-      ...(variants.length > 0
-        ? [
-            {
-              value: Workflow.ULTRATHINK_VARIANT,
-              title: "ultrathink",
-              description: "highest reasoning effort + automatic workflow orchestration",
-              onSelect: () => {
-                dialog.clear()
-                local.model.variant.set(Workflow.ULTRATHINK_VARIANT)
-              },
-            },
-          ]
-        : []),
-    ]
-  })
-
-  return (
-    <DialogSelect<string>
-      options={options()}
-      title="Select effort"
-      current={local.model.variant.selected()}
-      flat={true}
-    />
-  )
 }
 
 function SidebarProgress() {
@@ -146,16 +94,6 @@ const tui: TuiPlugin = async (api) => {
             return
           }
           api.ui.dialog.replace(() => <WorkflowsDialog />)
-        },
-      },
-      {
-        name: "effort.select",
-        title: "Select reasoning effort",
-        category: "Model",
-        namespace: "palette",
-        slashName: "effort",
-        run() {
-          api.ui.dialog.replace(() => <EffortDialog />)
         },
       },
     ],

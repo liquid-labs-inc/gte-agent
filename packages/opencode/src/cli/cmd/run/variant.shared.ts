@@ -14,6 +14,24 @@ import { Global } from "@opencode-ai/core/global"
 import { isRecord } from "@/util/record"
 import { createSession, sessionVariant, type RunSession, type SessionMessages } from "./session.shared"
 import type { RunInput, RunProvider } from "./types"
+import {
+  isUltrathink,
+  resolveUltrathinkVariant,
+  ultrathinkDisabledByEnv,
+  ultrathinkOptions,
+  ULTRATHINK_VARIANT,
+} from "@/workflow/ultrathink"
+
+export { isUltrathink, resolveUltrathinkVariant, ULTRATHINK_VARIANT }
+
+/**
+ * Variant options for effort cycling: the model's real variants plus the
+ * `ultrathink` pseudo-variant (highest reasoning + workflow planning) when
+ * workflows are not disabled and the model has a high-effort variant.
+ */
+export function effortOptions(variants: string[]): string[] {
+  return ultrathinkOptions(variants, !ultrathinkDisabledByEnv())
+}
 
 const MODEL_FILE = path.join(Global.Path.state, "model.json")
 
@@ -81,6 +99,12 @@ export function pickVariant(model: RunInput["model"], input: RunSession | Sessio
 function fitVariant(value: string | undefined, variants: string[]): string | undefined {
   if (!value) {
     return undefined
+  }
+
+  // ultrathink is a pseudo-variant resolved server-side; it fits whenever the
+  // model has a high-effort variant to back it.
+  if (isUltrathink(value)) {
+    return resolveUltrathinkVariant(variants) ? value : undefined
   }
 
   if (variants.length === 0 || variants.includes(value)) {

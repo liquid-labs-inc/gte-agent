@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { WorkflowScript } from "@/workflow/script"
+import DEEP_RESEARCH from "@/workflow/deep-research.txt"
 
 describe("workflow script validation", () => {
   test("accepts a plain orchestration script", () => {
@@ -44,6 +45,33 @@ describe("workflow script validation", () => {
 
   test("allows top-level await and return", () => {
     expect(WorkflowScript.validate(`await log("hi"); return 1`).ok).toBe(true)
+  })
+})
+
+describe("workflow script sandbox hardening", () => {
+  test("rejects indirect code evaluation that could smuggle a dynamic import", () => {
+    expect(WorkflowScript.validate(`return new Function('return import("node:fs")')()`).ok).toBe(false)
+    expect(WorkflowScript.validate(`return Function("return process")()`).ok).toBe(false)
+    expect(WorkflowScript.validate(`return eval("1+1")`).ok).toBe(false)
+  })
+
+  test("rejects constructor traversal and globalThis access", () => {
+    expect(WorkflowScript.validate(`return log.constructor("return process")()`).ok).toBe(false)
+    expect(WorkflowScript.validate(`return ({}).constructor`).ok).toBe(false)
+    expect(WorkflowScript.validate(`return globalThis`).ok).toBe(false)
+  })
+
+  test("does not trip on banned tokens inside strings", () => {
+    expect(
+      WorkflowScript.validate(`
+        const r = await agent({ prompt: "explain what a constructor and globalThis are; eval(x) too" })
+        return r.text
+      `).ok,
+    ).toBe(true)
+  })
+
+  test("the bundled deep-research workflow passes validation", () => {
+    expect(WorkflowScript.validate(DEEP_RESEARCH)).toEqual({ ok: true })
   })
 })
 

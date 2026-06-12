@@ -35,6 +35,18 @@ export function validate(script: string): ValidationResult {
     return { ok: false, error: "Workflow scripts cannot use import declarations — agents do all I/O" }
   if (/\bexport\s+/.test(stripped))
     return { ok: false, error: "Workflow scripts cannot use export declarations — return a value instead" }
+  // Defense in depth for the worker sandbox: indirect code evaluation can
+  // smuggle a dynamic import() inside a string the static checks above never
+  // see (e.g. new Function('return import("node:fs")')). Orchestration
+  // scripts have no legitimate use for any of these.
+  if (/\beval\s*\(/.test(stripped))
+    return { ok: false, error: "Workflow scripts cannot use eval — agents do all I/O" }
+  if (/\bFunction\s*\(/.test(stripped) || /\bnew\s+Function\b/.test(stripped))
+    return { ok: false, error: "Workflow scripts cannot use the Function constructor — agents do all I/O" }
+  if (/\.\s*constructor\b/.test(stripped) || /\[\s*["'`]?constructor/.test(stripped))
+    return { ok: false, error: "Workflow scripts cannot access .constructor — agents do all I/O" }
+  if (/\bglobalThis\b/.test(stripped))
+    return { ok: false, error: "Workflow scripts cannot access globalThis — agents do all I/O" }
   try {
     new AsyncFunction("phase", "agent", "map", "log", "args", `"use strict";\n${script}`)
   } catch (error) {
