@@ -145,9 +145,21 @@ const AnthropicToolChoice = Schema.Union([
   Schema.Struct({ type: Schema.tag("tool"), name: Schema.String }),
 ])
 
-const AnthropicThinking = Schema.Struct({
-  type: Schema.tag("enabled"),
-  budget_tokens: Schema.Number,
+const AnthropicThinking = Schema.Union([
+  Schema.Struct({
+    type: Schema.tag("enabled"),
+    budget_tokens: Schema.Number,
+  }),
+  Schema.Struct({
+    type: Schema.tag("adaptive"),
+    display: Schema.optional(Schema.Literal("summarized")),
+  }),
+])
+
+const ANTHROPIC_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const
+
+const AnthropicOutputConfig = Schema.Struct({
+  effort: Schema.Literals(ANTHROPIC_EFFORTS),
 })
 
 const AnthropicBodyFields = {
@@ -163,6 +175,7 @@ const AnthropicBodyFields = {
   top_k: Schema.optional(Schema.Number),
   stop_sequences: optionalArray(Schema.String),
   thinking: Schema.optional(AnthropicThinking),
+  output_config: Schema.optional(AnthropicOutputConfig),
 }
 const AnthropicMessagesBody = Schema.Struct(AnthropicBodyFields)
 export type AnthropicMessagesBody = Schema.Schema.Type<typeof AnthropicMessagesBody>
@@ -481,9 +494,30 @@ const lowerMessages = Effect.fn("AnthropicMessages.lowerMessages")(function* (
 
 const anthropicOptions = (request: LLMRequest) => request.providerOptions?.anthropic
 
+// Claude Fable 5 and Opus 4.7+ generations flip the API default for thinking
+// `display` to "omitted", which streams thinking blocks with empty text.
+// Detection is by model id substring, mirroring the upstream opencode fix
+// (anomalyco/opencode c4bc9029); Fable launched after our pinned revision.
+const omitsThinkingByDefault = (modelID: string) => {
+  const id = modelID.toLowerCase()
+  if (id.includes("fable")) return true
+  const opus = /opus-(\d+)[.-](\d+)(?:[.@-]|$)/.exec(id)
+  if (!opus) return false
+  const major = Number(opus[1])
+  return major > 4 || (major === 4 && Number(opus[2]) >= 7)
+}
+
 const lowerThinking = Effect.fn("AnthropicMessages.lowerThinking")(function* (request: LLMRequest) {
   const thinking = anthropicOptions(request)?.thinking
-  if (!ProviderShared.isRecord(thinking) || thinking.type !== "enabled") return undefined
+  if (!ProviderShared.isRecord(thinking)) return undefined
+  if (thinking.type === "adaptive") {
+    // Force "summarized" so reasoning summaries survive on models that omit
+    // thinking by default; earlier generations already default to it.
+    if (omitsThinkingByDefault(String(request.model.id)))
+      return { type: "adaptive" as const, display: "summarized" as const }
+    return { type: "adaptive" as const }
+  }
+  if (thinking.type !== "enabled") return undefined
   const budget =
     typeof thinking.budgetTokens === "number"
       ? thinking.budgetTokens
@@ -492,6 +526,18 @@ const lowerThinking = Effect.fn("AnthropicMessages.lowerThinking")(function* (re
         : undefined
   if (budget === undefined) return yield* invalid("Anthropic thinking provider option requires budgetTokens")
   return { type: "enabled" as const, budget_tokens: budget }
+})
+
+// Reasoning effort rides inside the adaptive thinking provider option, but
+// the Messages API carries it as `output_config.effort` on the wire.
+const lowerEffort = Effect.fn("AnthropicMessages.lowerEffort")(function* (request: LLMRequest) {
+  const thinking = anthropicOptions(request)?.thinking
+  if (!ProviderShared.isRecord(thinking) || thinking.type !== "adaptive" || thinking.effort === undefined)
+    return undefined
+  const effort = ANTHROPIC_EFFORTS.find((item) => item === thinking.effort)
+  if (effort === undefined)
+    return yield* invalid(`Anthropic adaptive thinking effort must be one of ${ANTHROPIC_EFFORTS.join(", ")}`)
+  return { effort }
 })
 
 const fromRequest = Effect.fn("AnthropicMessages.fromRequest")(function* (request: LLMRequest) {
@@ -532,6 +578,7 @@ const fromRequest = Effect.fn("AnthropicMessages.fromRequest")(function* (reques
     top_k: generation?.topK,
     stop_sequences: generation?.stop,
     thinking: yield* lowerThinking(request),
+    output_config: yield* lowerEffort(request),
   }
 })
 

@@ -17,6 +17,14 @@ const opus48 = AnthropicMessages.route
   .with({ endpoint: { baseURL: "https://api.anthropic.test/v1/" }, auth: Auth.header("x-api-key", "test") })
   .model({ id: "claude-opus-4-8" })
 
+const fable5 = AnthropicMessages.route
+  .with({ endpoint: { baseURL: "https://api.anthropic.test/v1/" }, auth: Auth.header("x-api-key", "test") })
+  .model({ id: "claude-fable-5" })
+
+const sonnet46 = AnthropicMessages.route
+  .with({ endpoint: { baseURL: "https://api.anthropic.test/v1/" }, auth: Auth.header("x-api-key", "test") })
+  .model({ id: "claude-sonnet-4-6" })
+
 const request = LLM.request({
   id: "req_1",
   model,
@@ -54,6 +62,104 @@ describe("Anthropic Messages route", () => {
         max_tokens: 20,
         temperature: 0,
       })
+    }),
+  )
+
+  it.effect("lowers adaptive thinking with forced summarized display for Claude Fable 5", () =>
+    Effect.gen(function* () {
+      const prepared = yield* LLMClient.prepare<AnthropicMessages.AnthropicMessagesBody>(
+        LLM.request({
+          model: fable5,
+          prompt: "Think hard.",
+          cache: "none",
+          providerOptions: { anthropic: { thinking: { type: "adaptive", effort: "xhigh" } } },
+        }),
+      )
+
+      expect(prepared.body.thinking).toEqual({ type: "adaptive", display: "summarized" })
+      expect(prepared.body.output_config).toEqual({ effort: "xhigh" })
+    }),
+  )
+
+  it.effect("lowers adaptive thinking with forced summarized display for Claude Opus 4.8", () =>
+    Effect.gen(function* () {
+      const prepared = yield* LLMClient.prepare<AnthropicMessages.AnthropicMessagesBody>(
+        LLM.request({
+          model: opus48,
+          prompt: "Think hard.",
+          cache: "none",
+          providerOptions: { anthropic: { thinking: { type: "adaptive" } } },
+        }),
+      )
+
+      expect(prepared.body.thinking).toEqual({ type: "adaptive", display: "summarized" })
+      expect(prepared.body.output_config).toBeUndefined()
+    }),
+  )
+
+  it.effect("leaves adaptive display alone for models that default to summarized", () =>
+    Effect.gen(function* () {
+      const prepared = yield* LLMClient.prepare<AnthropicMessages.AnthropicMessagesBody>(
+        LLM.request({
+          model: sonnet46,
+          prompt: "Think hard.",
+          cache: "none",
+          providerOptions: { anthropic: { thinking: { type: "adaptive", effort: "max" } } },
+        }),
+      )
+
+      expect(prepared.body.thinking).toEqual({ type: "adaptive" })
+      expect(prepared.body.output_config).toEqual({ effort: "max" })
+    }),
+  )
+
+  it.effect("keeps the legacy enabled thinking payload unchanged", () =>
+    Effect.gen(function* () {
+      const prepared = yield* LLMClient.prepare<AnthropicMessages.AnthropicMessagesBody>(
+        LLM.request({
+          model,
+          prompt: "Think hard.",
+          cache: "none",
+          generation: { maxTokens: 20 },
+          providerOptions: { anthropic: { thinking: { type: "enabled", budgetTokens: 16_000 } } },
+        }),
+      )
+
+      expect(prepared.body).toEqual({
+        model: "claude-sonnet-4-5",
+        messages: [{ role: "user", content: [{ type: "text", text: "Think hard." }] }],
+        stream: true,
+        max_tokens: 20,
+        thinking: { type: "enabled", budget_tokens: 16_000 },
+      })
+    }),
+  )
+
+  it.effect("rejects enabled thinking without a budget", () =>
+    Effect.gen(function* () {
+      const error = yield* LLMClient.prepare(
+        LLM.request({
+          model,
+          prompt: "Think hard.",
+          providerOptions: { anthropic: { thinking: { type: "enabled" } } },
+        }),
+      ).pipe(Effect.flip)
+
+      expect(error.message).toContain("Anthropic thinking provider option requires budgetTokens")
+    }),
+  )
+
+  it.effect("rejects adaptive thinking with an unknown effort", () =>
+    Effect.gen(function* () {
+      const error = yield* LLMClient.prepare(
+        LLM.request({
+          model: fable5,
+          prompt: "Think hard.",
+          providerOptions: { anthropic: { thinking: { type: "adaptive", effort: "ultra" } } },
+        }),
+      ).pipe(Effect.flip)
+
+      expect(error.message).toContain("Anthropic adaptive thinking effort must be one of low, medium, high, xhigh, max")
     }),
   )
 
