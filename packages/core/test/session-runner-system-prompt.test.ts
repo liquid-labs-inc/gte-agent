@@ -70,6 +70,30 @@ describe("SessionRunnerSystemPrompt", () => {
     }),
   )
 
+  it.effect("appends the workflow orchestration instruction only when flagged", () =>
+    Effect.sync(() => {
+      const without = SessionRunnerSystemPrompt.render({})
+      expect(without).not.toContain("Ultrathink mode is active")
+      const orchestrated = SessionRunnerSystemPrompt.render({ workflowOrchestration: true })
+      expect(orchestrated).toContain("Ultrathink mode is active for this request")
+      expect(orchestrated).toContain("launch it with the `workflow` tool")
+      // The instruction follows the session context, leaving the rest unchanged.
+      expect(orchestrated.startsWith(without)).toBe(true)
+    }),
+  )
+
+  it.effect("detects the literal ultrathink keyword on a word boundary", () =>
+    Effect.sync(() => {
+      expect(SessionRunnerSystemPrompt.mentionsUltrathink("please ultrathink this")).toBe(true)
+      expect(SessionRunnerSystemPrompt.mentionsUltrathink("ULTRATHINK now")).toBe(true)
+      expect(SessionRunnerSystemPrompt.mentionsUltrathink("ultrathink.")).toBe(true)
+      expect(SessionRunnerSystemPrompt.mentionsUltrathink("no special mode here")).toBe(false)
+      // Not a standalone word.
+      expect(SessionRunnerSystemPrompt.mentionsUltrathink("ultrathinking")).toBe(false)
+      expect(SessionRunnerSystemPrompt.mentionsUltrathink("superultrathink")).toBe(false)
+    }),
+  )
+
   const withGteData = testEffect(
     SessionRunnerSystemPrompt.layer.pipe(
       Layer.provideMerge(GteData.layerFromClient("hyperliquid-dev", makeStubClient())),
@@ -98,6 +122,16 @@ describe("SessionRunnerSystemPrompt", () => {
       const prompt = yield* SessionRunnerSystemPrompt.Service
       const baseline = yield* prompt.baseline(session())
       expect(baseline).toContain("GTE environment: unknown")
+    }),
+  )
+
+  withoutGteData.effect("adds the orchestration instruction when the latest user text mentions ultrathink", () =>
+    Effect.gen(function* () {
+      const prompt = yield* SessionRunnerSystemPrompt.Service
+      const plain = yield* prompt.baseline(session(), "summarize BTC funding")
+      expect(plain).not.toContain("Ultrathink mode is active")
+      const ultra = yield* prompt.baseline(session(), "ultrathink: compare funding across every perp")
+      expect(ultra).toContain("Ultrathink mode is active for this request")
     }),
   )
 

@@ -15,6 +15,12 @@ export interface Input {
   readonly gteEnv?: string
   readonly trackedAddress?: string
   readonly selectedMarket?: string
+  /**
+   * Opts this turn into the workflow-orchestration instruction (ultrathink
+   * mode). Set when the latest user prompt mentions `ultrathink`, when the
+   * `/effort ultrathink` session-intent flag is on, or when `/workflow` is used.
+   */
+  readonly workflowOrchestration?: boolean
 }
 
 export function render(input: Input): string {
@@ -37,11 +43,39 @@ export function render(input: Input): string {
     `- GTE environment: ${input.gteEnv ?? "unknown"}`,
     `- Tracked address: ${input.trackedAddress ?? "none"}`,
     `- Selected market: ${input.selectedMarket ?? "none"}`,
+    ...(input.workflowOrchestration ? ["", WORKFLOW_ORCHESTRATION_INSTRUCTION] : []),
   ].join("\n")
 }
 
+/**
+ * The orchestration instruction added to system context when ultrathink mode is
+ * active for a turn. Kept terse: it tells the model to scale work into a
+ * `workflow` run for substantive tasks and to handle small ones directly.
+ */
+export const WORKFLOW_ORCHESTRATION_INSTRUCTION = [
+  "<system-reminder>",
+  "Ultrathink mode is active for this request.",
+  "If the task is substantive (multi-step, parallelizable, or research-like across many markets, assets, or angles),",
+  "plan it as a workflow and launch it with the `workflow` tool: break it into phases, fan independent",
+  "research out across agents with map(), and synthesize the cross-checked results in a final phase.",
+  "Handle the task directly only when it is small enough that a workflow would be overhead.",
+  "</system-reminder>",
+].join("\n")
+
+const ULTRATHINK_KEYWORD = /(^|[^a-z0-9])ultrathink([^a-z0-9]|$)/i
+
+/** True when the text contains the literal word `ultrathink` (word-boundary, case-insensitive). */
+export function mentionsUltrathink(text: string): boolean {
+  return ULTRATHINK_KEYWORD.test(text)
+}
+
 export interface Interface {
-  readonly baseline: (session: SessionSchema.Info) => Effect.Effect<string>
+  /**
+   * Renders the per-turn GTE system prompt. `latestUserText` is the text of the
+   * user message leading this turn; when it mentions `ultrathink` the workflow
+   * orchestration instruction is appended.
+   */
+  readonly baseline: (session: SessionSchema.Info, latestUserText?: string) => Effect.Effect<string>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@gte-agent/SessionRunnerSystemPrompt") {}
@@ -59,12 +93,15 @@ export const layer = Layer.effect(
     const config = Option.getOrUndefined(yield* Effect.serviceOption(GteData.ConfigService))
     const gteEnv = data?.env ?? config?.env
     return Service.of({
-      baseline: (session) =>
+      baseline: (session, latestUserText) =>
         Effect.succeed(
           render({
             ...(gteEnv === undefined ? {} : { gteEnv }),
             ...(session.trackedAddress === undefined ? {} : { trackedAddress: session.trackedAddress }),
             ...(session.selectedMarket === undefined ? {} : { selectedMarket: session.selectedMarket }),
+            ...(latestUserText !== undefined && mentionsUltrathink(latestUserText)
+              ? { workflowOrchestration: true }
+              : {}),
           }),
         ),
     })
