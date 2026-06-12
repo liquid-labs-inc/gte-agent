@@ -106,10 +106,30 @@ export const layer = Layer.effect(
           fallback: `model "${request.model}" is not a providerID/modelID reference; using the parent session's model`,
         }
       }
-      if (requested === undefined) return { ref: undefined }
+      // No model to resolve against (default-model session with no parent ref):
+      // a script-requested variant cannot be honored, so surface the request and
+      // a fallback rather than dropping it silently from the snapshot.
+      if (requested === undefined)
+        return {
+          ref: undefined,
+          ...requestedFields,
+          fallback:
+            "no model is selected for the parent session, so the script's model/variant request was dropped; the agent runs with the session default",
+        }
       const found = yield* catalog.model.get(requested.providerID, requested.id).pipe(Effect.option)
       if (found._tag === "None") {
-        if (requested === parentRef) return { ref: parentRef }
+        // The parent's own model is not in the catalog. When a variant was also
+        // requested it cannot ride along on the bare parent ref, so record the
+        // request and the fallback; with no variant requested there is nothing
+        // to surface.
+        if (requested === parentRef)
+          return request.variant === undefined
+            ? { ref: parentRef }
+            : {
+                ref: parentRef,
+                ...requestedFields,
+                fallback: `the parent session's model is not in the catalog, so variant "${request.variant}" was dropped`,
+              }
         return {
           ref: parentRef,
           ...requestedFields,

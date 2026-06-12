@@ -106,6 +106,8 @@ export type Options = {
 type AgentState = {
   readonly id: string
   readonly phase: string
+  /** Content-addressed cache key for the (phase, prompt+model+variant): identifies the same logical agent across a resume. */
+  readonly key: string
   readonly prompt: string
   model?: string
   variant?: string
@@ -388,7 +390,12 @@ export const layerWith = (
           post(worker, { type: "agent-result", id: message.id, ok: true, value: cached })
           return
         }
-        if (run.launched >= run.maxAgents) {
+        // Resume re-executes the script: an agent interrupted by the pause has no
+        // cache entry, so it re-enters here. Reuse the prior stopped state for the
+        // same (phase, key) — re-running it must not push a duplicate agent or bump
+        // `launched`, which would inflate agentTotal and the phase count.
+        const prior = run.agents.find((agent) => agent.key === key && agent.status === "stopped")
+        if (prior === undefined && run.launched >= run.maxAgents) {
           post(worker, {
             type: "agent-result",
             id: message.id,
@@ -397,10 +404,10 @@ export const layerWith = (
           })
           return
         }
-        run.launched++
-        const state: AgentState = {
+        const state: AgentState = prior ?? {
           id: `a${++run.agentSeq}`,
           phase: message.phase,
+          key,
           prompt: head(message.request.prompt),
           ...(message.request.model === undefined ? {} : { model: message.request.model }),
           ...(message.request.variant === undefined ? {} : { variant: message.request.variant }),
@@ -408,7 +415,16 @@ export const layerWith = (
           tokens: { input: 0, output: 0, reasoning: 0 },
           started: Date.now(),
         }
-        run.agents.push(state)
+        if (prior === undefined) {
+          run.launched++
+          run.agents.push(state)
+        }
+        if (prior !== undefined) {
+          // Re-arm the reused state for another attempt.
+          prior.status = "queued"
+          prior.error = undefined
+          prior.finished = undefined
+        }
         const fiber = fork(
           run.gate
             .withPermit(

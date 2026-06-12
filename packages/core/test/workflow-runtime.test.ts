@@ -405,6 +405,11 @@ describe("WorkflowRuntime", () => {
           // interrupted second-phase agent executed again.
           expect(calls.get("first")).toBe(1)
           expect(calls.get("second first:ok")).toBe(2)
+          // The interrupted-then-resumed agent reused its prior state: exactly
+          // two agents and one per phase, never a double-count from the re-run.
+          expect(finished?.agents.length).toBe(2)
+          expect(finished?.agentTotal).toBe(2)
+          expect(finished?.phases.map((phase) => phase.agents)).toEqual([1, 1])
         }),
       )
     }),

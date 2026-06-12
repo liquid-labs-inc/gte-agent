@@ -218,6 +218,28 @@ describe("WorkflowExecutor", () => {
     ),
   )
 
+  it.effect("a requested variant on a default-model session surfaces the request and a fallback, never silently", () =>
+    withDemo(
+      Effect.gen(function* () {
+        // The parent has no model ref (default-model session), so a
+        // script-requested variant cannot be honored — but it must still appear
+        // in the snapshot as requested-vs-fallback, not vanish.
+        const parent = yield* createParent()
+        const executor = yield* WorkflowExecutor.Service
+        const result = yield* executor.execute({
+          sessionID: parent.id,
+          runID: WorkflowSchema.RunID.create(),
+          agentID: "a1",
+          phase: "main",
+          prompt: "Cross-check the claims",
+          variant: "xhigh",
+        })
+        expect(result.requestedVariant).toBe("xhigh")
+        expect(result.fallback).toContain("no model is selected for the parent session")
+      }),
+    ),
+  )
+
   it.effect("a two-phase workflow runs end to end through the runtime against the demo runner", () =>
     withDemo(
       Effect.gen(function* () {
