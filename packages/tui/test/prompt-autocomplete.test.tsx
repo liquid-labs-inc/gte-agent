@@ -6,6 +6,7 @@ import { createApi } from "../src/api/client"
 import { createEventSubscriber } from "../src/api/events"
 import { createGteApi } from "../src/api/gte"
 import { createModelsApi } from "../src/api/models"
+import { createWorkflowsApi } from "../src/api/workflows"
 import { createCompletionSources, type CompletionItem, type CompletionSources } from "../src/state/autocomplete"
 import { App } from "../src/ui/app"
 import { PromptInput } from "../src/ui/prompt-input"
@@ -232,6 +233,7 @@ test("in the app, esc closes the dropdown first and only then the session", asyn
         api={createApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
         gte={createGteApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
         models={createModelsApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
+        workflows={createWorkflowsApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
         subscribe={createEventSubscriber({ baseUrl: BASE_URL, fetch: mock.fetch })}
         auth={readAuthStatus({})}
         server={{ mode: "in-process", url: BASE_URL }}
@@ -272,6 +274,7 @@ test("enter with the dropdown open accepts in the app instead of prompting the s
         api={createApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
         gte={createGteApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
         models={createModelsApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
+        workflows={createWorkflowsApi({ baseUrl: BASE_URL, fetch: mock.fetch })}
         subscribe={createEventSubscriber({ baseUrl: BASE_URL, fetch: mock.fetch })}
         auth={readAuthStatus({})}
         server={{ mode: "in-process", url: BASE_URL }}
