@@ -1,0 +1,30 @@
+Launch an ultrathink workflow: a JavaScript orchestration script that coordinates many subagents in the background while you stay responsive.
+
+Use a workflow when a task benefits from scale or codified structure: codebase-wide audits, large migrations, cross-checked research, plans drafted from independent angles, anything with many independent items. Do NOT use a workflow for trivial questions or single-step edits.
+
+The script runs in a sandbox with NO filesystem, shell, or network access — spawned agents do all reading, writing, searching, and command-running. The script only coordinates and aggregates.
+
+Injected API (these are the ONLY globals available to the script):
+- phase(name, fn): declare a named phase; groups agents in the progress UI. Returns fn()'s promise.
+- agent({ prompt, type?, model?, variant? }): spawn one subagent; resolves { text, tokens: { input, output } }. `type` is an agent type from the registry (default "general"). `model` is "provider/model". `variant` is a reasoning-effort variant.
+- map(items, fn, { concurrency? }): bounded parallel fan-out over items; preserves order.
+- log(message): append a progress line visible in /workflows.
+- args: structured invocation input (undefined if none).
+
+The script body is the body of an async function: use top-level `await` and `return`. The resolved return value (string or JSON-serializable) is the workflow result and the ONLY thing that enters your context — keep intermediate results in script variables.
+
+Rules:
+- Make every agent prompt fully self-contained; agents share no state.
+- Fan out independent items with map(); the runtime caps concurrency (16 max) and total agents (1,000 per run).
+- Identical (phase, prompt) requests are cached; pausing and resuming replays completed agents instantly.
+- import/require/export are rejected; the sandbox has no ambient capabilities.
+
+Example script:
+  const files = args ?? []
+  const findings = await phase("audit", () =>
+    map(files, (f) => agent({ prompt: `Audit ${f} for unsafe SQL. Report file:line findings.`, type: "explore" })))
+  const review = await phase("review", () =>
+    agent({ prompt: "Deduplicate and rank these findings:\n" + findings.map((r) => r.text).join("\n"), variant: "high" }))
+  return review.text
+
+The run executes in the background: you get the run id and the persisted script path back immediately, and you will be notified automatically when the workflow finishes. Do not poll for progress.

@@ -6,6 +6,7 @@ import { Effect, Layer, Result, Schema } from "effect"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { Database } from "@opencode-ai/core/database/database"
 import { ToolRegistry } from "@/tool/registry"
+import { WorkflowRuntime } from "@/workflow/runtime"
 import { Tool } from "@/tool/tool"
 import { disposeAllInstances, TestInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
@@ -51,7 +52,7 @@ type RegistryLayerOptions = {
 const registryLayer = (opts: RegistryLayerOptions = {}) =>
   ToolRegistry.layer
     .pipe(
-      Layer.provide(configLayer),
+      Layer.provide([WorkflowRuntime.layer, configLayer]),
       Layer.provide(opts.plugin ?? Plugin.defaultLayer),
       Layer.provide(Question.defaultLayer),
       Layer.provide(Todo.defaultLayer),

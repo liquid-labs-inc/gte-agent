@@ -27,6 +27,7 @@ import * as Stream from "effect/Stream"
 import { Command } from "../command"
 import { pathToFileURL, fileURLToPath } from "url"
 import { Config } from "@/config/config"
+import { Workflow } from "@/workflow"
 import { ConfigMarkdown } from "@/config/markdown"
 import { SessionSummary } from "./summary"
 import { NamedError } from "@opencode-ai/core/util/error"
@@ -697,14 +698,31 @@ export const layer = Layer.effect(
         .get()
         .pipe(Effect.orDie)
       const model = input.model ?? ag.model ?? (yield* currentModel(input.sessionID))
+
+      // Ultrathink: "/effort ultrathink" selects the highest reasoning variant
+      // for the current model and opts the session into workflow planning; the
+      // bare keyword in a prompt opts a single task in.
+      let inputVariant = input.variant
+      let system = input.system
+      const workflowsEnabled = Workflow.enabled(yield* config.get())
+      if (inputVariant === Workflow.ULTRATHINK_VARIANT) {
+        const fullModel = yield* provider
+          .getModel(model.providerID, model.modelID)
+          .pipe(Effect.catchIf(Provider.ModelNotFoundError.isInstance, () => Effect.succeed(undefined)))
+        inputVariant = Workflow.bestVariant(Object.keys(fullModel?.variants ?? {}))
+        if (workflowsEnabled) system = [system, Workflow.ULTRATHINK_SYSTEM].filter(Boolean).join("\n\n")
+      } else if (workflowsEnabled && Workflow.hasKeyword(input.parts)) {
+        system = [system, Workflow.KEYWORD_SYSTEM].filter(Boolean).join("\n\n")
+      }
+
       const same = ag.model && model.providerID === ag.model.providerID && model.modelID === ag.model.modelID
       const full =
-        !input.variant && ag.variant && same
+        !inputVariant && ag.variant && same
           ? yield* provider
               .getModel(model.providerID, model.modelID)
               .pipe(Effect.catchIf(Provider.ModelNotFoundError.isInstance, () => Effect.succeed(undefined)))
           : undefined
-      const variant = input.variant ?? (ag.variant && full?.variants?.[ag.variant] ? ag.variant : undefined)
+      const variant = inputVariant ?? (ag.variant && full?.variants?.[ag.variant] ? ag.variant : undefined)
 
       const info: SessionV1.User = {
         id: input.messageID ?? MessageID.ascending(),
@@ -718,7 +736,7 @@ export const layer = Layer.effect(
           modelID: model.modelID,
           variant,
         },
-        system: input.system,
+        system,
         format: input.format,
       }
 
