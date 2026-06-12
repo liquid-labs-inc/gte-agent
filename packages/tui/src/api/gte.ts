@@ -57,6 +57,12 @@ export type IntentPatch = {
   readonly selectedMarket?: string | null
   readonly trackedAddress?: string | null
   readonly pinnedPanels?: readonly PinnedPanel[] | null
+  /**
+   * Session ultrathink intent: when true, system-context assembly adds the
+   * workflow-orchestration instruction. Persisted by the same intent route as
+   * the other session-intent fields; a parallel workstream owns the core side.
+   */
+  readonly ultrathink?: boolean | null
 }
 
 export class GteRequestError extends Error {
@@ -142,7 +148,9 @@ export function createGteApi(input: { baseUrl: string; fetch: typeof fetch }): G
     },
     health: () => snapshot("/api/gte/health"),
     markets: (query) =>
-      snapshot(query !== undefined && query.length > 0 ? `/api/gte/markets?query=${enc(query)}` : "/api/gte/markets?limit=10"),
+      snapshot(
+        query !== undefined && query.length > 0 ? `/api/gte/markets?query=${enc(query)}` : "/api/gte/markets?limit=10",
+      ),
     async resolveSymbol(q) {
       const result = (await request(`/api/gte/resolve-symbol?q=${enc(q)}`)) as { data: SymbolResolution }
       return result.data

@@ -15,11 +15,26 @@
  */
 import type { GteApi, GteProvenance, PanelType, PinnedPanel, SnapshotSummary } from "../api/gte"
 import { CANDLE_INTERVALS, GteRequestError } from "../api/gte"
+import type { ModelRef, ModelsApi } from "../api/models"
+import { isWorkflowsDisabled, type WorkflowsApi } from "../api/workflows"
 import { parseModelTarget, type ModelTarget } from "../state/models"
 import { summarizeData } from "../state/summarize"
 
 export const MAX_PINNED_PANELS = 8
 export const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/
+
+/** Named reasoning-effort tiers `/effort` accepts (besides the `ultrathink` resolver). */
+export const EFFORT_TIERS = ["low", "medium", "high", "xhigh", "max"] as const
+export type EffortTier = (typeof EFFORT_TIERS)[number]
+
+/**
+ * Minimal orchestration instruction prefixed onto a `/workflow <task>` prompt.
+ * Core-side keyword handling is a separate workstream; the TUI's only job is to
+ * wrap the user's task with this line so the model knows to consider fanning the
+ * work out via the workflow tool.
+ */
+export const WORKFLOW_PROMPT_PREFIX =
+  "Use the workflow tool to fan this task out across bounded subagents when it benefits from parallel research, scaling the fan-out to the task. Task:"
 
 export type ParsedCommand = { readonly name: string; readonly args: readonly string[] }
 
@@ -103,6 +118,9 @@ export const SLASH_COMMANDS: readonly CommandSpec[] = [
     argCompletions: [undefined, "symbol"],
   },
   { name: "models", usage: "/models [provider/model]", kind: "misc", argCompletions: ["model-ref"] },
+  { name: "workflows", usage: "/workflows", kind: "misc" },
+  { name: "effort", usage: "/effort <low|medium|high|xhigh|max|ultrathink>", kind: "misc" },
+  { name: "workflow", usage: "/workflow <task>", kind: "misc" },
   { name: "health", usage: "/health", kind: "misc" },
   { name: "bench-metrics", usage: "/bench-metrics", kind: "misc" },
   { name: "track", usage: "/track <address>|clear", kind: "misc" },
@@ -131,6 +149,18 @@ export type CommandContext = {
    * curated catalog happens inside the overlay via the strict select route.
    */
   readonly openModels: (target?: ModelTarget) => void
+  /** Open the /workflows overlay (run list → run view → agent detail). */
+  readonly openWorkflows: () => void
+  /** Models client for `/effort` variant re-selection and catalog variant lookup. */
+  readonly models: ModelsApi
+  /** Workflows client; `/effort ultrathink` probes it for the kill switch. */
+  readonly workflows: WorkflowsApi
+  /** The session's active model (its own selection, else the inherited default). */
+  readonly activeModel?: ModelRef
+  /** Send a prompt through the normal prompt path (used by `/workflow`). */
+  readonly prompt: (text: string) => void
+  /** Mirror an applied model back into the app store so the status line stays correct. */
+  readonly onModelApplied: (model: ModelRef) => void
   /** Local (non-persisted) command feedback line in the transcript. */
   readonly info: (text: string) => void
   readonly error: (text: string) => void
@@ -411,6 +441,17 @@ async function run(spec: CommandSpec, args: readonly string[], ctx: CommandConte
       ctx.openModels(target)
       return
     }
+    case "workflows":
+      ctx.openWorkflows()
+      return
+    case "effort":
+      return runEffort(ctx, args[0], spec.usage)
+    case "workflow": {
+      const task = args.join(" ").trim()
+      if (task.length === 0) return ctx.error(`Usage: ${spec.usage}`)
+      ctx.prompt(`${WORKFLOW_PROMPT_PREFIX} ${task}`)
+      return
+    }
     case "health":
       await snap("/health", () => gte.health(), "GTE data API health")
       return
@@ -457,5 +498,78 @@ async function run(spec: CommandSpec, args: readonly string[], ctx: CommandConte
       })
       return
     }
+  }
+}
+
+/**
+ * `/effort <tier>` re-selects the active model with a reasoning-effort variant.
+ *
+ * Named tiers (low/medium/high/xhigh/max) select that exact variant. `ultrathink`
+ * resolves to the highest variant the active model offers (xhigh, else max, else
+ * high) and turns on the session ultrathink intent flag; a model with no
+ * reasoning variants gets the flag only with an info line. The kill switch is
+ * probed through the workflows client so `ultrathink` reports the feature
+ * disabled rather than silently selecting nothing.
+ */
+async function runEffort(ctx: CommandContext, tier: string | undefined, usage: string): Promise<void> {
+  const requested = tier?.toLowerCase()
+  if (requested === undefined) return ctx.error(`Usage: ${usage}`)
+  if (requested !== "ultrathink" && !EFFORT_TIERS.includes(requested as EffortTier)) {
+    return ctx.error(`Unknown effort tier "${tier}". Choose one of: ${EFFORT_TIERS.join(", ")}, ultrathink.`)
+  }
+  const active = ctx.activeModel
+  if (active === undefined || active === null) {
+    return ctx.error("No active model — pick one with /models before setting an effort tier.")
+  }
+
+  const select = async (variant: string) => {
+    const result = await ctx.models.select({
+      providerID: active.providerID,
+      modelID: active.id,
+      variant,
+      sessionID: ctx.sessionID,
+    })
+    ctx.onModelApplied(result.model)
+    return result
+  }
+
+  if (requested !== "ultrathink") {
+    const result = await select(requested)
+    ctx.info(`Effort set to ${requested} for ${result.model.providerID}/${result.model.id}.`)
+    return
+  }
+
+  // ultrathink: gated on the workflow kill switch, then highest-variant + intent flag.
+  const disabled = await workflowsDisabled(ctx)
+  if (disabled) return ctx.error("workflows are disabled")
+
+  const variants = await activeModelVariants(ctx, active)
+  const highest = ["xhigh", "max", "high"].find((candidate) => variants.includes(candidate))
+  await ctx.gte.updateIntent(ctx.sessionID, { ultrathink: true })
+  if (highest === undefined) {
+    ctx.info(
+      `No reasoning variants exist for ${active.providerID}/${active.id}; ultrathink intent enabled without a variant change.`,
+    )
+    return
+  }
+  const result = await select(highest)
+  ctx.info(`Ultrathink enabled — ${result.model.providerID}/${result.model.id} set to ${highest}.`)
+}
+
+/** Reasoning variants the active model exposes in the curated catalog (empty when none). */
+async function activeModelVariants(ctx: CommandContext, active: ModelRef): Promise<readonly string[]> {
+  const catalog = await ctx.models.list(ctx.sessionID)
+  const provider = catalog.providers.find((candidate) => candidate.id === active.providerID)
+  return provider?.models.find((candidate) => candidate.id === active.id)?.variants ?? []
+}
+
+/** True when the workflow routes report the kill-switch disabled error. */
+async function workflowsDisabled(ctx: CommandContext): Promise<boolean> {
+  try {
+    await ctx.workflows.list(ctx.sessionID)
+    return false
+  } catch (error) {
+    if (isWorkflowsDisabled(error)) return true
+    return false
   }
 }
