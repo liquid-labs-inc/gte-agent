@@ -31,6 +31,12 @@ Final branch: `feat/ultrathink-workflows`. Base = candidate A (`feat/ultrathink-
 3. **Single /effort surface**: removed A's duplicate EffortDialog; `/effort` aliases the variants dialog whose options append `ultrathink` (only when a high-effort variant exists to back it).
 4. **Spec-required demo.test.ts** proving phases, concurrency cap, (phase,prompt) caching, pause/resume replay, total-agent cap, and event ordering against the real Bun-Worker runtime.
 
+## Final verification numbers
+
+- Workflow tests: **65 pass / 0 fail** (8 files; A had 45, B had 59 with overlap — union + spec demo + hardening tests)
+- Full `bun test` (packages/opencode): **3091 pass / 1 fail / 22 skip / 1 todo (3115 total)** vs ~3026-pass baseline — no regression; the single failure (`tool.write > file permissions > sets file permissions when writing sensitive data`) reproduces identically on the untouched impl-a worktree → pre-existing/environment-dependent, unrelated to workflows
+- Typecheck: `bunx tsc --noEmit` clean for **packages/opencode** and **packages/core**
+
 ## Remaining gaps (human follow-up)
 
 - **Sandbox is defense-in-depth, not a hard boundary.** Computed-string property access (e.g. `obj["const"+"ructor"]`) defeats static validation; a worker realm cannot fully revoke the Function intrinsic. A hard boundary needs a subprocess with OS-level restrictions or a loader hook denying dynamic import. Spec's stated bar (strip ambient capability from the script; agents do all I/O) is met.
