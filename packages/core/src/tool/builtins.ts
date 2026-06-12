@@ -11,6 +11,7 @@ import { QuestionTool } from "./question"
 import { ReadTool } from "./read"
 import { SkillTool } from "./skill"
 import { TodoWriteTool } from "./todowrite"
+import { ToolWorkshopTool } from "./tool-workshop"
 import { WebFetchTool } from "./webfetch"
 import { WebSearchTool } from "./websearch"
 import { WorkflowTool } from "./workflow"
@@ -44,6 +45,10 @@ export const runtimeScopeLayer = Layer.mergeAll(
   ReadTool.layer,
   SkillTool.layer,
   TodoWriteTool.layer,
+  // Self-authored dynamic tools, gated on their kill switch: the layer
+  // contributes nothing when GTE_AGENT_DISABLE_DYNAMIC_TOOLS is truthy or
+  // config sets `dynamicTools.enabled: false`.
+  ToolWorkshopTool.layer,
   WebFetchTool.layer,
   WebSearchTool.layer.pipe(Layer.provide(WebSearchTool.defaultConfigLayer)),
   // Dynamic workflow orchestration, gated on the kill switch: the layer

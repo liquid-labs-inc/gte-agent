@@ -13,6 +13,7 @@ import { ConfigAgent } from "./config/agent"
 import { ConfigAttachments } from "./config/attachments"
 import { ConfigCompaction } from "./config/compaction"
 import { ConfigCommand } from "./config/command"
+import { ConfigDynamicTools } from "./config/dynamic-tools"
 import { ConfigExperimental } from "./config/experimental"
 import { ConfigFormatter } from "./config/formatter"
 import { ConfigLSP } from "./config/lsp"
@@ -82,6 +83,9 @@ export class Info extends Schema.Class<Info>("Config.Info")({
   }),
   workflows: ConfigWorkflows.Info.pipe(Schema.optional).annotate({
     description: "Dynamic workflow orchestration settings",
+  }),
+  dynamicTools: ConfigDynamicTools.Info.pipe(Schema.optional).annotate({
+    description: "Self-authored dynamic tool settings",
   }),
   instructions: Schema.String.pipe(Schema.Array, Schema.optional).annotate({
     description: "Additional paths or URLs supplying ambient instructions",

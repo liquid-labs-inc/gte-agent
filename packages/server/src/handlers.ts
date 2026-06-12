@@ -40,6 +40,8 @@ import { WorkflowTool } from "@gte-agent/core/tool/workflow"
 import { ToolOutputStore } from "@gte-agent/core/tool-output-store"
 import { BackgroundJob } from "@gte-agent/core/background-job"
 import { Config } from "@gte-agent/core/config"
+import { DynamicToolRuntime } from "@gte-agent/core/dynamic-tool/runtime"
+import { ToolWorkshopTool } from "@gte-agent/core/tool/tool-workshop"
 import { WorkflowExecutor } from "@gte-agent/core/workflow/executor"
 import { WorkflowRuntime } from "@gte-agent/core/workflow/runtime"
 
@@ -205,6 +207,22 @@ const workflowTool = WorkflowTool.layer.pipe(
   Layer.orDie,
 )
 
+// Self-authored tools (milestone 9): the workshop tool and every saved
+// dynamic tool contribute into the registry the runner advertises, gated on
+// the dynamic-tools kill switch the same way the workflow tool is. The
+// runtime proxies dynamic-tool gte() calls back through this same registry.
+const toolWorkshop = ToolWorkshopTool.layer.pipe(
+  Layer.provide(toolRegistry),
+  Layer.provide(DynamicToolRuntime.layer.pipe(Layer.provide(toolRegistry))),
+  Layer.provide(SessionStore.layer),
+  Layer.provide(config),
+  Layer.provide(runtimeScope),
+  Layer.provide(Database.defaultLayer),
+  Layer.provide(FSUtil.defaultLayer),
+  Layer.provide(Global.defaultLayer),
+  Layer.orDie,
+)
+
 export const gteAgentHandlers = Layer.mergeAll(
   healthHandlers,
   sessionHandlers,
@@ -219,4 +237,6 @@ export const gteAgentHandlers = Layer.mergeAll(
   // effectDiscard likewise: contributes websearch and webfetch into the
   // registry the runner advertises.
   webTools,
+  // effectDiscard likewise: contributes the tool workshop and saved dynamic tools.
+  toolWorkshop,
 ).pipe(Layer.provide(routedSessions), Layer.provide(panelManager), Layer.provide(handlerEvents))

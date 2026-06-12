@@ -68,6 +68,9 @@ export const Flag = {
   get GTE_AGENT_DISABLE_WORKFLOWS() {
     return truthy("GTE_AGENT_DISABLE_WORKFLOWS")
   },
+  get GTE_AGENT_DISABLE_DYNAMIC_TOOLS() {
+    return truthy("GTE_AGENT_DISABLE_DYNAMIC_TOOLS")
+  },
   get GTE_AGENT_PERMISSION() {
     return process.env["GTE_AGENT_PERMISSION"]
   },
