@@ -67,6 +67,8 @@ export type ListInput = typeof ListInput.Type
 
 type CreateInput = {
   id?: SessionSchema.ID
+  /** Owning session for derived work (workflow agents); purely observational. */
+  parentID?: SessionSchema.ID
   agent?: Agent.ID
   model?: Model.Ref
   runtimeScope: RuntimeScope.Ref
@@ -240,6 +242,7 @@ export const layer = Layer.effect(
         const now = Date.now()
         const info = SessionSchema.Info.make({
           id: sessionID,
+          parentID: input.parentID,
           projectID: project.id,
           principalID: auth.principalID,
           authorityID,
