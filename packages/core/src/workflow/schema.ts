@@ -52,6 +52,13 @@ export const AgentInfo = Schema.Struct({
    */
   model: Schema.String.pipe(Schema.optional),
   variant: Schema.String.pipe(Schema.optional),
+  /**
+   * Script-requested override that was unavailable, so execution fell back to
+   * the parent session's model; `model`/`variant` carry the effective choice.
+   * The TUI shows requested-vs-effective without parsing the fallback log line.
+   */
+  requestedModel: Schema.String.pipe(Schema.optional),
+  requestedVariant: Schema.String.pipe(Schema.optional),
   /** Child session executing this agent, once created. */
   sessionID: SessionSchema.ID.pipe(Schema.optional),
   status: AgentStatus,
@@ -69,6 +76,11 @@ export const PhaseInfo = Schema.Struct({
   status: PhaseStatus,
   agents: NonNegativeInt,
   tokens: Tokens,
+  /** First-activation and completion times; the TUI shows per-phase elapsed without recomputing it. */
+  time: Schema.Struct({
+    started: TimeSchema.DateTimeUtcFromMillis,
+    finished: TimeSchema.DateTimeUtcFromMillis.pipe(Schema.optional),
+  }),
 }).annotate({ identifier: "Workflow.PhaseInfo" })
 export type PhaseInfo = typeof PhaseInfo.Type
 
@@ -90,6 +102,8 @@ export class RunInfo extends Schema.Class<RunInfo>("Workflow.RunInfo")({
   status: RunStatus,
   scriptPath: Schema.String,
   tokens: Tokens,
+  /** Agents launched against the per-run cap; cache hits never count, so the TUI gets completed/total directly. */
+  agentTotal: NonNegativeInt,
   time: Schema.Struct({
     started: TimeSchema.DateTimeUtcFromMillis,
     finished: TimeSchema.DateTimeUtcFromMillis.pipe(Schema.optional),

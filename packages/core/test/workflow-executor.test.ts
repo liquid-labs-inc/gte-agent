@@ -1,6 +1,5 @@
 import { describe, expect } from "bun:test"
 import { Effect, Layer, Stream } from "effect"
-import { BackgroundJob } from "@gte-agent/core/background-job"
 import { Catalog } from "@gte-agent/core/catalog"
 import { Database } from "@gte-agent/core/database/database"
 import { Event } from "@gte-agent/core/event"
@@ -78,7 +77,6 @@ const stack = (home: string) => {
   const runtime = WorkflowRuntime.layerWith({ snapshotTickMs: 20 }).pipe(
     Layer.provide(events),
     Layer.provide(global),
-    Layer.provide(BackgroundJob.layer),
     Layer.provide(executor),
   )
   return Layer.mergeAll(database, events, projector, store, sessions, executor, runtime)
@@ -164,6 +162,9 @@ describe("WorkflowExecutor", () => {
         })
         expect(result.model).toBe("anthropic/claude-fable-5")
         expect(result.fallback).toContain("missing/missing-model is unavailable")
+        // Structured requested-vs-effective for the TUI, not just the log line.
+        expect(result.requestedModel).toBe("missing/missing-model")
+        expect(result.requestedVariant).toBeUndefined()
         const child = yield* childOf(result.sessionID)
         expect(child?.model).toMatchObject({ id: "claude-fable-5", providerID: "anthropic" })
       }),
@@ -211,6 +212,8 @@ describe("WorkflowExecutor", () => {
         // The parent ref carries the "default" variant sentinel (session/info fromRow).
         expect(result.variant).toBe("default")
         expect(result.fallback).toContain('variant "no-such-variant" is unavailable')
+        expect(result.requestedModel).toBe("anthropic/claude-fable-5")
+        expect(result.requestedVariant).toBe("no-such-variant")
       }),
     ),
   )

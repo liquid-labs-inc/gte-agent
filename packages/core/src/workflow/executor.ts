@@ -35,6 +35,9 @@ export type Result = {
   /** Effective "providerID/modelID" the agent ran with, when one was selected. */
   readonly model?: string
   readonly variant?: string
+  /** Script-requested override that was unavailable; `model`/`variant` carry the parent fallback. */
+  readonly requestedModel?: string
+  readonly requestedVariant?: string
   /** Set when a requested model/variant was unavailable and the parent model was used instead. */
   readonly fallback?: string
 }
@@ -82,6 +85,12 @@ export const layer = Layer.effect(
      */
     const resolveModel = Effect.fnUntraced(function* (parent: SessionSchema.Info, request: Request) {
       const parentRef = parent.model
+      // The exact override the script asked for, recorded on every fallback so
+      // the snapshot carries requested-vs-effective without parsing the log line.
+      const requestedFields = {
+        ...(request.model === undefined ? {} : { requestedModel: request.model }),
+        ...(request.variant === undefined ? {} : { requestedVariant: request.variant }),
+      }
       if (request.model === undefined && request.variant === undefined) return { ref: parentRef }
       const requested =
         request.model !== undefined && request.model.includes("/")
@@ -93,6 +102,7 @@ export const layer = Layer.effect(
       if (request.model !== undefined && !request.model.includes("/")) {
         return {
           ref: parentRef,
+          ...requestedFields,
           fallback: `model "${request.model}" is not a providerID/modelID reference; using the parent session's model`,
         }
       }
@@ -102,12 +112,14 @@ export const layer = Layer.effect(
         if (requested === parentRef) return { ref: parentRef }
         return {
           ref: parentRef,
+          ...requestedFields,
           fallback: `model ${requested.providerID}/${requested.id} is unavailable; using the parent session's model`,
         }
       }
       if (request.variant !== undefined && !found.value.variants.some((variant) => variant.id === request.variant)) {
         return {
           ref: parentRef,
+          ...requestedFields,
           fallback: `variant "${request.variant}" is unavailable on ${requested.providerID}/${requested.id}; using the parent session's model`,
         }
       }
@@ -166,7 +178,13 @@ export const layer = Layer.effect(
           tokens,
           ...(model.ref === undefined ? {} : { model: `${model.ref.providerID}/${model.ref.id}` }),
           ...(model.ref?.variant === undefined ? {} : { variant: model.ref.variant }),
-          ...(model.fallback === undefined ? {} : { fallback: model.fallback }),
+          ...("requestedModel" in model && model.requestedModel !== undefined
+            ? { requestedModel: model.requestedModel }
+            : {}),
+          ...("requestedVariant" in model && model.requestedVariant !== undefined
+            ? { requestedVariant: model.requestedVariant }
+            : {}),
+          ...("fallback" in model && model.fallback !== undefined ? { fallback: model.fallback } : {}),
         }
       }),
     })
