@@ -89,7 +89,7 @@ const MAX_STEPS = 25
 const describeModelError = (error: SessionRunnerModel.Error): string => {
   switch (error._tag) {
     case "SessionRunnerModel.ModelNotSelectedError":
-      return "No model is selected for this session and no global default is configured. Use /models to choose a model."
+      return "No model is selected for this session and no global default is configured. Use /models to choose a model and connect a provider."
     case "Catalog.ProviderNotFound":
       return `The selected provider "${error.providerID}" is not in the model catalog. Use /models to choose a supported model.`
     case "Catalog.ModelNotFound":

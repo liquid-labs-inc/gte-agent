@@ -155,7 +155,7 @@ describe("SessionRunnerDefault gate", () => {
             error: {
               type: "unknown",
               message:
-                "No model is selected for this session and no global default is configured. Use /models to choose a model.",
+                "No model is selected for this session and no global default is configured. Use /models to choose a model and connect a provider.",
             },
           },
         ])
