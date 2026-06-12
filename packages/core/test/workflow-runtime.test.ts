@@ -1,6 +1,5 @@
 import { describe, expect } from "bun:test"
-import { Effect, Fiber, Layer, Stream } from "effect"
-import { BackgroundJob } from "@gte-agent/core/background-job"
+import { DateTime, Effect, Fiber, Layer, Stream } from "effect"
 import { Database } from "@gte-agent/core/database/database"
 import { Event } from "@gte-agent/core/event"
 import { Global } from "@gte-agent/core/global"
@@ -34,7 +33,6 @@ const harness = <A, E>(
     const runtime = WorkflowRuntime.layerWith(options ?? { snapshotTickMs: 20 }).pipe(
       Layer.provide(events),
       Layer.provide(Global.layerWith({ data: tmp.path })),
-      Layer.provide(BackgroundJob.layer),
       Layer.provide(Layer.succeed(WorkflowExecutor.Service, WorkflowExecutor.Service.of({ execute: executor }))),
     )
     return yield* body(tmp.path).pipe(Effect.provide(Layer.mergeAll(runtime, events)))
@@ -102,6 +100,13 @@ describe("WorkflowRuntime", () => {
         ])
         expect(finished?.tokens).toEqual({ input: 4, output: 8, reasoning: 0 })
         expect(finished?.logs.map((line) => line.message)).toEqual(["research complete"])
+        // Completed/total comes straight off the snapshot; cache hits never count.
+        expect(finished?.agentTotal).toBe(4)
+        // Each phase carries its own elapsed window for the TUI.
+        for (const phase of finished?.phases ?? []) {
+          expect(DateTime.toEpochMillis(phase.time.started)).toBeGreaterThanOrEqual(0)
+          expect(phase.time.finished).toBeDefined()
+        }
       }),
     ),
   )
@@ -126,7 +131,7 @@ describe("WorkflowRuntime", () => {
           .start({ sessionID, name: "invalid", script: "return globalThis" })
           .pipe(Effect.flip)
         expect(failure._tag).toBe("WorkflowScript.InvalidScriptError")
-        expect(failure.reason).toContain("globalThis")
+        if (failure._tag === "WorkflowScript.InvalidScriptError") expect(failure.reason).toContain("globalThis")
         expect(yield* runtime.list()).toEqual([])
       }),
     ),
@@ -270,6 +275,46 @@ describe("WorkflowRuntime", () => {
           expect(yield* runtime.stop(started.id)).toBe(false)
         }),
     ),
+  )
+
+  it.live("stop(runID, agentID) rejects one agent and settles it as stopped while the run continues", () =>
+    Effect.gen(function* () {
+      const executor: WorkflowExecutor.Interface["execute"] = (request) =>
+        request.prompt === "hang"
+          ? Effect.never
+          : Effect.succeed({ text: `${request.prompt}:ok`, tokens: { input: 1, output: 1, reasoning: 0 } })
+      yield* harness(executor, () =>
+        Effect.gen(function* () {
+          const runtime = yield* WorkflowRuntime.Service
+          const started = yield* runtime.start({
+            sessionID,
+            name: "stop-one",
+            script: [
+              "let stopped = false",
+              "try {",
+              '  await agent({ prompt: "hang" })',
+              "} catch {",
+              "  stopped = true",
+              "}",
+              'const ok = await agent({ prompt: "go" })',
+              'return stopped + " " + ok.text',
+            ].join("\n"),
+          })
+          yield* waitUntil(runtime.get(started.id).pipe(Effect.map((run) => run?.agents.at(0)?.status === "running")))
+          const target = (yield* runtime.get(started.id))?.agents.at(0)?.id
+          expect(target).toBeDefined()
+          // Stopping the hanging agent rejects its agent() promise; the script
+          // catches it and the run continues to completion.
+          expect(yield* runtime.stop(started.id, target ?? "")).toBe(true)
+          const finished = yield* runtime.wait(started.id)
+          expect(finished?.status).toBe("completed")
+          expect(finished?.result).toBe("true go:ok")
+          expect(finished?.agents.find((agent) => agent.id === target)?.status).toBe("stopped")
+          // Stopping an agent that is no longer inflight reports false.
+          expect(yield* runtime.stop(started.id, target ?? "")).toBe(false)
+        }),
+      )
+    }),
   )
 
   it.live("pause halts spawning and resume replays completed agents from the cache", () =>

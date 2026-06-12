@@ -2,8 +2,7 @@ export * as WorkflowRuntime from "./runtime"
 
 import os from "os"
 import path from "path"
-import { Cause, Context, DateTime, Deferred, Effect, Exit, Fiber, Layer, Semaphore } from "effect"
-import { BackgroundJob } from "../background-job"
+import { Cause, Context, DateTime, Deferred, Effect, Exit, Fiber, Layer, Schema, Semaphore } from "effect"
 import { Config } from "../config"
 import { Event } from "../event"
 import { Flag } from "../flag/flag"
@@ -31,6 +30,12 @@ export const JOB_TYPE = "workflow"
 export const MAX_AGENTS_PER_RUN = 1_000
 export const DEFAULT_SNAPSHOT_TICK_MS = 200
 const MAX_LOG_LINES = 100
+
+/** A run cannot start when its script fails to persist to the agent data dir. */
+export class ScriptPersistError extends Schema.TaggedErrorClass<ScriptPersistError>()("WorkflowRuntime.ScriptPersistError", {
+  path: Schema.String,
+  message: Schema.String,
+}) {}
 
 /** Concurrent-agent cap: min(16, max(2, cores - 2)). */
 export function concurrencyCap(cores: number = os.cpus().length || 4) {
@@ -78,7 +83,9 @@ export type StartInput = {
 }
 
 export interface Interface {
-  readonly start: (input: StartInput) => Effect.Effect<WorkflowSchema.RunInfo, WorkflowScript.InvalidScriptError>
+  readonly start: (
+    input: StartInput,
+  ) => Effect.Effect<WorkflowSchema.RunInfo, WorkflowScript.InvalidScriptError | ScriptPersistError>
   /** Resolves with the final snapshot once the run reaches a terminal status. */
   readonly wait: (runID: WorkflowSchema.RunID) => Effect.Effect<WorkflowSchema.RunInfo | undefined>
   readonly list: (sessionID?: SessionSchema.ID) => Effect.Effect<WorkflowSchema.RunInfo[]>
@@ -102,10 +109,18 @@ type AgentState = {
   readonly prompt: string
   model?: string
   variant?: string
+  requestedModel?: string
+  requestedVariant?: string
   sessionID?: SessionSchema.ID
   status: WorkflowSchema.AgentStatus
   tokens: { input: number; output: number; reasoning: number }
   error?: string
+  readonly started: number
+  finished?: number
+}
+
+type PhaseState = {
+  status: WorkflowSchema.PhaseStatus
   readonly started: number
   finished?: number
 }
@@ -121,7 +136,7 @@ type Run = {
   readonly gate: Semaphore.Semaphore
   readonly started: number
   readonly agents: AgentState[]
-  readonly phases: Map<string, { status: WorkflowSchema.PhaseStatus }>
+  readonly phases: Map<string, PhaseState>
   readonly cache: Map<string, WorkflowProtocol.AgentResult>
   readonly inflight: Map<string, { state: AgentState; fiber: Fiber.Fiber<void>; workerCallID: number }>
   readonly logs: { time: number; message: string }[]
@@ -158,14 +173,13 @@ const head = (prompt: string) => prompt.replace(/\s+/g, " ").trim().slice(0, Wor
 
 export const layerWith = (
   options?: Options,
-): Layer.Layer<Service, never, Event.Service | Global.Service | BackgroundJob.Service | WorkflowExecutor.Service> =>
+): Layer.Layer<Service, never, Event.Service | Global.Service | WorkflowExecutor.Service> =>
   Layer.effect(
     Service,
     Effect.gen(function* () {
       const tick = options?.snapshotTickMs ?? DEFAULT_SNAPSHOT_TICK_MS
       const events = yield* Event.Service
       const global = yield* Global.Service
-      const background = yield* BackgroundJob.Service
       const executor = yield* WorkflowExecutor.Service
       const context = yield* Effect.context()
       const fork = Effect.runForkWith(context)
@@ -184,13 +198,23 @@ export const layerWith = (
           status: run.status,
           scriptPath: run.scriptPath,
           tokens: tokensOf(run.agents),
+          agentTotal: run.launched,
           time: {
             started: DateTime.makeUnsafe(run.started),
             ...(run.finished === undefined ? {} : { finished: DateTime.makeUnsafe(run.finished) }),
           },
           phases: [...run.phases].map(([name, phase]) => {
             const members = run.agents.filter((agent) => agent.phase === name)
-            return { name, status: phase.status, agents: members.length, tokens: tokensOf(members) }
+            return {
+              name,
+              status: phase.status,
+              agents: members.length,
+              tokens: tokensOf(members),
+              time: {
+                started: DateTime.makeUnsafe(phase.started),
+                ...(phase.finished === undefined ? {} : { finished: DateTime.makeUnsafe(phase.finished) }),
+              },
+            }
           }),
           agents: run.agents.map((agent) => ({
             id: agent.id,
@@ -198,6 +222,8 @@ export const layerWith = (
             prompt: agent.prompt,
             ...(agent.model === undefined ? {} : { model: agent.model }),
             ...(agent.variant === undefined ? {} : { variant: agent.variant }),
+            ...(agent.requestedModel === undefined ? {} : { requestedModel: agent.requestedModel }),
+            ...(agent.requestedVariant === undefined ? {} : { requestedVariant: agent.requestedVariant }),
             ...(agent.sessionID === undefined ? {} : { sessionID: agent.sessionID }),
             status: agent.status,
             tokens: { ...agent.tokens },
@@ -284,22 +310,35 @@ export const layerWith = (
         run.result = outcome.result
         run.error = outcome.error
         for (const phase of run.phases.values()) {
-          if (phase.status === "running") phase.status = "completed"
+          if (phase.status === "running") {
+            phase.status = "completed"
+            phase.finished = run.finished
+          }
         }
-        runFork(
-          events.publish(SessionEvent.Workflow.Finished, {
-            sessionID: run.sessionID,
-            timestamp: DateTime.makeUnsafe(run.finished),
-            runID: run.id,
-            name: run.name,
-            scriptPath: run.scriptPath,
-            status,
-            tokens: tokensOf(run.agents),
-            duration: run.finished - run.started,
-          }),
-        )
         flushSnapshot(run)
-        Deferred.doneUnsafe(run.done, Exit.void)
+        // The durable Finished event must be written before run.done resolves,
+        // so the tool's synchronous settlement and wait() never return before
+        // the audit boundary is in the log. During shutdown the runtime no
+        // longer publishes, so resolve waiters directly instead of stranding
+        // them on a fork that never runs.
+        if (closed) {
+          Deferred.doneUnsafe(run.done, Exit.void)
+          return
+        }
+        fork(
+          events
+            .publish(SessionEvent.Workflow.Finished, {
+              sessionID: run.sessionID,
+              timestamp: DateTime.makeUnsafe(run.finished),
+              runID: run.id,
+              name: run.name,
+              scriptPath: run.scriptPath,
+              status,
+              tokens: tokensOf(run.agents),
+              duration: run.finished - run.started,
+            })
+            .pipe(Effect.ensuring(Effect.sync(() => Deferred.doneUnsafe(run.done, Exit.void)))),
+        )
       }
 
       const settle = (
@@ -321,6 +360,8 @@ export const layerWith = (
           state.tokens = { ...outcome.result.tokens }
           if (outcome.result.model !== undefined) state.model = outcome.result.model
           if (outcome.result.variant !== undefined) state.variant = outcome.result.variant
+          if (outcome.result.requestedModel !== undefined) state.requestedModel = outcome.result.requestedModel
+          if (outcome.result.requestedVariant !== undefined) state.requestedVariant = outcome.result.requestedVariant
           if (outcome.result.sessionID !== undefined) state.sessionID = outcome.result.sessionID
           if (outcome.result.fallback !== undefined) log(run, `${state.id}: ${outcome.result.fallback}`)
           const value = { text: outcome.result.text, tokens: { ...outcome.result.tokens } }
@@ -417,15 +458,22 @@ export const layerWith = (
             return
           case "phase-started": {
             const phase = run.phases.get(message.name)
-            // Resume re-executes the script, so a known phase re-enters "running".
-            if (phase) phase.status = "running"
-            if (!phase) run.phases.set(message.name, { status: "running" })
+            // Resume re-executes the script, so a known phase re-enters "running"
+            // and keeps its original start time.
+            if (phase) {
+              phase.status = "running"
+              phase.finished = undefined
+            }
+            if (!phase) run.phases.set(message.name, { status: "running", started: Date.now() })
             emitSnapshot(run)
             return
           }
           case "phase-ended": {
             const phase = run.phases.get(message.name)
-            if (phase) phase.status = "completed"
+            if (phase) {
+              phase.status = "completed"
+              phase.finished = Date.now()
+            }
             emitSnapshot(run)
             return
           }
@@ -466,7 +514,14 @@ export const layerWith = (
         // Persisted so the user can read, diff, edit, and relaunch the exact
         // script: the registry is process-local, the file survives restarts.
         const scriptPath = path.join(global.data, "workflow-runs", `${id}.mjs`)
-        yield* Effect.promise(() => Bun.write(scriptPath, input.script))
+        yield* Effect.tryPromise({
+          try: () => Bun.write(scriptPath, input.script),
+          catch: (error) =>
+            new ScriptPersistError({
+              path: scriptPath,
+              message: error instanceof Error ? error.message : String(error),
+            }),
+        })
         const run: Run = {
           id,
           sessionID: input.sessionID,
@@ -491,22 +546,6 @@ export const layerWith = (
           pending: false,
         }
         runs.set(id, run)
-        yield* background.start({
-          id,
-          type: JOB_TYPE,
-          title: input.name,
-          metadata: { sessionID: input.sessionID, scriptPath, background: true },
-          run: Deferred.await(run.done).pipe(
-            Effect.andThen(
-              Effect.suspend(() =>
-                run.status === "completed"
-                  ? Effect.succeed(run.result ?? "")
-                  : Effect.fail(new Error(run.error ?? `Workflow ${run.status}`)),
-              ),
-            ),
-            Effect.onInterrupt(() => Effect.sync(() => finish(run, "stopped", { error: "Workflow stopped" }))),
-          ),
-        })
         yield* events.publish(SessionEvent.Workflow.Started, {
           sessionID: input.sessionID,
           timestamp: DateTime.makeUnsafe(run.started),
@@ -574,10 +613,9 @@ export const layerWith = (
           return true
         }
         if (terminal(run.status)) return false
-        // Cancelling the owning job interrupts its run effect, whose interrupt
-        // handler performs the teardown; finish below is the synchronous path
-        // and idempotent when the job settles the race first.
-        yield* background.cancel(run.id)
+        // finish tears the worker down and settles waiters; the run owns its
+        // own lifecycle, so a background-job branch (if any) observes the stop
+        // through run.done like every other terminal transition.
         finish(run, "stopped", { error: "Workflow stopped" })
         return true
       })
