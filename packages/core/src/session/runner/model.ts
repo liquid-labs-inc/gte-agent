@@ -1,6 +1,6 @@
 export * as SessionRunnerModel from "./model"
 
-import { type ModelSchema } from "@gte-agent/llm"
+import { ProviderOptions, type ModelSchema } from "@gte-agent/llm"
 import * as AnthropicMessages from "@gte-agent/llm/protocols/anthropic-messages"
 import * as OpenAICodexResponses from "@gte-agent/llm/protocols/openai-codex-responses"
 import * as OpenAICompatibleChat from "@gte-agent/llm/protocols/openai-compatible-chat"
@@ -37,23 +37,41 @@ export class UnsupportedApiError extends Schema.TaggedErrorClass<UnsupportedApiE
   },
 ) {}
 
+export class UnknownVariantError extends Schema.TaggedErrorClass<UnknownVariantError>()(
+  "SessionRunnerModel.UnknownVariantError",
+  {
+    providerID: Provider.ID,
+    modelID: Model.ID,
+    variant: Model.VariantID,
+  },
+) {}
+
 export type Error =
   | Catalog.ProviderNotFoundError
   | Catalog.ModelNotFoundError
   | ModelNotSelectedError
   | UnsupportedApiError
+  | UnknownVariantError
   | AuthStore.MissingCredentialsError
   | AuthStore.Error
   | AuthOpenAI.RefreshError
 
+/** A resolved provider model plus the request payload its selected variant carries. */
+export interface Resolution {
+  readonly model: ResolvedModel
+  /** Canonical LLM-request provider options from the selected catalog variant (e.g. Anthropic thinking). */
+  readonly providerOptions?: ProviderOptions | undefined
+}
+
 export interface Interface {
-  readonly resolve: (session: SessionSchema.Info) => Effect.Effect<ResolvedModel, Error>
+  readonly resolve: (session: SessionSchema.Info) => Effect.Effect<Resolution, Error>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@gte-agent/SessionRunnerModel") {}
 
-/** Test or embedding seam for supplying a model resolver directly. */
-export const layerWith = (resolve: Interface["resolve"]) => Layer.succeed(Service, Service.of({ resolve }))
+/** Test or embedding seam for supplying a model resolver directly (no variant payload). */
+export const layerWith = (resolve: (session: SessionSchema.Info) => Effect.Effect<ResolvedModel, Error>) =>
+  Layer.succeed(Service, Service.of({ resolve: (session) => Effect.map(resolve(session), (model) => ({ model })) }))
 
 const apiKey = (model: Model.Info, provider?: Provider.Info) => {
   const value = explicitApiKey(model)
@@ -78,15 +96,43 @@ const withDefaults = (model: Model.Info, route: AnyRoute) =>
     limits: { context: model.limit.context, output: model.limit.output },
   })
 
-const withVariant = (model: Model.Info, variantID: Model.VariantID | undefined) => {
-  const id = variantID === "default" || variantID === undefined ? model.request.variant : variantID
-  const variant = model.variants.find((item) => item.id === id)
+type Variant = Model.Info["variants"][number]
+
+/**
+ * Resolves the session's variant against the catalog model, strictly: a
+ * variant the session explicitly selected must exist — never a silent drop.
+ * "default" (or no selection) falls back to the catalog's own default
+ * variant, which stays forgiving when dangling.
+ */
+const requireVariant = (
+  model: Model.Info,
+  variantID: Model.VariantID | undefined,
+): Effect.Effect<Variant | undefined, UnknownVariantError> => {
+  if (variantID === "default" || variantID === undefined)
+    return Effect.succeed(model.variants.find((item) => item.id === model.request.variant))
+  const variant = model.variants.find((item) => item.id === variantID)
+  if (!variant)
+    return Effect.fail(new UnknownVariantError({ providerID: model.providerID, modelID: model.id, variant: variantID }))
+  return Effect.succeed(variant)
+}
+
+const withVariant = (model: Model.Info, variant: Variant | undefined) => {
   if (!variant) return model
   return produce(model, (draft) => {
     Object.assign(draft.request.headers, variant.headers)
-    Object.assign(draft.request.body, variant.body)
+    // `providerOptions` is not a wire-body overlay: it carries the canonical
+    // LLM-request provider options the runner merges into the request.
+    Object.assign(
+      draft.request.body,
+      Object.fromEntries(Object.entries(variant.body).filter(([key]) => key !== "providerOptions")),
+    )
   })
 }
+
+const decodeProviderOptions = Schema.decodeUnknownOption(ProviderOptions)
+
+const variantProviderOptions = (variant: Variant | undefined) =>
+  variant === undefined ? undefined : Option.getOrUndefined(decodeProviderOptions(variant.body.providerOptions))
 
 const apiName = (model: Model.Info) =>
   model.api.type === "aisdk" ? `${model.api.type}:${model.api.package}` : model.api.type
@@ -212,8 +258,18 @@ export const fromCredential = (
   )
 }
 
-export const resolve = (session: SessionSchema.Info, model: Model.Info, provider?: Provider.Info) =>
-  fromCatalogModel(withVariant(model, session.model?.variant), provider)
+export const resolve = (
+  session: SessionSchema.Info,
+  model: Model.Info,
+  provider?: Provider.Info,
+): Effect.Effect<Resolution, UnknownVariantError | UnsupportedApiError> =>
+  Effect.gen(function* () {
+    const variant = yield* requireVariant(model, session.model?.variant)
+    return {
+      model: yield* fromCatalogModel(withVariant(model, variant), provider),
+      providerOptions: variantProviderOptions(variant),
+    }
+  })
 
 export const supported = (model: Model.Info) =>
   model.api.type === "aisdk" &&
@@ -253,7 +309,8 @@ export const runtimeScopeLayer = Layer.effect(
         const ref = session.model ?? (yield* selection.defaultRef())
         if (!ref) return yield* new ModelNotSelectedError({ sessionID: session.id })
         const selected = yield* catalog.model.get(ref.providerID, ref.id)
-        const model = withVariant(selected, session.model?.variant)
+        const variant = yield* requireVariant(selected, session.model?.variant)
+        const model = withVariant(selected, variant)
         const provider = Option.getOrUndefined(yield* catalog.provider.get(model.providerID).pipe(Effect.option))
         const credential = yield* auth.resolve({
           providerID: model.providerID,
@@ -268,7 +325,10 @@ export const runtimeScopeLayer = Layer.effect(
           credential.type === "oauth" && model.providerID === Provider.ID.openai
             ? { ...credential, profile: yield* refresh(credential) }
             : credential
-        return yield* fromCredential(model, ready)
+        return {
+          model: yield* fromCredential(model, ready),
+          providerOptions: variantProviderOptions(variant),
+        }
       }),
     })
   }),

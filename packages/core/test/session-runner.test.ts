@@ -144,8 +144,19 @@ const echo = Layer.effectDiscard(
     }),
   ),
 ).pipe(Layer.provide(registry))
-const models = SessionRunnerModel.layerWith((session) =>
-  Effect.succeed(session.model?.id === "replacement" ? replacementModel : model),
+// Direct Service rather than layerWith so a session-selected variant carries
+// a providerOptions payload the way the catalog resolver does.
+const models = Layer.succeed(
+  SessionRunnerModel.Service,
+  SessionRunnerModel.Service.of({
+    resolve: (session) =>
+      Effect.succeed({
+        model: session.model?.id === "replacement" ? replacementModel : model,
+        ...(session.model?.variant === undefined
+          ? {}
+          : { providerOptions: { anthropic: { thinking: { type: "adaptive", effort: session.model.variant } } } }),
+      }),
+  }),
 )
 const systemContextKey = SystemContext.Key.make("test/context")
 let systemBaseline = "Initial context"
@@ -517,6 +528,43 @@ describe("SessionRunnerLLM", () => {
           ],
         },
       ])
+    }),
+  )
+
+  it.effect("merges the selected variant's provider options into the provider request", () =>
+    Effect.gen(function* () {
+      yield* setup
+      const { db } = yield* Database.Service
+      yield* db
+        .update(SessionTable)
+        .set({ model: { id: "fake-model", providerID: "fake", variant: "xhigh" } })
+        .where(eq(SessionTable.id, sessionID))
+        .run()
+        .pipe(Effect.orDie)
+      const session = yield* Session.Service
+      requests.length = 0
+      yield* session.prompt({ sessionID, prompt: new Prompt({ text: "Think hard" }), resume: false })
+
+      yield* session.resume(sessionID)
+
+      expect(requests).toHaveLength(1)
+      expect(requests[0]?.providerOptions).toEqual({
+        anthropic: { thinking: { type: "adaptive", effort: "xhigh" } },
+      })
+    }),
+  )
+
+  it.effect("sends no provider options when the session has no variant", () =>
+    Effect.gen(function* () {
+      yield* setup
+      const session = yield* Session.Service
+      requests.length = 0
+      yield* session.prompt({ sessionID, prompt: new Prompt({ text: "Hello" }), resume: false })
+
+      yield* session.resume(sessionID)
+
+      expect(requests).toHaveLength(1)
+      expect(requests[0]?.providerOptions).toBeUndefined()
     }),
   )
 

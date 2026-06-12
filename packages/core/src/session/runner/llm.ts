@@ -96,6 +96,8 @@ const describeModelError = (error: SessionRunnerModel.Error): string => {
       return `The selected model "${error.providerID}/${error.modelID}" is not in the model catalog. Use /models to choose a supported model.`
     case "SessionRunnerModel.UnsupportedApiError":
       return `The selected model "${error.providerID}/${error.modelID}" has no supported route (${error.api}). Use /models to choose a supported model.`
+    case "SessionRunnerModel.UnknownVariantError":
+      return `The selected variant "${error.variant}" is not available for model "${error.providerID}/${error.modelID}". Use /models to re-select the model.`
     case "AuthStore.MissingCredentialsError":
       return `No credentials are configured for provider "${error.providerID}". Use /models to authenticate.`
     case "AuthStore.InvalidAuthFileError":
@@ -178,7 +180,7 @@ export const layer = Layer.effect(
       // lands in the transcript after the user message it answers. The typed
       // error still propagates; the published step is the visible surface
       // directing the user to /models.
-      const model = yield* models.resolve(session).pipe(
+      const resolution = yield* models.resolve(session).pipe(
         Effect.tapError((error) =>
           Effect.gen(function* () {
             const assistantMessageID = SessionMessage.ID.create()
@@ -204,20 +206,23 @@ export const layer = Layer.effect(
       const context = yield* store.runnerContext(session.id, system.baselineSeq)
       const gteBaseline = systemPrompt === undefined ? undefined : yield* systemPrompt.baseline(session)
       const request = LLM.request({
-        model,
+        model: resolution.model,
         system: [
           ...(gteBaseline === undefined || gteBaseline.length === 0 ? [] : [SystemPart.make(gteBaseline)]),
           ...(system.baseline.length > 0 ? [SystemPart.make(system.baseline)] : []),
         ],
-        messages: toLLMMessages(context, model),
+        messages: toLLMMessages(context, resolution.model),
         tools: yield* tools.definitions(),
+        // The selected variant's catalog payload (e.g. Anthropic thinking);
+        // no variant means no provider options on the request.
+        ...(resolution.providerOptions === undefined ? {} : { providerOptions: resolution.providerOptions }),
       })
       const publisher = createLLMEventPublisher(events, {
         sessionID: session.id,
         agent: session.agent ?? "build",
         model: {
-          id: Model.ID.make(model.id),
-          providerID: Provider.ID.make(model.provider),
+          id: Model.ID.make(resolution.model.id),
+          providerID: Provider.ID.make(resolution.model.provider),
           ...(session.model?.variant === undefined ? {} : { variant: session.model.variant }),
         },
       })

@@ -135,11 +135,77 @@ describe("SessionRunnerModel", () => {
         runtimeScope: { directory: AbsolutePath.make("/project") },
       })
 
-      const resolved = yield* SessionRunnerModel.resolve(session, catalog)
+      const resolution = yield* SessionRunnerModel.resolve(session, catalog)
 
-      expect(resolved.route.defaults).toMatchObject({
+      expect(resolution.model.route.defaults).toMatchObject({
         headers: { "x-test": "header", "x-variant": "high" },
         http: { body: { store: false, reasoningEffort: "high" } },
+      })
+      expect(resolution.providerOptions).toBeUndefined()
+    }),
+  )
+
+  it.effect("carries a variant's providerOptions to the runner instead of the wire body", () =>
+    Effect.gen(function* () {
+      const thinking = { anthropic: { thinking: { type: "adaptive", effort: "xhigh" } } }
+      const catalog = model({ type: "aisdk", package: "@ai-sdk/anthropic", url: "https://anthropic.example/v1" }, [
+        {
+          id: Model.VariantID.make("xhigh"),
+          headers: {},
+          body: { providerOptions: thinking },
+        },
+      ])
+      const session = Session.Info.make({
+        id: Session.ID.make("ses_model_variant_options"),
+        projectID: Project.ID.global,
+        principalID: GTEAuth.DEV_PRINCIPAL_ID,
+        authorityID: GTEAuth.DEV_AUTHORITY_ID,
+        title: "test",
+        model: {
+          id: catalog.id,
+          providerID: catalog.providerID,
+          variant: Model.VariantID.make("xhigh"),
+        },
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        time: { created: DateTime.makeUnsafe(0), updated: DateTime.makeUnsafe(0) },
+        runtimeScope: { directory: AbsolutePath.make("/project") },
+      })
+
+      const resolution = yield* SessionRunnerModel.resolve(session, catalog)
+
+      expect(resolution.providerOptions).toEqual(thinking)
+      expect(resolution.model.route.defaults.http?.body).toEqual({ store: false })
+    }),
+  )
+
+  it.effect("fails visibly on a variant the model does not define", () =>
+    Effect.gen(function* () {
+      const catalog = model({ type: "aisdk", package: "@ai-sdk/anthropic", url: "https://anthropic.example/v1" })
+      const session = Session.Info.make({
+        id: Session.ID.make("ses_model_variant_unknown"),
+        projectID: Project.ID.global,
+        principalID: GTEAuth.DEV_PRINCIPAL_ID,
+        authorityID: GTEAuth.DEV_AUTHORITY_ID,
+        title: "test",
+        model: {
+          id: catalog.id,
+          providerID: catalog.providerID,
+          variant: Model.VariantID.make("ultra"),
+        },
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        time: { created: DateTime.makeUnsafe(0), updated: DateTime.makeUnsafe(0) },
+        runtimeScope: { directory: AbsolutePath.make("/project") },
+      })
+
+      const failure = yield* SessionRunnerModel.resolve(session, catalog).pipe(Effect.flip)
+
+      expect(failure).toMatchObject({
+        _tag: "SessionRunnerModel.UnknownVariantError",
+        providerID: "test-provider",
+        modelID: "test-model",
+        variant: "ultra",
       })
     }),
   )

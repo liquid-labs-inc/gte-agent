@@ -1,4 +1,5 @@
 import { describe, expect } from "bun:test"
+import { eq } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { Catalog } from "@gte-agent/core/catalog"
 import { Database } from "@gte-agent/core/database/database"
@@ -156,6 +157,42 @@ describe("SessionRunnerDefault gate", () => {
               type: "unknown",
               message:
                 "No model is selected for this session and no global default is configured. Use /models to choose a model and connect a provider.",
+            },
+          },
+        ])
+      }),
+    ),
+  )
+
+  it.effect("the real path fails visibly on a variant the selected model does not define", () =>
+    withGate(
+      undefined,
+      Effect.gen(function* () {
+        yield* insertSession
+        const { db } = yield* Database.Service
+        yield* db
+          .update(SessionTable)
+          .set({ model: { id: "claude-fable-5", providerID: "anthropic", variant: "ultra" } })
+          .where(eq(SessionTable.id, sessionID))
+          .run()
+          .pipe(Effect.orDie)
+        const session = yield* Session.Service
+        yield* session.prompt({ sessionID, prompt: new Prompt({ text: "Hello" }), resume: false })
+
+        // No credentials are configured: the variant check precedes credential
+        // resolution, so the variant is the failure, never missing credentials.
+        const failure = yield* session.resume(sessionID).pipe(Effect.flip)
+        expect(failure).toMatchObject({ _tag: "SessionRunnerModel.UnknownVariantError" })
+
+        expect(yield* session.context(sessionID)).toMatchObject([
+          { type: "user", text: "Hello" },
+          {
+            type: "assistant",
+            finish: "error",
+            error: {
+              type: "unknown",
+              message:
+                'The selected variant "ultra" is not available for model "anthropic/claude-fable-5". Use /models to re-select the model.',
             },
           },
         ])

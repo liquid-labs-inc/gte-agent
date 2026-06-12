@@ -283,9 +283,59 @@ describe("SessionRunnerModel.runtimeScopeLayer", () => {
         const store = yield* AuthStore.Service
         yield* store.set(Provider.ID.anthropic, { type: "api_key", key: "k" })
         const models = yield* SessionRunnerModel.Service
-        const resolved = yield* models.resolve(session())
-        expect(resolved).toMatchObject({ id: "claude-fable-5" })
-        expect(resolved.route.id).toBe("anthropic-messages")
+        const resolution = yield* models.resolve(session())
+        expect(resolution.model).toMatchObject({ id: "claude-fable-5" })
+        expect(resolution.model.route.id).toBe("anthropic-messages")
+      }),
+    ),
+  )
+
+  it.effect("resolves the selected curated variant's thinking payload for the runner", () =>
+    withResolver(noHttp, () =>
+      Effect.gen(function* () {
+        process.env.ANTHROPIC_API_KEY = "env-anthropic-key"
+        const models = yield* SessionRunnerModel.Service
+        const resolution = yield* models.resolve(
+          session({
+            model: {
+              id: Model.ID.make("claude-fable-5"),
+              providerID: Provider.ID.anthropic,
+              variant: Model.VariantID.make("xhigh"),
+            },
+          }),
+        )
+        expect(resolution.providerOptions).toEqual({
+          anthropic: { thinking: { type: "adaptive", effort: "xhigh" } },
+        })
+        // The payload is canonical provider options, never a wire-body overlay.
+        expect(resolution.model.route.defaults.http?.body).toEqual({})
+      }),
+    ),
+  )
+
+  it.effect("fails visibly when the session selects a variant the model does not define", () =>
+    withResolver(noHttp, () =>
+      Effect.gen(function* () {
+        const models = yield* SessionRunnerModel.Service
+        // No credentials configured: the variant check precedes credential
+        // resolution, so the failure is the variant, not missing credentials.
+        const failure = yield* models
+          .resolve(
+            session({
+              model: {
+                id: Model.ID.make("claude-fable-5"),
+                providerID: Provider.ID.anthropic,
+                variant: Model.VariantID.make("ultra"),
+              },
+            }),
+          )
+          .pipe(Effect.flip)
+        expect(failure).toMatchObject({
+          _tag: "SessionRunnerModel.UnknownVariantError",
+          providerID: "anthropic",
+          modelID: "claude-fable-5",
+          variant: "ultra",
+        })
       }),
     ),
   )
@@ -295,11 +345,11 @@ describe("SessionRunnerModel.runtimeScopeLayer", () => {
       Effect.gen(function* () {
         process.env.ANTHROPIC_API_KEY = "env-anthropic-key"
         const models = yield* SessionRunnerModel.Service
-        const resolved = yield* models.resolve(
+        const resolution = yield* models.resolve(
           session({ model: { id: Model.ID.make("claude-haiku-4-5"), providerID: Provider.ID.anthropic } }),
         )
-        const headers = yield* resolved.route.auth.apply({
-          request: LLM.request({ model: resolved, prompt: "Hello" }),
+        const headers = yield* resolution.model.route.auth.apply({
+          request: LLM.request({ model: resolution.model, prompt: "Hello" }),
           method: "POST",
           url: "https://example.test/messages",
           body: "{}",
@@ -327,12 +377,12 @@ describe("SessionRunnerModel.runtimeScopeLayer", () => {
             accountId: "acct_9",
           })
           const models = yield* SessionRunnerModel.Service
-          const resolved = yield* models.resolve(
+          const resolution = yield* models.resolve(
             session({ model: { id: Model.ID.make("gpt-5.5"), providerID: Provider.ID.openai } }),
           )
-          expect(resolved.route.id).toBe("openai-codex-responses")
-          const headers = yield* resolved.route.auth.apply({
-            request: LLM.request({ model: resolved, prompt: "Hello" }),
+          expect(resolution.model.route.id).toBe("openai-codex-responses")
+          const headers = yield* resolution.model.route.auth.apply({
+            request: LLM.request({ model: resolution.model, prompt: "Hello" }),
             method: "POST",
             url: "https://example.test/responses",
             body: "{}",
@@ -383,10 +433,10 @@ describe("SessionRunnerModel.runtimeScopeLayer", () => {
           const store = yield* AuthStore.Service
           yield* store.set(Provider.ID.openai, { type: "oauth", access: "long-lived", refresh: "", expires: 0 })
           const models = yield* SessionRunnerModel.Service
-          const resolved = yield* models.resolve(
+          const resolution = yield* models.resolve(
             session({ model: { id: Model.ID.make("gpt-5.4"), providerID: Provider.ID.openai } }),
           )
-          expect(resolved.route.id).toBe("openai-codex-responses")
+          expect(resolution.model.route.id).toBe("openai-codex-responses")
           expect(calls).toHaveLength(0)
         }),
       )
