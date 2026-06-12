@@ -1,5 +1,6 @@
 import { Session } from "@gte-agent/core/session"
 import { Effect, Layer } from "effect"
+import { FetchHttpClient } from "effect/unstable/http"
 import { workflowHandlers } from "./handlers/workflow"
 import { authProviderHandlers } from "./handlers/auth-provider"
 import { modelsHandlers } from "./handlers/models"
@@ -33,7 +34,10 @@ import { SystemContextBuiltIns } from "@gte-agent/core/system-context-builtins"
 import { ApplicationTools } from "@gte-agent/core/tool/application-tools"
 import { GteTools } from "@gte-agent/core/tool/gte/tools"
 import { ToolRegistry } from "@gte-agent/core/tool/registry"
+import { WebFetchTool } from "@gte-agent/core/tool/webfetch"
+import { WebSearchTool } from "@gte-agent/core/tool/websearch"
 import { WorkflowTool } from "@gte-agent/core/tool/workflow"
+import { ToolOutputStore } from "@gte-agent/core/tool-output-store"
 import { BackgroundJob } from "@gte-agent/core/background-job"
 import { Config } from "@gte-agent/core/config"
 import { WorkflowExecutor } from "@gte-agent/core/workflow/executor"
@@ -86,6 +90,21 @@ const gteTools = GteTools.layer.pipe(
   Layer.provide(gteData),
   Layer.provide(SessionStore.layer),
   Layer.provide(Database.defaultLayer),
+  Layer.orDie,
+)
+
+// Web tools for the production registry. Both are implemented and tested in
+// core but were composed only into BuiltInTools.runtimeScopeLayer, which the
+// server never builds — the same gap fix-list item 1 closed for the workflow
+// tool. websearch works keyless (per-session provider selection); the
+// EXA/PARALLEL key and enable env vars refine it through defaultConfigLayer.
+const webTools = Layer.mergeAll(
+  WebFetchTool.layer,
+  WebSearchTool.layer.pipe(Layer.provide(WebSearchTool.defaultConfigLayer)),
+).pipe(
+  Layer.provide(toolRegistry),
+  Layer.provide(FetchHttpClient.layer),
+  Layer.provide(ToolOutputStore.defaultLayer),
   Layer.orDie,
 )
 
@@ -197,4 +216,7 @@ export const gteAgentHandlers = Layer.mergeAll(
   workflowHandlers.pipe(Layer.provide(workflowRuntime), Layer.provide(config)),
   // effectDiscard: contributing the workflow tool is the build's only effect.
   workflowTool,
+  // effectDiscard likewise: contributes websearch and webfetch into the
+  // registry the runner advertises.
+  webTools,
 ).pipe(Layer.provide(routedSessions), Layer.provide(panelManager), Layer.provide(handlerEvents))
