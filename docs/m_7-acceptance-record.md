@@ -71,3 +71,79 @@ These are checklist item 13 and every credential-dependent flow. Phase 1 closes 
 - Secret hygiene spot-check: after authing, grep the daemon log and `~/.gte-agent` (excluding `auth.json`) for key material; confirm `auth.json` is mode 0600.
 - Prompt autocomplete feel: `/` dropdown, arrows/Tab/Enter/Esc, `/models ` model-ref completion with auth annotations, `/book ` symbol completion against live resolution.
 - Demo gate sanity: `GTE_AGENT_LLM=demo gta` still streams the deterministic demo runner.
+
+## Amendment 1 (2026-06-12): Manual-Check Defects Found And Fixed
+
+The first live pass of the item-13 manual checks (real terminal, real Anthropic
+API key) surfaced three defects. All are fixed; evidence below was produced by
+re-running the live checks after the fixes.
+
+### Defects
+
+1. **TUI crashed on first session open from a fresh install** (the reported
+   "provider ID is null"). With no global default model configured,
+   `GET /api/models` serializes `default` as `null` (effect httpapi serializes
+   absent optionals as null — known limitation 11), but
+   `formatActiveModel` in `packages/tui/src/ui/status-bar.tsx` only guarded
+   `undefined`, so opening or creating a session threw
+   `null is not an object (evaluating 'defaultModel.providerID')` and froze the
+   TUI. Fix: null-guard in `formatActiveModel` plus null→undefined
+   normalization of `default`/`session`/`session.model` at the API boundary
+   (`packages/tui/src/api/models.ts` `list`). Pinned by new tests in
+   `packages/tui/test/models-state.test.ts`.
+
+2. **Every real provider turn failed with HTTP 400** (`tools.21.custom.input_schema.type:
+   Field required`). `gte_health` declares `Schema.Struct({})` parameters,
+   which `Schema.toJsonSchemaDocument` renders as
+   `{ anyOf: [{ type: "object" }, { type: "array" }] }`; Anthropic (and the
+   OpenAI tools APIs) require tool input schemas to declare `type: "object"`.
+   Since all 23 `gte_*` tools are advertised on every turn, this broke every
+   live request. Fix: `packages/llm/src/tool.ts` normalizes the empty-struct
+   shape to `{ type: "object", properties: {} }` for tool *input* schemas
+   (output schemas untouched). Pinned by a new test in
+   `packages/llm/test/tool-runtime.test.ts`.
+
+3. **Worker runtime logs wrote over the TUI screen.** Runner failures (e.g.
+   the deliberate visible no-model error) also log "Failed to drain Session"
+   at ERROR level; the in-process worker shared the terminal with the
+   renderer, so the log corrupted the screen. Fix: `webHandler()` in
+   `packages/server/src/routes.ts` now routes runtime logs through the core
+   logger (merged for request fibers and provided for layer-build-forked
+   fibers such as the session drain), and the TUI worker calls the new
+   `initFileLog()` before serving, sending logs to the shared log file
+   (`<data>/log/*.log`).
+
+### Live Evidence (re-run after fixes, 2026-06-12)
+
+- Fresh `~/.gte-agent`: `gta` starts, session create works, status line shows
+  "model not set — /models"; prompting yields the visible transcript error
+  directing to `/models`; nothing scribbles over the screen (drain failure
+  lands in the log file as `SessionRunnerModel.ModelNotSelectedError`).
+- `/models anthropic/claude-fable-5` direct selection chains into the wizard
+  (method picker → masked key paste → "Model set to anthropic/claude-fable-5
+  … session and global default updated"), the durable model-switched event
+  renders in the transcript, the status line shows the model, and
+  `~/.gte-agent/config.json` gains `"model": "anthropic/claude-fable-5"`.
+- Real streamed Anthropic reply over the pasted API key: text deltas →
+  `step.ended finish:"stop"` with usage/cache tokens.
+- Real live multi-step tool-calling turn ("look up the current BTC market"):
+  the model called `gte_market` and `gte_market_data`, both settled durably
+  with provenance, and the continuation turn produced the final text.
+- Secret hygiene: `auth.json` mode 0600; the key appears nowhere in the log
+  files, the data dir (excluding `auth.json`), or rendered TUI output (masked
+  paste).
+- Demo gate: `GTE_AGENT_LLM=demo` still streams the deterministic
+  "GTE Agent demo response.".
+- Suites after the fixes: tui 125 pass, llm 297 pass (28 pre-existing skips),
+  server 99 pass, core 1052 pass / 1 pre-existing fail (the known Watcher
+  fs-events case), `bun run typecheck` 11/11, lint 0 errors,
+  `bun run audit:gte` passed (685 files).
+
+### Still Manual-Remaining
+
+Everything OpenAI- and setup-token-shaped (no credentials available to this
+pass): Anthropic setup-token live turn, OpenAI API-key live turn, ChatGPT
+PKCE sign-in (browser + 1455 callback + paste-redirect fallback), live codex
+backend turn, and OAuth token refresh/rotation. A headless harness for future
+passes lives at `packages/tui/script/m7-repro.ts` (drives the real in-process
+server through the TUI's own clients).
